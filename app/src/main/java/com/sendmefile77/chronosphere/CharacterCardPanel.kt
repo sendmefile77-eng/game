@@ -89,11 +89,12 @@ fun CharacterCardPanel(
                         if (ancestry.isNotBlank()) " · $ancestry" else "",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                val covering = descriptor.bodyPlan.covering.name.lowercase()
                 Text(
                     buildString {
                         append("Морфологія: рук ${descriptor.bodyPlan.armPairs * 2}, ніг ${descriptor.bodyPlan.legPairs * 2}, очей ${descriptor.bodyPlan.eyeCount}")
                         if (descriptor.bodyPlan.hasTail) append(" · хвіст")
-                        descriptor.bodyPlan.covering.takeIf { it.isNotBlank() && it != "skin" }?.let { append(" · ${coveringLabel(it)}") }
+                        if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -134,7 +135,7 @@ private fun relationshipLabel(kind: RelationshipKind): String = when (kind) {
 }
 
 private fun rankLabel(rank: String): String = when (rank.lowercase()) {
-    "baseline_human" -> "людська лінія"
+    "population" -> "популяція"
     "morph" -> "морф"
     "subspecies" -> "підвид"
     "species" -> "вид"
@@ -142,8 +143,8 @@ private fun rankLabel(rank: String): String = when (rank.lowercase()) {
 }
 
 private fun coveringLabel(covering: String): String = when (covering.lowercase()) {
+    "dense_hair" -> "густе волосся"
+    "fine_fur" -> "шерсть"
     "scales" -> "луска"
-    "fur" -> "шерсть"
-    "feathers" -> "пір’я"
     else -> covering.lowercase()
 }
