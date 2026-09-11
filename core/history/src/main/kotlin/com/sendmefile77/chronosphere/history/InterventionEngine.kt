@@ -65,7 +65,9 @@ class InterventionEngine {
                 foodStock = (settlement.foodStock * foodFactor).coerceAtLeast(0.0),
             )
         }
-        return state.copy(settlements = settlements, recentEvents = appendEvent(state, event))
+        return withPopulationTotals(
+            state.copy(settlements = settlements, recentEvents = appendEvent(state, event)),
+        )
     }
 
     private fun applyTechnologyBoost(
@@ -94,6 +96,17 @@ class InterventionEngine {
             )
         }
         return state.copy(civilizations = civilizations, recentEvents = appendEvent(state, event))
+    }
+
+    private fun withPopulationTotals(state: LivingPlanetState): LivingPlanetState {
+        val totals = state.settlements.groupBy { it.civilizationId }.mapValues { (_, settlements) ->
+            settlements.sumOf { it.population }
+        }
+        return state.copy(
+            civilizations = state.civilizations.map { civilization ->
+                civilization.copy(population = totals[civilization.id] ?: 0L)
+            },
+        )
     }
 
     private fun eventFor(state: LivingPlanetState, command: InterventionCommand): SimulationEvent {
