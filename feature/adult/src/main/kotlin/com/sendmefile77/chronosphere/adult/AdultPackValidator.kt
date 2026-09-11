@@ -22,7 +22,7 @@ internal object AdultPackValidator {
             checkFiniteBound("intimacy", event.intimacy, errors, event.code)
             checkFiniteBound("scandal", event.scandal, errors, event.code)
             checkFiniteBound("fertility", event.fertility, errors, event.code)
-            checkFiniteBound("baseWeight", event.baseWeight, errors, event.code, min = 0.0)
+            checkFiniteBound("baseWeight", event.baseWeight, errors, event.code, min = 0.0, max = 2.0)
             event.cultureWeights.forEach { (tag, value) ->
                 if (tag.isBlank()) errors += "${event.code} has a blank culture weight tag"
                 checkFiniteBound("cultureWeight:$tag", value, errors, event.code, min = -2.0, max = 2.0)
