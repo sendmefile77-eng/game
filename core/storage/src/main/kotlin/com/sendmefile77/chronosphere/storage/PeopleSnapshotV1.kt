@@ -16,7 +16,11 @@ object PeopleSnapshotV1 {
     fun encode(state: PeopleState): String = buildString {
         appendLine(HEADER)
         appendLine("WORLD\t${state.worldSeed}\t${state.tick}")
-        state.persons.sortedBy { it.id }.forEach { person ->
+
+        // List order is part of PeopleState semantics and must survive a round-trip exactly.
+        // The simulation itself is deterministic, so preserving the existing order also keeps
+        // the encoded snapshot deterministic without silently canonicalising state on save.
+        state.persons.forEach { person ->
             appendLine(
                 listOf(
                     "PERSON",
@@ -34,7 +38,7 @@ object PeopleSnapshotV1 {
                 ).joinToString("\t"),
             )
         }
-        state.dynasties.sortedBy { it.id }.forEach { dynasty ->
+        state.dynasties.forEach { dynasty ->
             appendLine(
                 listOf(
                     "DYNASTY",
@@ -47,7 +51,7 @@ object PeopleSnapshotV1 {
                 ).joinToString("\t"),
             )
         }
-        state.relationships.sortedBy { it.id }.forEach { relationship ->
+        state.relationships.forEach { relationship ->
             appendLine(
                 listOf(
                     "REL",
@@ -63,7 +67,7 @@ object PeopleSnapshotV1 {
         state.rulerByCivilization.toSortedMap().forEach { (civilizationId, rulerId) ->
             appendLine("RULER\t${pack(civilizationId)}\t${pack(rulerId)}")
         }
-        state.socialProfiles.sortedBy { it.civilizationId }.forEach { profile ->
+        state.socialProfiles.forEach { profile ->
             appendLine(
                 listOf(
                     "PROFILE",
