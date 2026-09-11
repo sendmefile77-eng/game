@@ -3,40 +3,12 @@ package com.sendmefile77.chronosphere
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.TerritoryResolver
@@ -54,6 +27,7 @@ import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.history.HistoryComparator
 import com.sendmefile77.chronosphere.history.HistoryTimeline
+import com.sendmefile77.chronosphere.history.HistoryWorkspace
 import com.sendmefile77.chronosphere.history.InterventionCommand
 import com.sendmefile77.chronosphere.history.InterventionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
@@ -92,12 +66,7 @@ private val ChronosphereColors = darkColorScheme(
     error = Color(0xFFE07171),
 )
 
-private enum class GamePanel {
-    WORLD,
-    PERSON,
-    HISTORY,
-    CHRONICLE,
-}
+private enum class GamePanel { WORLD, PERSON, HISTORY, CHRONICLE }
 
 @Composable
 fun ChronosphereGameApp() {
@@ -391,57 +360,23 @@ fun ChronosphereGameApp() {
                             onCivilizationSelected = if (isAdvancing) null else { index ->
                                 civilizations.getOrNull(index)?.let { selectCivilization(it.id) }
                             },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp)),
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
                         )
 
-                        Surface(
+                        WorldMapSummary(
+                            totalPopulation = session.state.totalPopulation,
+                            settlements = session.state.settlements.size,
+                            civilizations = civilizations.size,
+                            wars = session.state.wars.size,
+                            tradeRoutes = economyState.routes.size,
                             modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
-                            color = Color(0xD90A1117),
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
-                        ) {
-                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-                                Text(
-                                    "${compactNumber(session.state.totalPopulation)} людей · ${session.state.settlements.size} міст",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    "${civilizations.size} держав · ${session.state.wars.size} війн · ${economyState.routes.size} торгових шляхів",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        )
 
-                        Surface(
+                        SelectedCivilizationBadge(
+                            civilizationName = selectedCivilization.name,
+                            eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
                             modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                            color = Color(0xD90A1117),
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
-                        ) {
-                            Column(
-                                modifier = Modifier.width(150.dp).padding(horizontal = 10.dp, vertical = 7.dp),
-                                horizontalAlignment = Alignment.End,
-                            ) {
-                                Text(
-                                    selectedCivilization.name,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                )
-                            }
-                        }
+                        )
 
                         Surface(
                             modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp),
@@ -460,9 +395,7 @@ fun ChronosphereGameApp() {
                         }
                     }
 
-                    if (isAdvancing) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                    if (isAdvancing) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
 
                     GameTabs(
                         selectedPanel = selectedPanel,
@@ -570,9 +503,6 @@ fun ChronosphereGameApp() {
                                 GamePanel.HISTORY -> HistoryPanel(
                                     workspace = workspace,
                                     session = session,
-                                    peopleState = peopleState,
-                                    economyState = economyState,
-                                    evolutionState = evolutionState,
                                     timeYear = time.year,
                                     isAdvancing = isAdvancing,
                                     onCheckpoint = {
@@ -606,7 +536,11 @@ fun ChronosphereGameApp() {
                                         val hadCheckpoint = workspace.checkpoints.any { it.branchId == workspace.activeBranchId }
                                         workspace = historyTimeline.restoreLatestCheckpoint(workspace)
                                         activateWorkspaceState()
-                                        saveStatus = if (hadCheckpoint) "Повернуто збережений момент" else "У цій гілці ще немає збереженого моменту"
+                                        saveStatus = if (hadCheckpoint) {
+                                            "Повернуто збережений момент"
+                                        } else {
+                                            "У цій гілці ще немає збереженого моменту"
+                                        }
                                     },
                                     onNextBranch = {
                                         if (workspace.branches.size > 1) {
@@ -703,6 +637,70 @@ private fun ChronosphereTopBar(year: Int, branchName: String, onNewWorld: () -> 
 }
 
 @Composable
+private fun WorldMapSummary(
+    totalPopulation: Long,
+    settlements: Int,
+    civilizations: Int,
+    wars: Int,
+    tradeRoutes: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = Color(0xD90A1117),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text(
+                "${compactNumber(totalPopulation)} людей · $settlements міст",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "$civilizations держав · $wars війн · $tradeRoutes торгових шляхів",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectedCivilizationBadge(
+    civilizationName: String,
+    eraName: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = Color(0xD90A1117),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+    ) {
+        Column(
+            modifier = Modifier.widthIn(min = 110.dp, max = 150.dp).padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            Text(
+                civilizationName,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                eraName,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+    }
+}
+
+@Composable
 private fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
@@ -711,6 +709,7 @@ private fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(text, maxLines = 1)
     }
@@ -764,7 +763,7 @@ private fun RowScope.GameTab(
 
 @Composable
 private fun WorldPanel(
-    civilization: com.sendmefile77.chronosphere.civilization.Civilization,
+    civilization: Civilization,
     civilizationCount: Int,
     economyState: EconomyState,
     peopleState: PeopleState,
@@ -783,7 +782,10 @@ private fun WorldPanel(
     val representativePopulation = representativeSettlement?.let { evolutionState.population(it.id) }
     val representativeLineage = representativePopulation?.let { evolutionState.lineage(it.lineageId) }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(civilization.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
@@ -797,17 +799,23 @@ private fun WorldPanel(
         }
     }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MetricCard("Населення", compactNumber(civilization.population), modifier = Modifier.weight(1f))
-        MetricCard("Стабільність", qualityBand(civilization.stability), modifier = Modifier.weight(1f))
-        MetricCard("Розвиток", qualityBand(civilization.technology), modifier = Modifier.weight(1f))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MetricCard("Населення", compactNumber(civilization.population), Modifier.weight(1f))
+        MetricCard("Стабільність", qualityBand(civilization.stability), Modifier.weight(1f))
+        MetricCard("Розвиток", qualityBand(civilization.technology), Modifier.weight(1f))
     }
 
     if (economy != null) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard("Казна", compactNumber(civilization.treasury), modifier = Modifier.weight(1f))
-            MetricCard("Ресурси", shortageBand(economy.shortageIndex), modifier = Modifier.weight(1f))
-            MetricCard("Торгівля", tradeBand(economy.tradeBalance), modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricCard("Казна", compactNumber(civilization.treasury), Modifier.weight(1f))
+            MetricCard("Ресурси", shortageBand(economy.shortageIndex), Modifier.weight(1f))
+            MetricCard("Торгівля", tradeBand(economy.tradeBalance), Modifier.weight(1f))
         }
     }
 
@@ -825,17 +833,23 @@ private fun WorldPanel(
         )
     }
     if (profile != null) {
-        val culture = profile.tags.sorted().take(6).joinToString(" · ")(::humanizeTag)
+        val culture = profile.tags.sorted().take(6).joinToString(separator = " · ", transform = ::humanizeTag)
         InfoLine("Культура", culture.ifBlank { "Без виразної домінантної традиції" })
         InfoLine("Суспільство", tensionBand(profile.socialTension))
     }
 
     Text("Втручання у світ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         InterventionButton("Допомога", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.HARVEST_AID) }
         InterventionButton("Посуха", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.DROUGHT) }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         InterventionButton("Прорив", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.TECHNOLOGY_BOOST) }
         InterventionButton("Підтримка", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.STABILITY_SUPPORT) }
     }
@@ -870,11 +884,8 @@ private fun InterventionButton(label: String, modifier: Modifier, enabled: Boole
 
 @Composable
 private fun HistoryPanel(
-    workspace: com.sendmefile77.chronosphere.history.HistoryWorkspace,
+    workspace: HistoryWorkspace,
     session: GameSession,
-    peopleState: PeopleState,
-    economyState: EconomyState,
-    evolutionState: EvolutionState,
     timeYear: Int,
     isAdvancing: Boolean,
     onCheckpoint: () -> Unit,
@@ -890,11 +901,17 @@ private fun HistoryPanel(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         OutlinedButton(onClick = onCheckpoint, enabled = !isAdvancing, modifier = Modifier.weight(1f)) { Text("Зберегти момент") }
         OutlinedButton(onClick = onFork, enabled = !isAdvancing, modifier = Modifier.weight(1f)) { Text("Нова гілка") }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         OutlinedButton(onClick = onRestore, enabled = !isAdvancing, modifier = Modifier.weight(1f)) { Text("Повернутися") }
         OutlinedButton(
             onClick = onNextBranch,
@@ -906,6 +923,7 @@ private fun HistoryPanel(
     val originalState = workspace.branches.firstOrNull { it.id == HistoryTimeline.ROOT_BRANCH_ID }?.state ?: workspace.activeState
     val divergence = HistoryComparator.compare(originalState, session.state)
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
     ) {
@@ -917,16 +935,13 @@ private fun HistoryPanel(
     }
 
     Text("Світ на $timeYear рік", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Button(onClick = onSave, enabled = !isAdvancing, modifier = Modifier.weight(1f)) { Text("Зберегти світ") }
         OutlinedButton(onClick = onLoad, enabled = !isAdvancing, modifier = Modifier.weight(1f)) { Text("Завантажити") }
     }
-
-    // Keep references in this presentation function explicit: these layers are part of a history snapshot.
-    Spacer(modifier = Modifier.height(0.dp))
-    peopleState.tick
-    economyState.tick
-    evolutionState.tick
 }
 
 @Composable
