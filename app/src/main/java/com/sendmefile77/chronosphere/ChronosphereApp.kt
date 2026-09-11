@@ -39,6 +39,7 @@ import com.sendmefile77.chronosphere.people.PeopleEngine
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationClock
 import com.sendmefile77.chronosphere.simulation.WorldSeed
+import com.sendmefile77.chronosphere.society.SocietyEngine
 import com.sendmefile77.chronosphere.storage.GameSnapshotV1
 import com.sendmefile77.chronosphere.storage.HistoryWorkspaceSnapshotV1
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
@@ -71,6 +72,9 @@ fun ChronosphereApp() {
     val historyTimeline = remember { HistoryTimeline() }
     val interventionEngine = remember { InterventionEngine() }
     val peopleEngine = remember { PeopleEngine() }
+    val adultModule = remember { AdultModuleRuntime.load() }
+    val societyEngine = remember(adultModule) { SocietyEngine(adultModule) }
+    val adultModuleActive = remember(adultModule) { AdultModuleRuntime.isActive(adultModule) }
     val initialSession = remember { newSession(424242L, generator, hydrology, resourceGenerator) }
     val initialPeople = remember(initialSession) { peopleEngine.initialize(initialSession.state) }
     val initialEconomy = remember(initialSession) {
@@ -85,7 +89,9 @@ fun ChronosphereApp() {
         mutableStateOf(historyTimeline.create(initialSession.state, initialPeople, initialEconomy))
     }
     var selectedCivilizationId by remember { mutableStateOf(initialSession.state.civilizations.first().id) }
-    var saveStatus by remember { mutableStateOf("Локальне збереження готове") }
+    var saveStatus by remember {
+        mutableStateOf(if (adultModuleActive) "Дорослий модуль активний" else "Базовий режим: дорослий модуль не завантажено")
+    }
     var interventionSequence by remember { mutableStateOf(0L) }
 
     fun syncState(
@@ -100,17 +106,40 @@ fun ChronosphereApp() {
     }
 
     fun advanceMonths(months: Int) {
-        val worldNext = CivilizationEngine(session.world, session.resources).advance(session.state, months)
-        val economyResult = EconomyEngine(session.world, session.resources).advance(economyState, worldNext)
-        val peopleResult = peopleEngine.advance(peopleState, economyResult.world)
-        val mergedWorld = economyResult.world.copy(
-            recentEvents = (economyResult.world.recentEvents + peopleResult.events).takeLast(96),
-        )
-        syncState(
-            mergedWorld,
-            peopleResult.state.copy(tick = mergedWorld.tick),
-            economyResult.state.copy(tick = mergedWorld.tick),
-        )
+        require(months > 0)
+        val civilizationEngine = CivilizationEngine(session.world, session.resources)
+        val economyEngine = EconomyEngine(session.world, session.resources)
+        var worldState = session.state
+        var people = peopleState
+        var economy = economyState
+        var remaining = months
+
+        // Chunking keeps every yearly society event causally inside the timeline instead of
+        // evaluating a century of social history from the final century state.
+        while (remaining > 0) {
+            val step = minOf(12, remaining)
+            val fromTick = worldState.tick
+            val civilizationNext = civilizationEngine.advance(worldState, step)
+            val economyResult = economyEngine.advance(economy, civilizationNext)
+            val peopleResult = peopleEngine.advance(people, economyResult.world)
+            val worldWithPeople = economyResult.world.copy(
+                recentEvents = (economyResult.world.recentEvents + peopleResult.events).takeLast(96),
+            )
+            val peopleAtTick = peopleResult.state.copy(tick = worldWithPeople.tick)
+            val economyAtTick = economyResult.state.copy(tick = worldWithPeople.tick)
+            val societyResult = societyEngine.advance(
+                fromTick = fromTick,
+                world = worldWithPeople,
+                people = peopleAtTick,
+                economy = economyAtTick,
+            )
+            worldState = societyResult.world
+            people = societyResult.people.copy(tick = worldState.tick)
+            economy = economyAtTick
+            remaining -= step
+        }
+
+        syncState(worldState, people, economy)
     }
 
     fun intervene(kind: InterventionKind) {
@@ -164,7 +193,7 @@ fun ChronosphereApp() {
                         workspace = historyTimeline.create(created.state, createdPeople, createdEconomy)
                         selectedCivilizationId = created.state.civilizations.first().id
                         interventionSequence = 0L
-                        saveStatus = "Створено новий світ"
+                        saveStatus = if (adultModuleActive) "Створено новий світ · дорослий модуль активний" else "Створено новий світ · базовий режим"
                     }) { Text("Новий світ") }
                 }
 
@@ -235,6 +264,15 @@ fun ChronosphereApp() {
                     if (profile != null) {
                         Text(
                             "Культурний профіль: ${profile.tags.sorted().take(6).joinToString(", ")} · напруга ${String.format("%.2f", profile.socialTension)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    val latestSocietyEvent = session.state.recentEvents.lastOrNull {
+                        it.code == "ADULT_SOCIAL_EVENT" && selectedCivilization.id in it.actorIds
+                    }
+                    if (latestSocietyEvent != null) {
+                        Text(
+                            "Соціальна подія: ${latestSocietyEvent.facts["eventCode"] ?: "подія"} · ${latestSocietyEvent.facts["participants"] ?: ""}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
