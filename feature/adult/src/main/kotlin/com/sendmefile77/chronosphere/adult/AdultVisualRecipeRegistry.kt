@@ -7,6 +7,7 @@ internal class AdultVisualRecipeRegistry(
     recipes: List<AdultVisualRecipe>,
     private val fallback: AdultVisualRecipe = SAFE_VISUAL_FALLBACK,
     private val morphFallback: AdultVisualRecipe = SAFE_MORPH_FALLBACK,
+    private val undressedFallback: AdultVisualRecipe = SAFE_UNDRESSED_FALLBACK,
 ) {
     val recipes: List<AdultVisualRecipe> = AdultVisualRecipeValidator.validateOrThrow(recipes, fallback)
 
@@ -15,11 +16,22 @@ internal class AdultVisualRecipeRegistry(
         val count = request.participants.size
         val morph = AdultMorphologyParser.parse(request)
         return recipes.filter { recipe ->
-            event.code in recipe.eventCodes &&
+            recipe.wardrobeState == null &&
+                event.code in recipe.eventCodes &&
                 count in recipe.minParticipants..recipe.maxParticipants &&
                 tags.containsAll(recipe.requiredTags.map { it.lowercase() }) &&
                 tags.none { it in recipe.forbiddenTags.map { tag -> tag.lowercase() } } &&
                 AdultContextSignals.matchesEraRequirement(recipe.requiredEras, recipe.forbiddenEras, tags) &&
+                AdultMorphCompatibility.matches(recipe, morph)
+        }
+    }
+
+    fun compatibleCards(request: AdultEventRequest, state: AdultWardrobeState): List<AdultVisualRecipe> {
+        val count = request.participants.size
+        val morph = AdultMorphologyParser.parse(request)
+        return recipes.filter { recipe ->
+            recipe.wardrobeState == state &&
+                count in recipe.minParticipants..recipe.maxParticipants &&
                 AdultMorphCompatibility.matches(recipe, morph)
         }
     }
@@ -33,19 +45,18 @@ internal class AdultVisualRecipeRegistry(
     }
 
     fun select(event: AdultEventRule, request: AdultEventRequest, fingerprint: Long): AdultVisualRecipe {
-        val pool = compatible(event, request)
+        return pick(compatible(event, request), request, fingerprint, sceneFallback(request))
+    }
+
+    fun selectCard(request: AdultEventRequest, state: AdultWardrobeState, fingerprint: Long): AdultVisualRecipe {
+        val pool = compatibleCards(request, state)
         val morph = AdultMorphologyParser.parse(request)
-        if (pool.isEmpty()) return if (morph.visuallyDivergent || !morph.structuralBaseline) morphFallback else fallback
-        val weighted = pool.sortedBy { it.id }.map { it to recipeWeight(it, request) }
-        val total = weighted.sumOf { it.second }
-        if (total <= 0.0) return if (morph.visuallyDivergent || !morph.structuralBaseline) morphFallback else fallback
-        val target = AdultFingerprint.unit01(fingerprint, 41L) * total
-        var acc = 0.0
-        for ((recipe, weight) in weighted) {
-            acc += weight
-            if (target < acc) return recipe
+        val emptyFallback = when {
+            state == AdultWardrobeState.UNDRESSED -> undressedFallback
+            morph.visuallyDivergent || !morph.structuralBaseline -> morphFallback
+            else -> fallback
         }
-        return weighted.last().first
+        return pick(pool, request, fingerprint, emptyFallback)
     }
 
     fun mediaCue(event: AdultEventRule, request: AdultEventRequest, fingerprint: Long): MediaCue {
@@ -91,15 +102,40 @@ internal class AdultVisualRecipeRegistry(
         return MediaCue(assetKey = "adult://recipe/${recipe.id}", tags = tags)
     }
 
+    private fun pick(
+        pool: List<AdultVisualRecipe>,
+        request: AdultEventRequest,
+        fingerprint: Long,
+        emptyFallback: AdultVisualRecipe,
+    ): AdultVisualRecipe {
+        if (pool.isEmpty()) return emptyFallback
+        val weighted = pool.sortedBy { it.id }.map { it to recipeWeight(it, request) }
+        val total = weighted.sumOf { it.second }
+        if (total <= 0.0) return emptyFallback
+        val target = AdultFingerprint.unit01(fingerprint, 41L) * total
+        var acc = 0.0
+        for ((recipe, weight) in weighted) {
+            acc += weight
+            if (target < acc) return recipe
+        }
+        return weighted.last().first
+    }
+
+    private fun sceneFallback(request: AdultEventRequest): AdultVisualRecipe {
+        val morph = AdultMorphologyParser.parse(request)
+        return if (morph.visuallyDivergent || !morph.structuralBaseline) morphFallback else fallback
+    }
+
     private fun isMorphTag(tag: String): Boolean {
         val t = tag.lowercase()
         return t.startsWith("lineage:") || t.startsWith("bio_rank:") || t.startsWith("posture:") ||
             t.startsWith("covering:") || t.startsWith("arms:") || t.startsWith("legs:") ||
             t.startsWith("eyes:") || t.startsWith("ancestry:") || t == "tail" ||
-            t == "mixed_ancestry" || t == "hybrid_lineage"
+            t == "mixed_ancestry" || t == "hybrid_lineage" || t.startsWith("wardrobe:")
     }
 
     companion object {
-        fun bundled(): AdultVisualRecipeRegistry = AdultVisualRecipeRegistry(BundledVisualRecipes.all)
+        fun bundled(): AdultVisualRecipeRegistry =
+            AdultVisualRecipeRegistry(BundledVisualRecipes.all + AdultCardRecipes.all)
     }
 }

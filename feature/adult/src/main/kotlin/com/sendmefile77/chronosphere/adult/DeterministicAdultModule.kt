@@ -4,6 +4,7 @@ import com.sendmefile77.chronosphere.adultcontracts.ADULT_CONTRACT_VERSION
 import com.sendmefile77.chronosphere.adultcontracts.AdultEventRequest
 import com.sendmefile77.chronosphere.adultcontracts.AdultModule
 import com.sendmefile77.chronosphere.adultcontracts.AdultModuleResult
+import com.sendmefile77.chronosphere.adultcontracts.MediaCue
 
 /**
  * Isolated adult-module engine for contract v1.
@@ -12,8 +13,13 @@ import com.sendmefile77.chronosphere.adultcontracts.AdultModuleResult
 class DeterministicAdultModule internal constructor(
     private val registry: AdultPackRegistry,
     private val recipes: AdultVisualRecipeRegistry,
+    private val cards: AdultCharacterCardVisuals,
 ) : AdultModule {
-    constructor() : this(AdultPackRegistry.bundled(), AdultVisualRecipeRegistry.bundled())
+    constructor() : this(
+        AdultPackRegistry.bundled(),
+        AdultVisualRecipeRegistry.bundled(),
+        AdultCharacterCardVisuals(),
+    )
 
     override val contractVersion: Int = ADULT_CONTRACT_VERSION
 
@@ -32,5 +38,10 @@ class DeterministicAdultModule internal constructor(
     internal fun selectedPackId(request: AdultEventRequest): String {
         val fingerprint = AdultFingerprint.of(request)
         return registry.selectPack(request, fingerprint).id
+    }
+
+    internal fun characterCardCue(request: AdultEventRequest, undressed: Boolean): MediaCue {
+        val state = if (undressed) AdultWardrobeState.UNDRESSED else AdultWardrobeState.DRESSED
+        return cards.resolve(request, state)
     }
 }
