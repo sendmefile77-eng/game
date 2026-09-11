@@ -30,9 +30,11 @@ jobs:
           :core:economy:test
           :core:evolution:test
           :core:society:test
-          :core:history:test
-          :core:storage:test
           :core:scene:test
+          :core:history:test
+          :core:textgen:test
+          :core:storage:test
+          :core:adult-contracts:test
           :feature:adult:test
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug
