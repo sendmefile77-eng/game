@@ -22,6 +22,10 @@ class ChronicleTextGenerator {
         }
         "ALLIANCE_FORMED" -> "${event.facts["a"] ?: "One state"} and ${event.facts["b"] ?: "another"} formed an alliance."
         "ALLIANCE_ENDED" -> "The alliance between ${event.facts["a"] ?: "two states"} and ${event.facts["b"] ?: "their partner"} dissolved."
+        "INTERVENTION_HARVEST_AID" -> "An outside intervention supported harvests in ${event.facts["civilization"] ?: "a state"}."
+        "INTERVENTION_DROUGHT" -> "A forced drought struck ${event.facts["civilization"] ?: "a state"}, reducing food reserves and population."
+        "INTERVENTION_TECH_BOOST" -> "${event.facts["civilization"] ?: "A state"} received an abrupt technological impulse."
+        "INTERVENTION_STABILITY_SUPPORT" -> "Political stability in ${event.facts["civilization"] ?: "a state"} was artificially reinforced."
         else -> event.code.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() } + "."
     }
 }
