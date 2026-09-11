@@ -66,6 +66,8 @@ object HistoryWorkspaceSnapshotV1 {
         require(branches.all { it.id.isNotBlank() }) { "Blank branch id" }
         require(branches.any { it.id == activeBranchId }) { "Active branch is missing" }
         val branchById = branches.associateBy { it.id }
+        val workspaceSeed = branches.first().state.worldSeed
+        require(branches.all { it.state.worldSeed == workspaceSeed }) { "History branches use different world seeds" }
         require(branches.all { branch -> branch.parentBranchId == null || branch.parentBranchId in branchById }) {
             "Branch references unknown parent"
         }
@@ -94,8 +96,8 @@ object HistoryWorkspaceSnapshotV1 {
         }
         require(checkpoints.all { checkpoint ->
             val branch = branchById.getValue(checkpoint.branchId)
-            checkpoint.tick >= branch.forkTick
-        }) { "Checkpoint predates its branch" }
+            checkpoint.state.worldSeed == branch.state.worldSeed && checkpoint.tick >= branch.forkTick
+        }) { "Checkpoint is inconsistent with its branch" }
         return HistoryWorkspace(activeBranchId = activeBranchId, branches = branches, checkpoints = checkpoints)
     }
 
