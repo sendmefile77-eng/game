@@ -1,8 +1,8 @@
 package com.sendmefile77.chronosphere
 
-import com.sendmefile77.chronosphere.scene.WardrobeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChronosphereCharacterLibraryV01Test {
@@ -33,5 +33,23 @@ class ChronosphereCharacterLibraryV01Test {
         assertEquals(young.frame, old.frame)
         assertEquals(young.garment, old.garment)
         assertNotEquals(young.hairColor, old.hairColor)
+    }
+
+    @Test
+    fun rasterLibrarySelectionIsStableAndInRange() {
+        val first = RasterCharacterLibraryV01.select("person-alpha")
+        val second = RasterCharacterLibraryV01.select("person-alpha")
+        assertEquals(first, second)
+        assertTrue(first.headIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
+        assertTrue(first.garmentIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
+    }
+
+    @Test
+    fun rasterIdentityDoesNotDependOnWardrobeState() {
+        val first = RasterCharacterLibraryV01.select("person-alpha")
+        val second = RasterCharacterLibraryV01.select("person-alpha")
+        assertEquals(first.femaleFamily, second.femaleFamily)
+        assertEquals(first.headIndex, second.headIndex)
+        assertEquals(first.garmentIndex, second.garmentIndex)
     }
 }
