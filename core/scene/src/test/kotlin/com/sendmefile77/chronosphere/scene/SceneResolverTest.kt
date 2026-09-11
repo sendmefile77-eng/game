@@ -86,6 +86,14 @@ class SceneResolverTest {
     }
 
     @Test
+    fun morphologyNumericChangesStableSceneKey() {
+        val resolver = SceneResolver(pack)
+        val a = resolver.resolve(portraitRequest(morphDivergence = 0.1))
+        val b = resolver.resolve(portraitRequest(morphDivergence = 0.8))
+        assertNotEquals(a.sceneKey, b.sceneKey)
+    }
+
+    @Test
     fun fallbackNeverCompetesWithNormalCompatibleRecipe() {
         val resolved = SceneResolver(pack).resolve(portraitRequest())
         assertEquals("portrait.human", resolved.recipeId)
@@ -113,6 +121,17 @@ class SceneResolverTest {
         val resolved = SceneResolver(pack).resolve(request)
         assertEquals("undress.human", resolved.recipeId)
         assertEquals(WardrobeState.UNDRESSED, resolved.wardrobeState)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun undressIntentCannotOmitUndressedState() {
+        SceneRequest(
+            worldSeed = 42L,
+            eventId = "card-person-a-undress",
+            rngToken = 9L,
+            intent = SceneIntent.CHARACTER_UNDRESS,
+            participants = listOf(SceneParticipant("person-a", 31, "human")),
+        )
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -153,11 +172,22 @@ class SceneResolverTest {
         assertTrue(first.fallbackUsed)
     }
 
-    private fun portraitRequest(token: Long = 7L, rig: String = "human") = SceneRequest(
+    private fun portraitRequest(
+        token: Long = 7L,
+        rig: String = "human",
+        morphDivergence: Double? = null,
+    ) = SceneRequest(
         worldSeed = 42L,
         eventId = "portrait-person-a",
         rngToken = token,
         intent = SceneIntent.PORTRAIT,
-        participants = listOf(SceneParticipant("person-a", 30, rig)),
+        participants = listOf(
+            SceneParticipant(
+                entityId = "person-a",
+                ageYears = 30,
+                rigFamily = rig,
+                numeric = morphDivergence?.let { mapOf("morph_divergence" to it) } ?: emptyMap(),
+            ),
+        ),
     )
 }
