@@ -48,6 +48,15 @@ class ChronicleTextGenerator {
         "DYNASTY_FOUNDED" -> "${event.facts["person"] ?: "Нова постать"} започаткував нову правлячу династію в державі ${event.facts["civilization"] ?: "невідомого народу"}."
         "RULER_PARTNERSHIP_FORMED" -> "Правитель ${event.facts["ruler"] ?: "невідома особа"} утворив династичний союз із ${event.facts["partner"] ?: "новим партнером"}."
         "DYNASTIC_BIRTH" -> "У правлячому домі держави ${event.facts["civilization"] ?: "невідомого народу"} народився новий династ — ${event.facts["person"] ?: "дитина"}."
+        "ADULT_SOCIAL_EVENT" -> {
+            val eventName = event.facts["eventCode"]?.replace('_', ' ')?.lowercase() ?: "приватна соціальна подія"
+            val participants = event.facts["participants"]?.takeIf { it.isNotBlank() }
+            buildString {
+                append("У державі ${event.facts["civilization"] ?: "невідомого народу"} відбулася подія: $eventName")
+                if (participants != null) append(". Учасники: $participants")
+                append('.')
+            }
+        }
         "INTERVENTION_HARVEST_AID" -> "Зовнішнє втручання посилило врожайність у державі ${event.facts["civilization"] ?: "невідомого народу"}."
         "INTERVENTION_DROUGHT" -> "Штучно спричинена посуха вдарила по державі ${event.facts["civilization"] ?: "невідомого народу"}, скоротивши запаси продовольства та населення."
         "INTERVENTION_TECH_BOOST" -> "Держава ${event.facts["civilization"] ?: "невідомого народу"} отримала різкий технологічний імпульс."
