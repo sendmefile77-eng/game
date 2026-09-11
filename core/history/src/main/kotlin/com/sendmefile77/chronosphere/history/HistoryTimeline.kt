@@ -2,6 +2,7 @@ package com.sendmefile77.chronosphere.history
 
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.people.PeopleState
 
 data class HistoryBranch(
@@ -12,6 +13,7 @@ data class HistoryBranch(
     val state: LivingPlanetState,
     val peopleState: PeopleState? = null,
     val economyState: EconomyState? = null,
+    val evolutionState: EvolutionState? = null,
 )
 
 data class HistoryCheckpoint(
@@ -22,6 +24,7 @@ data class HistoryCheckpoint(
     val state: LivingPlanetState,
     val peopleState: PeopleState? = null,
     val economyState: EconomyState? = null,
+    val evolutionState: EvolutionState? = null,
 )
 
 data class HistoryWorkspace(
@@ -29,17 +32,11 @@ data class HistoryWorkspace(
     val branches: List<HistoryBranch>,
     val checkpoints: List<HistoryCheckpoint> = emptyList(),
 ) {
-    val activeBranch: HistoryBranch
-        get() = branches.first { it.id == activeBranchId }
-
-    val activeState: LivingPlanetState
-        get() = activeBranch.state
-
-    val activePeopleState: PeopleState?
-        get() = activeBranch.peopleState
-
-    val activeEconomyState: EconomyState?
-        get() = activeBranch.economyState
+    val activeBranch: HistoryBranch get() = branches.first { it.id == activeBranchId }
+    val activeState: LivingPlanetState get() = activeBranch.state
+    val activePeopleState: PeopleState? get() = activeBranch.peopleState
+    val activeEconomyState: EconomyState? get() = activeBranch.economyState
+    val activeEvolutionState: EvolutionState? get() = activeBranch.evolutionState
 }
 
 class HistoryTimeline {
@@ -47,6 +44,7 @@ class HistoryTimeline {
         initialState: LivingPlanetState,
         initialPeopleState: PeopleState? = null,
         initialEconomyState: EconomyState? = null,
+        initialEvolutionState: EvolutionState? = null,
     ): HistoryWorkspace = HistoryWorkspace(
         activeBranchId = ROOT_BRANCH_ID,
         branches = listOf(
@@ -58,6 +56,7 @@ class HistoryTimeline {
                 state = initialState,
                 peopleState = initialPeopleState,
                 economyState = initialEconomyState,
+                evolutionState = initialEvolutionState,
             ),
         ),
     )
@@ -67,13 +66,17 @@ class HistoryTimeline {
         state: LivingPlanetState,
         peopleState: PeopleState? = workspace.activePeopleState,
         economyState: EconomyState? = workspace.activeEconomyState,
+        evolutionState: EvolutionState? = workspace.activeEvolutionState,
     ): HistoryWorkspace = workspace.copy(
         branches = workspace.branches.map { branch ->
             if (branch.id == workspace.activeBranchId) {
-                branch.copy(state = state, peopleState = peopleState, economyState = economyState)
-            } else {
-                branch
-            }
+                branch.copy(
+                    state = state,
+                    peopleState = peopleState,
+                    economyState = economyState,
+                    evolutionState = evolutionState,
+                )
+            } else branch
         },
     )
 
@@ -88,6 +91,7 @@ class HistoryTimeline {
             state = branch.state,
             peopleState = branch.peopleState,
             economyState = branch.economyState,
+            evolutionState = branch.evolutionState,
         )
         return workspace.copy(checkpoints = workspace.checkpoints + checkpoint)
     }
@@ -104,11 +108,9 @@ class HistoryTimeline {
             state = parent.state,
             peopleState = parent.peopleState,
             economyState = parent.economyState,
+            evolutionState = parent.evolutionState,
         )
-        return workspace.copy(
-            activeBranchId = id,
-            branches = workspace.branches + branch,
-        )
+        return workspace.copy(activeBranchId = id, branches = workspace.branches + branch)
     }
 
     fun switchTo(workspace: HistoryWorkspace, branchId: String): HistoryWorkspace {
@@ -129,21 +131,17 @@ class HistoryTimeline {
                         state = checkpoint.state,
                         peopleState = checkpoint.peopleState,
                         economyState = checkpoint.economyState,
+                        evolutionState = checkpoint.evolutionState,
                     )
-                } else {
-                    branch
-                }
+                } else branch
             },
         )
     }
 
     fun restoreLatestCheckpoint(workspace: HistoryWorkspace): HistoryWorkspace {
-        val checkpoint = workspace.checkpoints.lastOrNull { it.branchId == workspace.activeBranchId }
-            ?: return workspace
+        val checkpoint = workspace.checkpoints.lastOrNull { it.branchId == workspace.activeBranchId } ?: return workspace
         return restoreCheckpoint(workspace, checkpoint.id)
     }
 
-    companion object {
-        const val ROOT_BRANCH_ID = "branch-0"
-    }
+    companion object { const val ROOT_BRANCH_ID = "branch-0" }
 }
