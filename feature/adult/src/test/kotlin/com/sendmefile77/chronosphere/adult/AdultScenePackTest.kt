@@ -9,60 +9,37 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.nio.file.Files
 
 class AdultScenePackTest {
     private val loader = javaClass.classLoader
 
     @Test
-    fun manifestIsLoadableAndHasNoUrlsOrDuplicateKeys() {
+    fun manifestIsLoadableAndWellFormed() {
         val text = resourceText("scene_packs/adult/manifest.tsv")
         val lines = text.lines().map { it.trimEnd() }.filter { it.isNotBlank() && !it.startsWith("#") }
         assertEquals("CHRONOSPHERE_SCENE_ASSET_V1", lines.first())
-        val pack = lines.first { it.startsWith("PACK\t") }.split("\t")
-        assertEquals(listOf("PACK", "adult-visual", "1", "1024", "1536"), pack)
+        assertEquals(listOf("PACK", "adult-visual", "1", "1024", "1536"), lines.first { it.startsWith("PACK\t") }.split("\t"))
         val assets = lines.filter { it.startsWith("ASSET\t") }.map { it.split("\t") }
         val keys = assets.map { it[1] }
         assertEquals(keys.size, keys.toSet().size)
         assets.forEach { cols ->
             assertEquals(4, cols.size)
             assertFalse(cols[3].startsWith("http://") || cols[3].startsWith("https://"))
+            val bytes = requireResource(cols[3])
+            assertTrue(cols[3], bytes.size > 32)
+            val png = bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'N'.code.toByte() && bytes[3] == 'G'.code.toByte()
+            val webp = bytes.size >= 12 && bytes.copyOfRange(0, 4).toString(Charsets.US_ASCII) == "RIFF" && bytes.copyOfRange(8, 12).toString(Charsets.US_ASCII) == "WEBP"
+            assertTrue(cols[3], png || webp)
         }
     }
 
     @Test
-    fun generatorWritesNonEmptyPngsForEveryManifestPath() {
-        val dir = Files.createTempDirectory("adult-pack").toFile()
-        AdultPackGenerator.writeAll(dir)
-        manifestPaths().forEach { path ->
-            val file = dir.resolve(path)
-            assertTrue(path, file.isFile)
-            val bytes = file.readBytes()
-            assertTrue(path, bytes.size > 32)
-            assertEquals(0x89.toByte(), bytes[0])
-            assertEquals('P'.code.toByte(), bytes[1])
-            assertEquals('N'.code.toByte(), bytes[2])
-            assertEquals('G'.code.toByte(), bytes[3])
-        }
-    }
-
-    @Test
-    fun classloaderServesGeneratedPngsWhenPackTaskRan() {
-        manifestPaths().forEach { path ->
-            val stream = loader.getResourceAsStream(path)
-            if (stream != null) {
-                val bytes = stream.readBytes()
-                assertTrue(path, bytes.size > 32)
-                assertEquals(0x89.toByte(), bytes[0])
-            }
-        }
-    }
-
-    @Test
-    fun everyCardRecipeHasManifestCoverage() {
+    fun everyCardRecipeHasManifestAndRaster() {
         val keys = manifestKeys()
         AdultCardRecipes.all.forEach { recipe ->
-            assertTrue(recipe.id, keys.contains("recipe:${recipe.id}"))
+            val key = "recipe:${recipe.id}"
+            assertTrue(recipe.id, key in keys)
+            requireResource("scene_packs/adult/recipe/${recipe.id}.png")
         }
     }
 
@@ -71,6 +48,7 @@ class AdultScenePackTest {
         val eventIds = BundledVisualRecipes.all.map { it.id }.toSet()
         val covered = manifestKeys().map { it.removePrefix("recipe:") }.filter { it in eventIds }
         assertTrue("covered=${covered.size} $covered", covered.size >= 12)
+        covered.forEach { id -> requireResource("scene_packs/adult/recipe/$id.png") }
     }
 
     @Test
@@ -85,7 +63,6 @@ class AdultScenePackTest {
         val undressed = bridge.undressedCharacterCard(request)
         assertEquals(dressed, bridge.dressedCharacterCard(request))
         assertEquals(WardrobeState.UNDRESSED, undressed.wardrobeState)
-        assertFalse(undressed.fallbackUsed && undressed.wardrobeState != WardrobeState.UNDRESSED)
     }
 
     private fun manifestKeys(): Set<String> =
@@ -95,16 +72,11 @@ class AdultScenePackTest {
             .map { it.split("\t")[1] }
             .toSet()
 
-    private fun manifestPaths(): List<String> =
-        resourceText("scene_packs/adult/manifest.tsv").lineSequence()
-            .map { it.trimEnd() }
-            .filter { it.startsWith("ASSET\t") }
-            .map { it.split("\t")[3] }
-            .toList()
-
-    private fun resourceText(path: String): String {
+    private fun requireResource(path: String): ByteArray {
         val stream = loader.getResourceAsStream(path)
         assertNotNull(path, stream)
-        return stream!!.bufferedReader().readText()
+        return stream!!.readBytes()
     }
+
+    private fun resourceText(path: String): String = requireResource(path).toString(Charsets.UTF_8)
 }
