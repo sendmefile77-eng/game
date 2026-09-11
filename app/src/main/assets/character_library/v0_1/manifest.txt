@@ -1,0 +1,56 @@
+CHARACTER_LIBRARY_V1
+version=1
+style=mature_animation
+canvas=320x480
+coordinate_space=normalized
+assembly=layered
+identity_key=person.id
+runtime_ai=false
+network=false
+
+# Layer order
+background
+body_frame
+neck
+face
+hair_back
+ears
+nose
+eyes
+brows
+mouth
+hair_front
+age_details
+wardrobe
+accessories
+foreground
+
+# v0.1 bundled presets
+face=oval,long,square,heart
+eyes=almond,deep_set,narrow,round
+brows=straight,arched,heavy,soft
+nose=straight,narrow,broad,aquiline
+mouth=neutral,full,thin,wide
+hair=crop,side_part,wavy,bob,tied_back,short_curl
+frame=narrow,balanced,broad
+garment=simple,high_collar,coat,tunic
+skin_palettes=6
+hair_palettes=6
+garment_palettes=6
+
+# Anchors used by all future raster/vector replacements
+anchor.face_center=0.500,0.380
+anchor.eye_left=0.441,0.325
+anchor.eye_right=0.559,0.325
+anchor.nose=0.500,0.445
+anchor.mouth=0.500,0.520
+anchor.neck=0.500,0.625
+anchor.shoulder_left=0.265,0.745
+anchor.shoulder_right=0.735,0.745
+
+# Art direction
+adult_proportions=true
+oversized_anime_head=false
+flat_chibi=false
+soft_cinematic_shading=true
+realistic_feature_scale=true
