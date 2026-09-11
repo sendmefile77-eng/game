@@ -80,7 +80,8 @@
 - [x] Optional G-007 adult-scene bridge to `core:scene`.
 - [x] Android offline scene renderer with deterministic fallback.
 - [x] APK/classpath scene-pack loading contract.
-- [ ] G-008 first real offline adult raster asset pack — in progress.
+- [x] G-008 procedural raster pack evaluated and rejected as final visual layer; it is not a release dependency.
+- [ ] High-quality portrait renderer remains a replaceable post-v0.1 presentation layer and must be proven by a real visual prototype before integration.
 
 ## v0.1 Playable milestone
 - [x] Map-first observer sandbox.
@@ -94,7 +95,10 @@
 - [x] Long-run deterministic integration test added.
 - [x] History save consistency validation hardened.
 - [x] Full JVM regression suite wired into manual milestone workflow.
-- [ ] Review and merge G-008 visual assets.
+- [x] Rejected G-008 removed from the milestone gate; deterministic local fallback remains mandatory.
+- [x] Map settlement selection connected to the playable Android shell.
+- [x] Long time advances moved off the Compose UI thread.
+- [x] Map-first UI split into focused state/person/time/chronicle panels.
 - [ ] Run the first manual GitHub Actions milestone build.
 - [ ] Install APK and complete `docs/PLAYABLE_V01_QA.md` phone pass.
 
@@ -113,7 +117,12 @@
 - space polities, trade and conflict;
 - long-term galactic simulation.
 
+## Presentation strategy after v0.1
+The simulation must never depend on a particular portrait engine. The current deterministic local renderer is a safe fallback, not the final art target. Any future 2D, 3D-to-pixel or other renderer consumes `ResolvedScene`/morphology descriptors and may be replaced without changing simulation state, saves or time branches.
+
+A final character renderer is accepted only after a standalone real-asset prototype proves identity continuity, dressed/undressed consistency, offline operation and acceptable visual quality. Concept images do not satisfy this gate.
+
 ## Build policy
 GitHub Actions stay manual-only. Run a build at meaningful playable/visual milestones, not after each commit, PR or internal module change.
 
-The next intended Actions run is the **first v0.1 Playable milestone build**, after G-008 and the current QA branch are reviewed and merged.
+The next intended Actions run is the **first v0.1 Playable milestone build**, after the playable-completion branch is reviewed and merged. No rejected visual pack is required for that build.
