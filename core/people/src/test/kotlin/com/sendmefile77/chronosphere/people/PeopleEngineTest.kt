@@ -18,6 +18,17 @@ class PeopleEngineTest {
     }
 
     @Test
+    fun initializeAtLateTickKeepsIntendedAdultAges() {
+        val world = sampleWorld(2_400L)
+        val state = engine.initialize(world)
+        state.persons.forEach { person ->
+            assertTrue(person.ageYearsAt(world.tick) in 0..90)
+        }
+        assertTrue(state.dynasties.all { it.foundedTick == world.tick })
+        assertTrue(state.relationships.all { it.startedTick == world.tick })
+    }
+
+    @Test
     fun longAdvanceKeepsAValidLivingRulerAndBoundedRoster() {
         val initialWorld = sampleWorld(0L)
         val initial = engine.initialize(initialWorld)
