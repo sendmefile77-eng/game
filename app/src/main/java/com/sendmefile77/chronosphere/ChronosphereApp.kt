@@ -108,6 +108,19 @@ fun ChronosphereApp() {
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
 
+                val leaders = session.state.civilizations.sortedByDescending { it.population }.take(3)
+                Text(
+                    "Leading states: " + leaders.joinToString(" · ") { "${it.name} ${it.population}" },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (session.state.wars.isNotEmpty()) {
+                    val names = session.state.civilizations.associate { it.id to it.name }
+                    Text(
+                        "Active wars: " + session.state.wars.take(2).joinToString(" · ") { "${names[it.civilizationA] ?: it.civilizationA}–${names[it.civilizationB] ?: it.civilizationB}" },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
                 Column(modifier = Modifier.fillMaxWidth().heightIn(max = 132.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Recent chronicle", style = MaterialTheme.typography.titleSmall)
                     session.state.recentEvents.takeLast(4).reversed().forEach { event ->
@@ -129,7 +142,13 @@ private fun newSession(seed: Long, generator: WorldGenerator, hydrology: WorldHy
 private fun sessionFromState(state: LivingPlanetState, generator: WorldGenerator, hydrology: WorldHydrology, resourceGenerator: WorldResourceGenerator): GameSession {
     val world = generator.generate(WorldSeed(state.worldSeed))
     val resources = resourceGenerator.generate(world)
-    return GameSession(world, resources, hydrology.generateRivers(world), state)
+    val normalizedState = if (state.relations.isEmpty() && state.civilizations.size > 1) {
+        val defaultRelations = CivilizationEngine(world, resources).initialize(state.civilizations.size).relations
+        state.copy(relations = defaultRelations)
+    } else {
+        state
+    }
+    return GameSession(world, resources, hydrology.generateRivers(world), normalizedState)
 }
 
 private fun advance(session: GameSession, months: Int): GameSession = session.copy(state = CivilizationEngine(session.world, session.resources).advance(session.state, months))
