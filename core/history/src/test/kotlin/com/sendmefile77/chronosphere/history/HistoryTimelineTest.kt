@@ -5,6 +5,7 @@ import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HistoryTimelineTest {
@@ -52,6 +53,20 @@ class HistoryTimelineTest {
 
         workspace = timeline.switchTo(workspace, "branch-1")
         assertEquals(72L, workspace.activeState.tick)
+    }
+
+    @Test
+    fun checkpointFromAnotherBranchCannotOverwriteActiveTimeline() {
+        val initial = sampleState(tick = 12L)
+        var workspace = timeline.create(initial)
+        workspace = timeline.checkpoint(workspace, "Root checkpoint")
+        val rootCheckpoint = workspace.checkpoints.single().id
+        workspace = timeline.fork(workspace, "Alternative")
+        workspace = timeline.syncActive(workspace, initial.copy(tick = 84L))
+
+        val result = runCatching { timeline.restoreCheckpoint(workspace, rootCheckpoint) }
+        assertTrue(result.isFailure)
+        assertEquals(84L, workspace.activeState.tick)
     }
 
     private fun sampleState(tick: Long): LivingPlanetState {
