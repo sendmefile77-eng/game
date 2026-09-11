@@ -22,14 +22,19 @@ object HordeResolvedScenePromptFactory {
         scene: ResolvedScene,
         characterKey: String,
         ageYears: Int,
+        visualTags: Set<String> = emptySet(),
+        visualNumeric: Map<String, Double> = emptyMap(),
     ): HordeImageRequest {
         require(characterKey.isNotBlank())
         require(ageYears >= 0)
+        require(visualTags.none { it.isBlank() })
+        require(visualNumeric.values.all { it.isFinite() })
 
         val undressed = scene.wardrobeState == WardrobeState.UNDRESSED
         require(!undressed || ageYears >= 18) { "Undressed Horde requests require an adult character" }
 
         val identity = HordeCharacterVisualProfile.from(characterKey)
+        val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
         val agePhrase = when {
             ageYears < 13 -> "child age $ageYears"
             ageYears < 18 -> "teenager age $ageYears"
@@ -37,7 +42,8 @@ object HordeResolvedScenePromptFactory {
             ageYears < 60 -> "mature adult age $ageYears"
             else -> "older adult age $ageYears"
         }
-        val morphology = when {
+        val morphologyPhrase = when {
+            morphology.promptFragment.isNotBlank() -> morphology.promptFragment
             scene.bodyRigKey.contains("morph", ignoreCase = true) ->
                 "distinctive nonstandard humanoid morphology matching the fictional lineage"
             else -> "natural humanlike anatomy"
@@ -59,11 +65,11 @@ object HordeResolvedScenePromptFactory {
             add("high quality photorealistic single fictional character")
             add(agePhrase)
             add(identity.promptFragment)
-            add(morphology)
+            add(morphologyPhrase)
             add(wardrobe)
             add(camera)
             add("consistent facial identity and appearance across images")
-            add("natural proportions")
+            add("natural proportions appropriate to the specified body plan")
             add("detailed face")
             add("realistic skin and material detail")
             add("coherent pose")
@@ -96,11 +102,17 @@ object HordeResolvedScenePromptFactory {
             }
         }.joinToString(", ")
 
-        val referenceCacheKey = "horde-character-reference-v1|$characterKey|${identity.signature}"
-        val cacheKey = listOf(
-            "horde-resolved-scene-v3",
+        val referenceCacheKey = listOf(
+            "horde-character-reference-v2",
             characterKey,
             identity.signature,
+            morphology.signature,
+        ).joinToString("|")
+        val cacheKey = listOf(
+            "horde-resolved-scene-v4",
+            characterKey,
+            identity.signature,
+            morphology.signature,
             ageYears.toString(),
             scene.sceneKey,
             scene.styleId,
@@ -122,7 +134,7 @@ object HordeResolvedScenePromptFactory {
             negativePrompt = negative,
             nsfw = undressed,
             ageYears = ageYears,
-            seed = "chronosphere:$characterKey",
+            seed = "chronosphere:$characterKey:${morphology.signature}",
             preferredModels = if (undressed) nsfwModels else sfwModels,
             referenceCacheKey = referenceCacheKey,
             saveResultAsReference = canonicalPortrait,

@@ -87,6 +87,8 @@ fun CharacterCardPanel(
                 scene = scene,
                 characterKey = person.id,
                 ageYears = age,
+                visualTags = descriptor?.tags ?: emptySet(),
+                visualNumeric = descriptor?.numeric ?: emptyMap(),
             )
 
             if (dynasty != null) {
