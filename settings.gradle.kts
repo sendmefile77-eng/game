@@ -25,6 +25,7 @@ include(
     ":core:economy",
     ":core:evolution",
     ":core:society",
+    ":core:scene",
     ":core:history",
     ":core:textgen",
     ":core:storage",
