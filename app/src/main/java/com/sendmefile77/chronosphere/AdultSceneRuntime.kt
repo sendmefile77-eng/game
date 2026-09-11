@@ -17,7 +17,7 @@ internal class AdultSceneRuntime private constructor(
 
     fun resolveCharacterCard(request: AdultEventRequest, undressed: Boolean): ResolvedScene? {
         val target = bridge ?: return null
-        val method = if (undressed) undressedMethod else dressedMethod ?: return null
+        val method = (if (undressed) undressedMethod else dressedMethod) ?: return null
         return runCatching { method.invoke(target, request) as? ResolvedScene }.getOrNull()
     }
 
