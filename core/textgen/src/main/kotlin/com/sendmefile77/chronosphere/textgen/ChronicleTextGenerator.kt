@@ -22,6 +22,15 @@ class ChronicleTextGenerator {
         }
         "ALLIANCE_FORMED" -> "${event.facts["a"] ?: "Одна держава"} та ${event.facts["b"] ?: "інша"} уклали союз."
         "ALLIANCE_ENDED" -> "Союз між ${event.facts["a"] ?: "двома державами"} та ${event.facts["b"] ?: "їхнім партнером"} припинив існування."
+        "PERSON_DIED" -> {
+            val age = event.numbers["age"]?.toInt()
+            if (age != null) "Померла історична постать ${event.facts["person"] ?: "невідома особа"} у віці $age років."
+            else "Померла історична постать ${event.facts["person"] ?: "невідома особа"}."
+        }
+        "RULER_SUCCEEDED" -> "${event.facts["person"] ?: "Новий правитель"} очолив державу ${event.facts["civilization"] ?: "невідомого народу"}."
+        "DYNASTY_FOUNDED" -> "${event.facts["person"] ?: "Нова постать"} започаткував нову правлячу династію в державі ${event.facts["civilization"] ?: "невідомого народу"}."
+        "RULER_PARTNERSHIP_FORMED" -> "Правитель ${event.facts["ruler"] ?: "невідома особа"} утворив династичний союз із ${event.facts["partner"] ?: "новим партнером"}."
+        "DYNASTIC_BIRTH" -> "У правлячому домі держави ${event.facts["civilization"] ?: "невідомого народу"} народився новий династ — ${event.facts["person"] ?: "дитина"}."
         "INTERVENTION_HARVEST_AID" -> "Зовнішнє втручання посилило врожайність у державі ${event.facts["civilization"] ?: "невідомого народу"}."
         "INTERVENTION_DROUGHT" -> "Штучно спричинена посуха вдарила по державі ${event.facts["civilization"] ?: "невідомого народу"}, скоротивши запаси продовольства та населення."
         "INTERVENTION_TECH_BOOST" -> "Держава ${event.facts["civilization"] ?: "невідомого народу"} отримала різкий технологічний імпульс."
