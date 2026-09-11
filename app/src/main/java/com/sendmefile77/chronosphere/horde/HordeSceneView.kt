@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere.horde
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.LocalSceneFallbackView
 import com.sendmefile77.chronosphere.scene.ResolvedScene
@@ -51,6 +53,8 @@ internal fun HordeSceneView(
 
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = HordeUiState.Loading
+        val attemptRequest = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
+
         val cached = withContext(Dispatchers.IO) { cache.read(request.cacheKey) }
         if (cached != null) {
             if (request.saveResultAsReference) {
@@ -67,11 +71,11 @@ internal fun HordeSceneView(
                 withContext(Dispatchers.IO) { references.read(key) }
             }
             val effectiveRequest = reference?.model?.let { canonicalModel ->
-                request.copy(
-                    preferredModels = (listOf(canonicalModel) + request.preferredModels)
+                attemptRequest.copy(
+                    preferredModels = (listOf(canonicalModel) + attemptRequest.preferredModels)
                         .distinctBy { it.lowercase() },
                 )
-            } ?: request
+            } ?: attemptRequest
 
             val result = if (reference != null) {
                 try {
@@ -84,10 +88,8 @@ internal fun HordeSceneView(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Throwable) {
-                    // Img2img availability depends on the volunteer worker pool. It is an
-                    // enhancement, never a hard requirement for rendering a playable scene.
                     client.generate(
-                        request = request,
+                        request = attemptRequest,
                         sourceImageBytes = null,
                         timeoutMillis = 75_000L,
                         pollIntervalMillis = 3_000L,
@@ -95,7 +97,7 @@ internal fun HordeSceneView(
                 }
             } else {
                 client.generate(
-                    request = request,
+                    request = attemptRequest,
                     sourceImageBytes = null,
                     timeoutMillis = 75_000L,
                     pollIntervalMillis = 3_000L,
@@ -120,7 +122,7 @@ internal fun HordeSceneView(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         when (val current = state) {
             HordeUiState.Loading -> {
@@ -177,16 +179,34 @@ internal fun HordeSceneView(
                             contentScale = ContentScale.Crop,
                         )
                     }
-                    if (current.model != null || current.usedReference) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
                             text = buildString {
                                 append("AI Horde")
                                 current.model?.let { append(" · $it") }
-                                if (current.usedReference) append(" · reference")
+                                if (current.usedReference) append(" · ref")
                             },
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        CompactAction("Інший варіант") {
+                            cache.remove(request.cacheKey)
+                            retryNonce += 1
+                        }
+                        if (request.saveResultAsReference && request.referenceCacheKey != null) {
+                            CompactAction("Новий образ") {
+                                cache.remove(request.cacheKey)
+                                references.remove(request.referenceCacheKey)
+                                retryNonce += 1
+                            }
+                        }
                     }
                 }
             }
@@ -200,11 +220,28 @@ internal fun HordeSceneView(
                 )
                 FailureRow(
                     message = current.message,
-                    onRetry = { retryNonce += 1 },
+                    onRetry = {
+                        cache.remove(request.cacheKey)
+                        retryNonce += 1
+                    },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun CompactAction(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = label,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 5.dp),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        maxLines = 1,
+    )
 }
 
 @Composable
