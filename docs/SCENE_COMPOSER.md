@@ -23,6 +23,18 @@ A scene recipe is data, not a bitmap. It references compatible assets such as:
 
 Actual binary art is supplied by asset packs. Core stores logical asset keys only.
 
+## Character-card visual actions
+Adult character cards may expose deterministic visual actions such as **`Роздягнути`**. These are scene-state transitions, not independent random image requests.
+
+Rules:
+- the action exists only for characters who are at least 18 at the current tick;
+- the action changes the wardrobe state of the same character identity/morphology and preserves lineage, ancestry, body plan and visible appearance continuity;
+- rig/body compatibility is checked before resolution;
+- a non-baseline morphology must never receive a clearly incompatible baseline body rig;
+- if the active asset pack has no compatible undressed representation, use a deterministic morphology-safe fallback instead of broken composition;
+- dressed and undressed representations of the same character should share stable appearance/morphology keys so the person remains recognizably the same character;
+- optional adult asset packs may provide richer wardrobe states through the same scene interface without changing core simulation facts.
+
 ## Compatibility first
 Random mixing is forbidden. Every selectable combination must pass compatibility rules before weighting.
 
@@ -35,6 +47,7 @@ A compatibility rule may constrain:
 - prop/anchor requirements;
 - camera visibility requirements;
 - culture/era tags;
+- morphology/body-plan tags and numeric ranges;
 - pack version.
 
 If no complete compatible recipe exists, the composer must fall back deterministically to a simpler supported representation (portrait, silhouette, symbolic scene, or text-only event) rather than rendering broken layers.
@@ -48,7 +61,7 @@ If no complete compatible recipe exists, the composer must fall back determinist
 ## Asset-pack rules
 - One coherent visual style per pack.
 - Assets within a pack share documented anchors, scale and rig conventions.
-- Packs declare supported rig/pose/clothing/location combinations.
+- Packs declare supported rig/pose/clothing/location/morphology combinations.
 - Pack validation rejects missing anchors, unknown slots, duplicate ids and impossible compatibility references.
 - Packs can extend the composer without changing simulation facts or core state.
 
