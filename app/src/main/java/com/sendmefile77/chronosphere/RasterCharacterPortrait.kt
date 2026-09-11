@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.util.Base64
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -18,11 +19,11 @@ import androidx.compose.ui.platform.LocalContext
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
 /**
- * Real offline raster constructor backed by local atlases physically cut from the approved
- * mature semi-realistic character-library boards. No runtime AI and no network access.
+ * Offline raster character constructor. Runtime never generates images and never uses network/AI.
  *
- * Ordinary portraits keep the layered head/body/wardrobe constructor. Adult female-family
- * UNDRESSED cards can use focused normalized local anatomy atlases supplied by the user.
+ * The previous v02 atlas in main was physically truncated, so BitmapFactory returned null and the
+ * UI silently fell back to the old vector/cartoon portrait. v03 is a validated raster atlas and a
+ * missing/corrupt pack is now surfaced as an asset error instead of silently changing art style.
  */
 @Composable
 internal fun RasterCharacterPortrait(
@@ -33,65 +34,17 @@ internal fun RasterCharacterPortrait(
 ) {
     val context = LocalContext.current.applicationContext
     val atlas = remember(context) {
-        runCatching {
-            context.assets.open(RasterCharacterLibraryV01.ATLAS_PATH).use { stream ->
-                BitmapFactory.decodeStream(stream)
-            }
-        }.getOrNull()
+        decodeBase64AssetBitmap(context.assets, RasterCharacterLibraryV01.ATLAS_BASE64_PARTS)
     }
-    val femaleLowerFrontAtlas = remember(context) {
-        runCatching {
-            context.assets.open(RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_ATLAS_PATH).use { stream ->
-                BitmapFactory.decodeStream(stream)
-            }
-        }.getOrNull()
-    }
-    val femaleUpperTorsoAtlas = remember(context) {
-        runCatching {
-            context.assets.open(RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_ATLAS_PATH).use { stream ->
-                BitmapFactory.decodeStream(stream)
-            }
-        }.getOrNull()
+    val femaleUndressTorsoAtlas = remember(context) {
+        decodeBase64AssetBitmap(context.assets, RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_BASE64_PARTS)
     }
     val selection = remember(characterKey, ageYears) {
         RasterCharacterLibraryV01.select(characterKey, ageYears)
     }
 
-    // User-supplied focused atlases are adult, female-only and UNDRESSED-only.
-    if (
-        ageYears >= 18 &&
-        wardrobeState == WardrobeState.UNDRESSED &&
-        selection.femaleFamily
-    ) {
-        if (femaleUpperTorsoAtlas != null) {
-            Canvas(modifier = modifier) {
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Color(0xFF1A2229), Color(0xFF10151A))),
-                    size = size,
-                )
-                drawFemaleUpperTorso(femaleUpperTorsoAtlas, selection.upperTorsoIndex)
-            }
-            return
-        }
-        if (femaleLowerFrontAtlas != null) {
-            Canvas(modifier = modifier) {
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Color(0xFF1A2229), Color(0xFF10151A))),
-                    size = size,
-                )
-                drawFemaleLowerFront(femaleLowerFrontAtlas, selection.lowerFrontIndex)
-            }
-            return
-        }
-    }
-
     if (atlas == null) {
-        ModularCharacterPortrait(
-            characterKey = characterKey,
-            ageYears = ageYears,
-            wardrobeState = wardrobeState,
-            modifier = modifier,
-        )
+        BrokenRasterPackPortrait(modifier)
         return
     }
 
@@ -100,64 +53,109 @@ internal fun RasterCharacterPortrait(
             brush = Brush.verticalGradient(listOf(Color(0xFF1A2229), Color(0xFF10151A))),
             size = size,
         )
-        drawRasterCharacter(atlas, selection, wardrobeState)
+
+        val useFemaleUndressTorso =
+            ageYears >= 18 &&
+                wardrobeState == WardrobeState.UNDRESSED &&
+                selection.femaleFamily &&
+                femaleUndressTorsoAtlas != null
+
+        if (useFemaleUndressTorso) {
+            drawFemaleUndressedCharacter(
+                baseAtlas = atlas,
+                torsoAtlas = femaleUndressTorsoAtlas!!,
+                selection = selection,
+            )
+        } else {
+            drawRasterCharacter(atlas, selection, wardrobeState)
+        }
+    }
+}
+
+private fun decodeBase64AssetBitmap(
+    assets: android.content.res.AssetManager,
+    paths: List<String>,
+): Bitmap? = runCatching {
+    val encoded = buildString {
+        paths.forEach { path ->
+            assets.open(path).bufferedReader().use { reader -> append(reader.readText()) }
+        }
+    }
+    val bytes = Base64.decode(encoded, Base64.DEFAULT)
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.takeIf { bitmap ->
+        bitmap.width > 0 && bitmap.height > 0
+    }
+}.getOrNull()
+
+@Composable
+private fun BrokenRasterPackPortrait(modifier: Modifier) {
+    Canvas(modifier = modifier) {
+        drawRect(
+            brush = Brush.verticalGradient(listOf(Color(0xFF20191B), Color(0xFF120F11))),
+            size = size,
+        )
+        val stroke = size.minDimension * 0.018f
+        drawLine(
+            color = Color(0xFFB65B62),
+            start = androidx.compose.ui.geometry.Offset(size.width * 0.35f, size.height * 0.35f),
+            end = androidx.compose.ui.geometry.Offset(size.width * 0.65f, size.height * 0.65f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = Color(0xFFB65B62),
+            start = androidx.compose.ui.geometry.Offset(size.width * 0.65f, size.height * 0.35f),
+            end = androidx.compose.ui.geometry.Offset(size.width * 0.35f, size.height * 0.65f),
+            strokeWidth = stroke,
+        )
     }
 }
 
 internal object RasterCharacterLibraryV01 {
-    const val ATLAS_PATH = "character_library/v0_1/character_parts_v02.webp"
-    const val FEMALE_LOWER_FRONT_ATLAS_PATH =
-        "character_library/v0_1/female_lower_front_v01.webp"
-    const val FEMALE_UPPER_TORSO_ATLAS_PATH =
-        "character_library/v0_1/female_upper_torso_v01.webp"
+    val ATLAS_BASE64_PARTS = listOf(
+        "character_library/v0_1/character_parts_v03_480.b64.00",
+        "character_library/v0_1/character_parts_v03_480.b64.01",
+    )
+    val FEMALE_UNDRESS_TORSO_BASE64_PARTS = listOf(
+        "character_library/v0_1/female_undress_torsos_v01_384.b64.00",
+    )
 
-    const val ATLAS_SIZE = 320
-    const val CELL_W = 40
-    const val CELL_H = 50
+    const val CELL_W = 70
+    const val CELL_H = 85
     const val VARIANTS = 6
 
     const val FEMALE_HEAD_Y = 0
-    const val MALE_HEAD_Y = 50
-    const val FEMALE_GARMENT_Y = 100
-    const val MALE_GARMENT_Y = 150
+    const val MALE_HEAD_Y = 85
+    const val FEMALE_GARMENT_Y = 170
+    const val MALE_GARMENT_Y = 255
 
-    const val TORSO_Y = 200
-    const val TORSO_W = 60
-    const val TORSO_H = 100
+    const val TORSO_Y = 340
+    const val TORSO_W = 110
+    const val TORSO_H = 140
 
-    const val FEMALE_LOWER_FRONT_CELL_W = 240
-    const val FEMALE_LOWER_FRONT_CELL_H = 256
-    const val FEMALE_LOWER_FRONT_COLUMNS = 4
-    const val FEMALE_LOWER_FRONT_VARIANTS = 12
-
-    const val FEMALE_UPPER_TORSO_CELL_W = 128
-    const val FEMALE_UPPER_TORSO_CELL_H = 150
-    const val FEMALE_UPPER_TORSO_COLUMNS = 3
-    const val FEMALE_UPPER_TORSO_VARIANTS = 9
-    const val FEMALE_UPPER_TORSO_MATURE_INDEX = 8
+    const val FEMALE_UNDRESS_TORSO_CELL_W = 128
+    const val FEMALE_UNDRESS_TORSO_CELL_H = 150
+    const val FEMALE_UNDRESS_TORSO_COLUMNS = 3
+    const val FEMALE_UNDRESS_TORSO_VARIANTS = 9
+    const val FEMALE_UNDRESS_MATURE_INDEX = 8
 
     data class Selection(
         val femaleFamily: Boolean,
         val headIndex: Int,
         val garmentIndex: Int,
-        val lowerFrontIndex: Int,
-        val upperTorsoIndex: Int,
+        val femaleUndressTorsoIndex: Int,
     )
 
     fun select(characterKey: String, ageYears: Int): Selection {
         val hash = stableHash(characterKey)
         val youngHead = (hash ushr 3) % (VARIANTS - 1)
-        // The sixth head in each row is the mature/elder variant from the same source board.
         val head = if (ageYears >= 60) VARIANTS - 1 else youngHead
-        val youngUpperTorso = (hash ushr 19) % (FEMALE_UPPER_TORSO_VARIANTS - 1)
+        val youngTorso = (hash ushr 17) % (FEMALE_UNDRESS_TORSO_VARIANTS - 1)
+        val undressTorso = if (ageYears >= 40) FEMALE_UNDRESS_MATURE_INDEX else youngTorso
         return Selection(
             femaleFamily = (hash and 1) == 0,
             headIndex = head,
             garmentIndex = (hash ushr 11) % VARIANTS,
-            lowerFrontIndex = (hash ushr 16) % FEMALE_LOWER_FRONT_VARIANTS,
-            // The ninth selected cell is the supplied mature-40s variant.
-            upperTorsoIndex =
-                if (ageYears >= 40) FEMALE_UPPER_TORSO_MATURE_INDEX else youngUpperTorso,
+            femaleUndressTorsoIndex = undressTorso,
         )
     }
 
@@ -171,66 +169,41 @@ internal object RasterCharacterLibraryV01 {
     }
 }
 
-private fun DrawScope.drawFemaleUpperTorso(atlas: Bitmap, variantIndex: Int) {
-    val column = variantIndex % RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_COLUMNS
-    val row = variantIndex / RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_COLUMNS
-    val left = column * RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_W
-    val top = row * RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_H
-    val source = Rect(
-        left,
-        top,
-        left + RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_W,
-        top + RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_H,
-    )
-    drawFocusedAtlasCell(
-        atlas = atlas,
-        source = source,
-        sourceWidth = RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_W,
-        sourceHeight = RasterCharacterLibraryV01.FEMALE_UPPER_TORSO_CELL_H,
-    )
-}
-
-private fun DrawScope.drawFemaleLowerFront(atlas: Bitmap, variantIndex: Int) {
-    val column = variantIndex % RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_COLUMNS
-    val row = variantIndex / RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_COLUMNS
-    val left = column * RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W
-    val top = row * RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H
-    val source = Rect(
-        left,
-        top,
-        left + RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W,
-        top + RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H,
-    )
-    drawFocusedAtlasCell(
-        atlas = atlas,
-        source = source,
-        sourceWidth = RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W,
-        sourceHeight = RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H,
-    )
-}
-
-private fun DrawScope.drawFocusedAtlasCell(
-    atlas: Bitmap,
-    source: Rect,
-    sourceWidth: Int,
-    sourceHeight: Int,
+private fun DrawScope.drawFemaleUndressedCharacter(
+    baseAtlas: Bitmap,
+    torsoAtlas: Bitmap,
+    selection: RasterCharacterLibraryV01.Selection,
 ) {
-    // Fit without independent X/Y stretching so anatomy is not deformed by phone aspect ratio.
-    val scale = minOf(
-        size.width / sourceWidth,
-        size.height / sourceHeight,
-    )
-    val width = sourceWidth * scale
-    val height = sourceHeight * scale
-    val target = RectF(
-        (size.width - width) / 2f,
-        (size.height - height) / 2f,
-        (size.width + width) / 2f,
-        (size.height + height) / 2f,
-    )
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+    val torsoIndex = selection.femaleUndressTorsoIndex
+    val column = torsoIndex % RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_COLUMNS
+    val row = torsoIndex / RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_COLUMNS
+    val torsoSource = Rect(
+        column * RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_CELL_W,
+        row * RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_CELL_H,
+        (column + 1) * RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_CELL_W,
+        (row + 1) * RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_CELL_H,
+    )
+    val torsoTarget = logicalRect(35f, 150f, 285f, 480f)
     drawIntoCanvas { canvas ->
-        canvas.nativeCanvas.drawBitmap(atlas, source, target, paint)
+        canvas.nativeCanvas.drawBitmap(torsoAtlas, torsoSource, torsoTarget, paint)
+    }
+
+    val headX = selection.headIndex * RasterCharacterLibraryV01.CELL_W
+    val headSource = Rect(
+        headX,
+        RasterCharacterLibraryV01.FEMALE_HEAD_Y,
+        headX + RasterCharacterLibraryV01.CELL_W,
+        RasterCharacterLibraryV01.FEMALE_HEAD_Y + RasterCharacterLibraryV01.CELL_H,
+    )
+    drawIntoCanvas { canvas ->
+        canvas.nativeCanvas.drawBitmap(
+            baseAtlas,
+            headSource,
+            logicalRect(75f, 8f, 245f, 225f),
+            paint,
+        )
     }
 }
 
@@ -239,16 +212,7 @@ private fun DrawScope.drawRasterCharacter(
     selection: RasterCharacterLibraryV01.Selection,
     wardrobeState: WardrobeState,
 ) {
-    val sx = size.width / LOGICAL_W
-    val sy = size.height / LOGICAL_H
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-
-    fun dst(left: Float, top: Float, right: Float, bottom: Float): RectF = RectF(
-        left * sx,
-        top * sy,
-        right * sx,
-        bottom * sy,
-    )
 
     fun drawPart(src: Rect, target: RectF, alpha: Int = 255) {
         paint.alpha = alpha
@@ -264,7 +228,7 @@ private fun DrawScope.drawRasterCharacter(
         torsoX + RasterCharacterLibraryV01.TORSO_W,
         RasterCharacterLibraryV01.TORSO_Y + RasterCharacterLibraryV01.TORSO_H,
     )
-    drawPart(torsoSrc, dst(55f, 165f, 265f, 480f))
+    drawPart(torsoSrc, logicalRect(55f, 165f, 265f, 480f))
 
     if (wardrobeState != WardrobeState.UNDRESSED) {
         val garmentY = if (selection.femaleFamily) {
@@ -283,7 +247,7 @@ private fun DrawScope.drawRasterCharacter(
             WardrobeState.PARTIAL, WardrobeState.DAMAGED -> 220
             else -> 255
         }
-        drawPart(garmentSrc, dst(60f, 205f, 260f, 465f), garmentAlpha)
+        drawPart(garmentSrc, logicalRect(60f, 205f, 260f, 465f), garmentAlpha)
     }
 
     val headY = if (selection.femaleFamily) {
@@ -298,7 +262,13 @@ private fun DrawScope.drawRasterCharacter(
         headX + RasterCharacterLibraryV01.CELL_W,
         headY + RasterCharacterLibraryV01.CELL_H,
     )
-    drawPart(headSrc, dst(75f, 10f, 245f, 235f))
+    drawPart(headSrc, logicalRect(75f, 8f, 245f, 225f))
+}
+
+private fun DrawScope.logicalRect(left: Float, top: Float, right: Float, bottom: Float): RectF {
+    val sx = size.width / LOGICAL_W
+    val sy = size.height / LOGICAL_H
+    return RectF(left * sx, top * sy, right * sx, bottom * sy)
 }
 
 private const val LOGICAL_W = 320f
