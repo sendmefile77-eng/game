@@ -33,6 +33,7 @@ import com.sendmefile77.chronosphere.map.WorldMapView
 import com.sendmefile77.chronosphere.simulation.SimulationClock
 import com.sendmefile77.chronosphere.simulation.WorldSeed
 import com.sendmefile77.chronosphere.storage.GameSnapshotV1
+import com.sendmefile77.chronosphere.storage.HistoryWorkspaceSnapshotV1
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
 import com.sendmefile77.chronosphere.worldgen.ResourceDeposit
 import com.sendmefile77.chronosphere.worldgen.TileCoord
@@ -42,6 +43,7 @@ import com.sendmefile77.chronosphere.worldgen.WorldMap
 import com.sendmefile77.chronosphere.worldgen.WorldResourceGenerator
 
 private const val SAVE_FILE = "chronosphere-save-v1.txt"
+private const val HISTORY_FILE = "chronosphere-history-v1.txt"
 
 data class GameSession(
     val world: WorldMap,
@@ -198,24 +200,38 @@ fun ChronosphereApp() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         saveStatus = runCatching {
+                            val syncedWorkspace = historyTimeline.syncActive(workspace, session.state)
                             context.openFileOutput(SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
                                 it.write(GameSnapshotV1.encode(session.state))
                             }
-                            "Saved locally"
+                            context.openFileOutput(HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
+                                it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace))
+                            }
+                            workspace = syncedWorkspace
+                            "Saved world + timelines"
                         }.getOrElse { "Save failed: ${it.message ?: "unknown error"}" }
                     }) { Text("Save") }
                     Button(onClick = {
                         saveStatus = runCatching {
-                            val loaded = context.openFileInput(SAVE_FILE).bufferedReader().use {
+                            val loadedWorkspace = runCatching {
+                                context.openFileInput(HISTORY_FILE).bufferedReader().use {
+                                    HistoryWorkspaceSnapshotV1.decode(it.readText())
+                                }
+                            }.getOrNull()
+                            val loadedState = loadedWorkspace?.activeState ?: context.openFileInput(SAVE_FILE).bufferedReader().use {
                                 GameSnapshotV1.decode(it.readText())
                             }
-                            val loadedSession = sessionFromState(loaded, generator, hydrology, resourceGenerator)
+                            val loadedSession = sessionFromState(loadedState, generator, hydrology, resourceGenerator)
                             session = loadedSession
-                            workspace = historyTimeline.create(loadedSession.state)
+                            workspace = if (loadedWorkspace != null) {
+                                historyTimeline.syncActive(loadedWorkspace, loadedSession.state)
+                            } else {
+                                historyTimeline.create(loadedSession.state)
+                            }
                             selectedCivilizationId = loadedSession.state.civilizations.first().id
-                            seedText = loaded.worldSeed.toString()
+                            seedText = loadedState.worldSeed.toString()
                             interventionSequence = 0L
-                            "Loaded local save"
+                            if (loadedWorkspace != null) "Loaded world + timelines" else "Loaded legacy save"
                         }.getOrElse { "Load failed: ${it.message ?: "no save"}" }
                     }) { Text("Load") }
                     Text(saveStatus, style = MaterialTheme.typography.bodySmall)
