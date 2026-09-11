@@ -24,7 +24,13 @@ internal object BundledVisualRecipes {
         rec("public.arcade.neon", setOf("PUBLIC_SEX"), "hardcore", "pair-square", "pose.bent-over-crowd", "wardrobe.hiked", "set.arcade", "cam.wide", "light.neon", setOf("exhibition", "penetration", "urban"), minP = 2, maxP = 8, forbidden = AdultCulture.AUSTERE, requiredEras = setOf(EraTags.URBAN, EraTags.INDUSTRIAL, EraTags.ELECTRIC, EraTags.INFORMATION), eraW = mapOf(EraTags.INFORMATION to 0.4, EraTags.URBAN to 0.3)),
         rec("bondage.cellar.restraint", setOf("BONDAGE_RITE"), "hardcore", "pair-frame", "pose.bound-spread", "wardrobe.straps", "set.cellar", "cam.low", "light.ember", setOf("bdsm", "restraint", "power"), minP = 2, maxP = 4),
         rec("altar.coupling.rite", setOf("ALTAR_COUPLING", "FERTILITY_RITE"), "ritual-sex", "pair-altar", "pose.altar-mount", "wardrobe.ceremonial-open", "set.altar", "cam.low", "light.flame", setOf("ritual", "penetration"), minP = 2, maxP = 6),
-        rec("hold.threshold.silhouette", setOf("CONTEXT_HOLD"), "symbolic", "solo-bust", "pose.hold", "wardrobe.opaque", "set.threshold", "cam.portrait", "light.low", setOf("fallback", "hold"), minP = 1, maxP = 99),
+        rec("hold.threshold.silhouette", setOf("CONTEXT_HOLD"), "symbolic", "solo-bust", "pose.hold", "wardrobe.opaque", "set.threshold", "cam.portrait", "light.low", setOf("fallback", "hold"), minP = 1, maxP = 99, plan = RigPlan.SILHOUETTE, minA = 0, maxA = 16, minL = 0, maxL = 16, minE = 0, maxE = 16, noTail = false, maxDiv = null),
+        rec("union.hybrid.blend", setOf("UNION", "AFFAIR", "DYNASTIC_BOND"), "coupling", "hybrid-pair-bed", "pose.missionary-blend", "wardrobe.undressed", "set.chamber", "cam.intimate", "light.lamp", setOf("penetration", "sex", "hybrid"), minP = 2, maxP = 2, weight = 1.35, plan = RigPlan.HYBRID, hybrid = true, maxDiv = 0.85),
+        rec("courtship.hybrid.garden", setOf("COURTSHIP"), "courtship", "hybrid-pair-standing", "pose.lean-close", "wardrobe.clothed", "set.garden", "cam.three-quarter", "light.day", setOf("clothed", "tender", "hybrid"), minP = 1, maxP = 2, weight = 1.2, plan = RigPlan.HYBRID, hybrid = true, maxDiv = 0.85),
+        rec("union.divergent.quad", setOf("UNION", "ROUGH_COUPLING"), "coupling", "quad-pair-bed", "pose.entwined-limbs", "wardrobe.undressed", "set.chamber", "cam.wide", "light.lamp", setOf("penetration", "sex", "divergent"), minP = 2, maxP = 2, weight = 1.5, plan = RigPlan.DIVERGENT, minA = 3, maxA = 6, noTail = false, minDiv = 0.2, maxDiv = 1.0),
+        rec("union.divergent.tailed", setOf("UNION", "AFFAIR", "FERTILITY_RITE"), "coupling", "tailed-pair-bed", "pose.coil-mount", "wardrobe.undressed", "set.chamber", "cam.intimate", "light.lamp", setOf("penetration", "sex", "tail"), minP = 2, maxP = 2, weight = 1.4, plan = RigPlan.DIVERGENT, needTail = true, noTail = false, minDiv = 0.15, maxDiv = 1.0),
+        rec("union.divergent.scaled", setOf("UNION", "SACRED_UNION"), "coupling", "scaled-pair-bed", "pose.missionary", "wardrobe.none", "set.chamber", "cam.intimate", "light.cool", setOf("penetration", "sex", "scales"), minP = 2, maxP = 2, weight = 1.3, plan = RigPlan.DIVERGENT, covering = "scales", noTail = false, minDiv = 0.2, maxDiv = 1.0),
+        rec("rough.divergent.semi", setOf("ROUGH_COUPLING", "POWER_FUCK"), "hardcore", "stooped-pair", "pose.prone-bone", "wardrobe.ripped", "set.war-tent", "cam.low", "light.lantern", setOf("rough-sex", "penetration", "divergent"), minP = 2, maxP = 2, weight = 1.2, plan = RigPlan.DIVERGENT, posture = "semi_upright", noTail = false, minDiv = 0.2, maxDiv = 1.0),
     )
 
     private fun rec(
@@ -32,10 +38,18 @@ internal object BundledVisualRecipes {
         setting: String, camera: String, light: String, effects: Set<String>,
         minP: Int = 1, maxP: Int = 8, weight: Double = 1.0, forbidden: Set<String> = emptySet(),
         requiredEras: Set<String> = emptySet(), eraW: Map<String, Double> = emptyMap(), numW: Map<String, Double> = emptyMap(),
+        plan: RigPlan = RigPlan.BASELINE, posture: String = "", covering: String = "",
+        minA: Int = 2, maxA: Int = 2, minL: Int = 2, maxL: Int = 2, minE: Int = 1, maxE: Int = 2,
+        needTail: Boolean = false, noTail: Boolean = true, minDiv: Double? = null, maxDiv: Double? = 0.44,
+        hybrid: Boolean = false,
     ) = AdultVisualRecipe(
         id = id, eventCodes = events, sceneFamily = family, rigLayout = rig, poseKey = pose,
         wardrobeKey = wardrobe, settingKey = setting, cameraKey = camera, lightingKey = light,
         effectTags = effects, minParticipants = minP, maxParticipants = maxP, forbiddenTags = forbidden,
         requiredEras = requiredEras, eraWeights = eraW, numericWeights = numW, weight = weight,
+        rigPlan = plan, requiredPosture = posture, requiredCovering = covering,
+        minArms = minA, maxArms = maxA, minLegs = minL, maxLegs = maxL, minEyes = minE, maxEyes = maxE,
+        requireTail = needTail, forbidTail = noTail, minDivergence = minDiv, maxDivergence = maxDiv,
+        requireHybrid = hybrid,
     )
 }
