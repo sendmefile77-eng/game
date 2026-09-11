@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -48,12 +49,10 @@ import com.sendmefile77.chronosphere.simulation.WorldSeed
 import com.sendmefile77.chronosphere.storage.GameSnapshotV1
 import com.sendmefile77.chronosphere.storage.HistoryWorkspaceSnapshotV1
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
-import com.sendmefile77.chronosphere.worldgen.ResourceDeposit
-import com.sendmefile77.chronosphere.worldgen.TileCoord
 import com.sendmefile77.chronosphere.worldgen.WorldGenerator
 import com.sendmefile77.chronosphere.worldgen.WorldHydrology
-import com.sendmefile77.chronosphere.worldgen.WorldMap
 import com.sendmefile77.chronosphere.worldgen.WorldResourceGenerator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -212,6 +211,8 @@ fun ChronospherePlayableApp() {
                 }
                 val advancedTime = clock.at(result.world.tick)
                 saveStatus = "Час промотано до ${advancedTime.year} року"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Throwable) {
                 saveStatus = "Помилка моделювання: ${error.message ?: "невідома"}"
             } finally {
@@ -232,7 +233,8 @@ fun ChronospherePlayableApp() {
             strength = 0.65,
         )
         syncState(interventionEngine.apply(session.state, command), peopleState, economyState, evolutionState)
-        saveStatus = "Втручання застосовано до ${session.state.civilizations.first { it.id == targetId }.name}"
+        val targetName = session.state.civilizations.firstOrNull { it.id == targetId }?.name ?: targetId
+        saveStatus = "Втручання застосовано до $targetName"
     }
 
     fun activateWorkspaceState() {
@@ -349,7 +351,7 @@ fun ChronospherePlayableApp() {
                         enabled = !isAdvancing,
                         modifier = Modifier.weight(0.75f),
                     )
-                    Button(onClick = ::newWorld, enabled = !isAdvancing) { Text("Новий") }
+                    Button(onClick = { newWorld() }, enabled = !isAdvancing) { Text("Новий") }
                 }
 
                 val time = clock.at(session.state.tick)
@@ -659,8 +661,8 @@ fun ChronospherePlayableApp() {
 
                             Text("Локальне збереження", style = MaterialTheme.typography.titleSmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = ::saveGame, enabled = !isAdvancing) { Text("Зберегти") }
-                                Button(onClick = ::loadGame, enabled = !isAdvancing) { Text("Завантажити") }
+                                Button(onClick = { saveGame() }, enabled = !isAdvancing) { Text("Зберегти") }
+                                Button(onClick = { loadGame() }, enabled = !isAdvancing) { Text("Завантажити") }
                             }
                         }
 
@@ -707,7 +709,7 @@ fun ChronospherePlayableApp() {
 }
 
 @Composable
-private fun RowScopePanelButton(
+private fun RowScope.PanelButton(
     text: String,
     selected: Boolean,
     enabled: Boolean,
@@ -719,14 +721,6 @@ private fun RowScopePanelButton(
         OutlinedButton(onClick = onClick, enabled = enabled, modifier = Modifier.weight(1f)) { Text(text) }
     }
 }
-
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.PanelButton(
-    text: String,
-    selected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) = RowScopePanelButton(text, selected, enabled, onClick)
 
 private fun signedPlayable(value: Long): String = if (value >= 0) "+$value" else value.toString()
 private fun signedPlayable(value: Int): String = if (value >= 0) "+$value" else value.toString()
