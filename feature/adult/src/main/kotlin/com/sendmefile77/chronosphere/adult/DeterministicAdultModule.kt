@@ -11,8 +11,9 @@ import com.sendmefile77.chronosphere.adultcontracts.AdultModuleResult
  */
 class DeterministicAdultModule internal constructor(
     private val registry: AdultPackRegistry,
+    private val recipes: AdultVisualRecipeRegistry,
 ) : AdultModule {
-    constructor() : this(AdultPackRegistry.bundled())
+    constructor() : this(AdultPackRegistry.bundled(), AdultVisualRecipeRegistry.bundled())
 
     override val contractVersion: Int = ADULT_CONTRACT_VERSION
 
@@ -24,7 +25,7 @@ class DeterministicAdultModule internal constructor(
             requestId = request.requestId,
             eventCode = event.code,
             effects = AdultEffectResolver.effects(event, request, fingerprint),
-            mediaCue = AdultEffectResolver.mediaCue(event, request),
+            mediaCue = AdultEffectResolver.mediaCue(event, request, fingerprint, recipes),
         )
     }
 
