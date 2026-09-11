@@ -52,19 +52,12 @@ internal object AdultEffectResolver {
         return proposals
     }
 
-    fun mediaCue(event: AdultEventRule, request: AdultEventRequest): MediaCue {
-        val tone = AdultCulture.tone(request.context.cultureTags)
-        val cultures = request.context.cultureTags.map { it.lowercase() }.sorted()
-        val tags = buildSet {
-            addAll(event.mediaTags)
-            add(event.code.lowercase())
-            add(event.setting)
-            add(tone.explicitness)
-            addAll(cultures.take(4))
-            add("participants_${request.participants.size.coerceAtMost(8)}")
-        }
-        return MediaCue(assetKey = event.mediaKey, tags = tags)
-    }
+    fun mediaCue(
+        event: AdultEventRule,
+        request: AdultEventRequest,
+        fingerprint: Long,
+        recipes: AdultVisualRecipeRegistry = AdultVisualRecipeRegistry.bundled(),
+    ): MediaCue = recipes.mediaCue(event, request, fingerprint)
 
     private fun proposal(
         kind: CoreEffectKind,
