@@ -32,7 +32,14 @@ class PlayableLongRunIntegrationTest {
         assertEquals(first.people, second.people)
         assertEquals(first.economy, second.economy)
         assertEquals(first.evolution, second.evolution)
-        assertHealthy(first)
+        assertHealthy(first, expectedYears = 60)
+    }
+
+    @Test
+    fun severalSeedsRemainHealthyForFortyYears() {
+        listOf(1L, -1L, 987654321L).forEach { seed ->
+            assertHealthy(runWorld(seed = seed, years = 40), expectedYears = 40)
+        }
     }
 
     @Test
@@ -106,8 +113,8 @@ class PlayableLongRunIntegrationTest {
         return RunState(world, resources, state, people, economy, evolution)
     }
 
-    private fun assertHealthy(run: RunState) {
-        assertEquals(60L * 12L, run.state.tick)
+    private fun assertHealthy(run: RunState, expectedYears: Int) {
+        assertEquals(expectedYears.toLong() * 12L, run.state.tick)
         assertTrue(run.state.civilizations.isNotEmpty())
         assertTrue(run.state.settlements.isNotEmpty())
         assertTrue(run.state.totalPopulation > 0L)
@@ -121,6 +128,18 @@ class PlayableLongRunIntegrationTest {
             assertTrue(civilization.technology.isFinite())
             assertTrue(civilization.stability.isFinite())
             assertTrue(civilization.treasury.isFinite())
+        }
+        run.state.settlements.forEach { settlement ->
+            assertTrue(settlement.population >= 0L)
+            assertTrue(run.state.civilizations.any { it.id == settlement.civilizationId })
+        }
+        run.state.wars.forEach { war ->
+            assertTrue(run.state.civilizations.any { it.id == war.civilizationA })
+            assertTrue(run.state.civilizations.any { it.id == war.civilizationB })
+        }
+        run.state.alliances.forEach { alliance ->
+            assertTrue(run.state.civilizations.any { it.id == alliance.civilizationA })
+            assertTrue(run.state.civilizations.any { it.id == alliance.civilizationB })
         }
         run.economy.civilizations.forEach { civilization ->
             assertTrue(civilization.shortageIndex.isFinite())
