@@ -39,7 +39,7 @@ dependencies {
 
     // Full builds package the optional adult implementation when that module exists.
     // The app itself compiles only against core/adult-contracts and loads the implementation reflectively.
-    findProject(":feature:adult")?.let { runtimeOnly(it) }
+    project.findProject(":feature:adult")?.let { runtimeOnly(it) }
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
