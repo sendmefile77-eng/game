@@ -33,7 +33,9 @@ internal fun RasterCharacterPortrait(
     val context = LocalContext.current.applicationContext
     val atlas = remember(context) {
         runCatching {
-            context.assets.open(RasterCharacterLibraryV01.ATLAS_PATH).use(BitmapFactory::decodeStream)
+            context.assets.open(RasterCharacterLibraryV01.ATLAS_PATH).use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
         }.getOrNull()
     }
 
@@ -64,7 +66,6 @@ internal object RasterCharacterLibraryV01 {
     const val CELL_W = 96
     const val CELL_H = 120
     const val BODY_Y = 480
-    const val BODY_H = 240
     const val VARIANTS = 6
 
     data class Selection(
@@ -77,8 +78,8 @@ internal object RasterCharacterLibraryV01 {
         val hash = stableHash(characterKey)
         return Selection(
             femaleFamily = (hash and 1) == 0,
-            headIndex = ((hash ushr 3) % VARIANTS),
-            garmentIndex = ((hash ushr 11) % VARIANTS),
+            headIndex = (hash ushr 3) % VARIANTS,
+            garmentIndex = (hash ushr 11) % VARIANTS,
         )
     }
 
