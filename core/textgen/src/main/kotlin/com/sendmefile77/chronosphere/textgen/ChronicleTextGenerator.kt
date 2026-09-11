@@ -57,6 +57,11 @@ class ChronicleTextGenerator {
                 append('.')
             }
         }
+        "LINEAGE_FOUNDED" -> "У поселенні ${event.facts["settlement"] ?: "невідомому"} сформувалася окрема популяційна лінія — ${event.facts["lineage"] ?: "нова лінія"}."
+        "BIOLOGICAL_DIVERGENCE" -> "Лінія ${event.facts["lineage"] ?: "населення"} у ${event.facts["settlement"] ?: "регіоні"} досягла нового рівня біологічного розходження: ${event.facts["rank"] ?: "морф"}."
+        "STRUCTURAL_MUTATION" -> "У лінії ${event.facts["lineage"] ?: "населення"} закріпилася рідкісна структурна зміна тіла (${event.facts["bodyPlan"] ?: "новий план тіла"})."
+        "HYBRID_LINEAGE_FORMED" -> "У ${event.facts["settlement"] ?: "поселенні"} стабілізувалася гібридна лінія ${event.facts["lineage"] ?: "населення"}, що поєднує походження ${event.facts["primary"] ?: "першої лінії"} та ${event.facts["secondary"] ?: "другої лінії"}."
+        "CULTURAL_ASSIMILATION" -> "У ${event.facts["settlement"] ?: "поселенні"} культурна ідентичність більшості змістилася до панівної культури, не змінюючи біологічного походження населення."
         "INTERVENTION_HARVEST_AID" -> "Зовнішнє втручання посилило врожайність у державі ${event.facts["civilization"] ?: "невідомого народу"}."
         "INTERVENTION_DROUGHT" -> "Штучно спричинена посуха вдарила по державі ${event.facts["civilization"] ?: "невідомого народу"}, скоротивши запаси продовольства та населення."
         "INTERVENTION_TECH_BOOST" -> "Держава ${event.facts["civilization"] ?: "невідомого народу"} отримала різкий технологічний імпульс."
