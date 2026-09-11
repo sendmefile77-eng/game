@@ -51,7 +51,7 @@ fun CharacterCardPanel(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -68,6 +68,12 @@ fun CharacterCardPanel(
                     OutlinedButton(onClick = onNext) { Text("Наступний") }
                 }
             }
+
+            OfflineSceneView(scene = scene)
+            Text(
+                if (scene.fallbackUsed) "Візуал: сумісний резервний силует" else "Візуал: локальний пакет ${scene.packId}",
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             Text(
                 "Династія: ${dynasty ?: "—"} · поселення: ${person.settlementId ?: "—"}",
@@ -93,13 +99,6 @@ fun CharacterCardPanel(
             if (relationships.isNotEmpty()) {
                 Text("Зв’язки: ${relationships.joinToString(" · ")}", style = MaterialTheme.typography.bodySmall)
             }
-
-            Text("Візуальна сцена", style = MaterialTheme.typography.labelLarge)
-            Text(
-                "${scene.recipeId} · ${scene.bodyRigKey} · ${scene.wardrobeState.name.lowercase()}" +
-                    if (scene.fallbackUsed) " · fallback" else "",
-                style = MaterialTheme.typography.bodySmall,
-            )
 
             if (age >= 18) {
                 Button(onClick = onToggleWardrobe) {

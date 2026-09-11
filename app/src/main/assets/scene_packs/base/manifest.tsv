@@ -1,0 +1,4 @@
+CHRONOSPHERE_SCENE_ASSET_V1
+PACK	chronosphere-base	1	1024	1536
+# Base raster layers are optional in v0.1. The app has a deterministic built-in drawable fallback.
+# Additional packs may override or add logical keys without changing core:scene.
