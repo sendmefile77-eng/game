@@ -1,7 +1,9 @@
 package com.sendmefile77.chronosphere.horde
 
+import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,6 +48,31 @@ class HordeResolvedScenePromptFactoryTest {
         }
 
         assertTrue(rejected)
+    }
+
+    @Test
+    fun sameCharacterAlwaysGetsSameVisualIdentity() {
+        val first = HordeCharacterVisualProfile.from("person-civ-a-ruler-0")
+        val second = HordeCharacterVisualProfile.from("person-civ-a-ruler-0")
+        assertEquals(first, second)
+        assertEquals(BiologicalSex.fromStableKey("person-civ-a-ruler-0"), first.sex)
+    }
+
+    @Test
+    fun promptContainsStableSexAndAppearanceAndUsesNewCacheVersion() {
+        val characterKey = "person-civ-a-ruler-0"
+        val identity = HordeCharacterVisualProfile.from(characterKey)
+        val request = HordeResolvedScenePromptFactory.create(
+            scene = scene(WardrobeState.DRESSED),
+            characterKey = characterKey,
+            ageYears = 42,
+        )
+        val sexWord = if (identity.sex == BiologicalSex.FEMALE) "female" else "male"
+
+        assertTrue(request.positivePrompt.contains(sexWord))
+        assertTrue(request.positivePrompt.contains(identity.hairColor))
+        assertTrue(request.positivePrompt.contains(identity.eyeColor))
+        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v2|"))
     }
 
     private fun scene(wardrobeState: WardrobeState): ResolvedScene = ResolvedScene(

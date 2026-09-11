@@ -11,6 +11,26 @@ enum class PersonRole {
     NOTABLE,
 }
 
+enum class BiologicalSex {
+    FEMALE,
+    MALE;
+
+    companion object {
+        /**
+         * Existing saves predate an explicit sex field. Deriving it from the immutable person id
+         * gives every old and new character a stable value without changing the save format.
+         */
+        fun fromStableKey(key: String): BiologicalSex {
+            require(key.isNotBlank())
+            var hash = -3750763034362895579L
+            key.forEach { char ->
+                hash = (hash xor char.code.toLong()) * 1099511628211L
+            }
+            return if ((hash and 1L) == 0L) FEMALE else MALE
+        }
+    }
+}
+
 enum class RelationshipKind {
     PARTNER,
     LOVER,
@@ -44,6 +64,7 @@ data class NotablePerson(
     }
 
     val isAlive: Boolean get() = deathTick == null
+    val biologicalSex: BiologicalSex get() = BiologicalSex.fromStableKey(id)
 
     fun ageYearsAt(tick: Long): Int = ((tick - birthTick).coerceAtLeast(0L) / 12L).toInt()
 }

@@ -29,6 +29,7 @@ object HordeResolvedScenePromptFactory {
         val undressed = scene.wardrobeState == WardrobeState.UNDRESSED
         require(!undressed || ageYears >= 18) { "Undressed Horde requests require an adult character" }
 
+        val identity = HordeCharacterVisualProfile.from(characterKey)
         val agePhrase = when {
             ageYears < 13 -> "child age $ageYears"
             ageYears < 18 -> "teenager age $ageYears"
@@ -57,10 +58,11 @@ object HordeResolvedScenePromptFactory {
         val positive = buildList {
             add("high quality photorealistic single fictional character")
             add(agePhrase)
+            add(identity.promptFragment)
             add(morphology)
             add(wardrobe)
             add(camera)
-            add("consistent facial identity")
+            add("same facial identity and appearance across images")
             add("natural proportions")
             add("detailed face")
             add("realistic skin and material detail")
@@ -74,6 +76,10 @@ object HordeResolvedScenePromptFactory {
             add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
             add("multiple people")
             add("split screen")
+            add("different person")
+            add("identity change")
+            add("different hair color")
+            add("different eye color")
             if (undressed) {
                 add("clothing")
                 add("underwear")
@@ -91,8 +97,9 @@ object HordeResolvedScenePromptFactory {
         }.joinToString(", ")
 
         val cacheKey = listOf(
-            "horde-resolved-scene-v1",
+            "horde-resolved-scene-v2",
             characterKey,
+            identity.signature,
             ageYears.toString(),
             scene.sceneKey,
             scene.styleId,
