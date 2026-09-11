@@ -23,6 +23,8 @@
 - [x] war casualties and stability cost;
 - [x] internal migration under food pressure;
 - [x] politics/migration chronicle events;
+- [x] leading-state and active-war observer summary;
+- [x] backward-compatible diplomacy initialization for older local saves;
 - [ ] territorial conquest and border transfer;
 - [ ] treaties and alliances;
 - [ ] richer observer filters and continuous speed controls;
