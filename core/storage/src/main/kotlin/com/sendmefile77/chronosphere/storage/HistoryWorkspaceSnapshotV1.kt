@@ -50,17 +50,25 @@ object HistoryWorkspaceSnapshotV1 {
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
-            require(peopleState == null || peopleState.worldSeed == state.worldSeed) { "Branch people/world seed mismatch" }
-            require(economyState == null || economyState.worldSeed == state.worldSeed) { "Branch economy/world seed mismatch" }
-            require(evolutionState == null || evolutionState.worldSeed == state.worldSeed) { "Branch evolution/world seed mismatch" }
+            val forkTick = p[4].toLong()
+            require(forkTick in 0L..state.tick) { "Branch fork tick is outside branch history" }
+            validateLayer("Branch people", state.worldSeed, state.tick, peopleState?.worldSeed, peopleState?.tick)
+            validateLayer("Branch economy", state.worldSeed, state.tick, economyState?.worldSeed, economyState?.tick)
+            validateLayer("Branch evolution", state.worldSeed, state.tick, evolutionState?.worldSeed, evolutionState?.tick)
             HistoryBranch(
                 id = unesc(p[1]), name = unesc(p[2]), parentBranchId = unesc(p[3]).ifBlank { null },
-                forkTick = p[4].toLong(), state = state, peopleState = peopleState,
+                forkTick = forkTick, state = state, peopleState = peopleState,
                 economyState = economyState, evolutionState = evolutionState,
             )
         }
         require(branches.isNotEmpty()) { "History contains no branches" }
+        require(branches.map { it.id }.distinct().size == branches.size) { "Duplicate branch id" }
+        require(branches.all { it.id.isNotBlank() }) { "Blank branch id" }
         require(branches.any { it.id == activeBranchId }) { "Active branch is missing" }
+        val branchById = branches.associateBy { it.id }
+        require(branches.all { branch -> branch.parentBranchId == null || branch.parentBranchId in branchById }) {
+            "Branch references unknown parent"
+        }
 
         val checkpoints = lines.filter { it.startsWith("CHECKPOINT\t") }.map { row ->
             val p = row.split('\t')
@@ -69,18 +77,38 @@ object HistoryWorkspaceSnapshotV1 {
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
-            require(peopleState == null || peopleState.worldSeed == state.worldSeed) { "Checkpoint people/world seed mismatch" }
-            require(economyState == null || economyState.worldSeed == state.worldSeed) { "Checkpoint economy/world seed mismatch" }
-            require(evolutionState == null || evolutionState.worldSeed == state.worldSeed) { "Checkpoint evolution/world seed mismatch" }
+            val tick = p[4].toLong()
+            require(tick == state.tick) { "Checkpoint tick/state mismatch" }
+            validateLayer("Checkpoint people", state.worldSeed, state.tick, peopleState?.worldSeed, peopleState?.tick)
+            validateLayer("Checkpoint economy", state.worldSeed, state.tick, economyState?.worldSeed, economyState?.tick)
+            validateLayer("Checkpoint evolution", state.worldSeed, state.tick, evolutionState?.worldSeed, evolutionState?.tick)
             HistoryCheckpoint(
-                id = unesc(p[1]), branchId = unesc(p[2]), label = unesc(p[3]), tick = p[4].toLong(),
+                id = unesc(p[1]), branchId = unesc(p[2]), label = unesc(p[3]), tick = tick,
                 state = state, peopleState = peopleState, economyState = economyState, evolutionState = evolutionState,
             )
         }
-        require(checkpoints.all { checkpoint -> branches.any { it.id == checkpoint.branchId } }) {
+        require(checkpoints.map { it.id }.distinct().size == checkpoints.size) { "Duplicate checkpoint id" }
+        require(checkpoints.all { it.id.isNotBlank() }) { "Blank checkpoint id" }
+        require(checkpoints.all { checkpoint -> checkpoint.branchId in branchById }) {
             "Checkpoint references unknown branch"
         }
+        require(checkpoints.all { checkpoint ->
+            val branch = branchById.getValue(checkpoint.branchId)
+            checkpoint.tick >= branch.forkTick
+        }) { "Checkpoint predates its branch" }
         return HistoryWorkspace(activeBranchId = activeBranchId, branches = branches, checkpoints = checkpoints)
+    }
+
+    private fun validateLayer(
+        label: String,
+        worldSeed: Long,
+        tick: Long,
+        layerSeed: Long?,
+        layerTick: Long?,
+    ) {
+        if (layerSeed == null || layerTick == null) return
+        require(layerSeed == worldSeed) { "$label/world seed mismatch" }
+        require(layerTick == tick) { "$label/world tick mismatch" }
     }
 
     private fun pack(value: String): String = Base64.getEncoder().encodeToString(value.toByteArray(StandardCharsets.UTF_8))
