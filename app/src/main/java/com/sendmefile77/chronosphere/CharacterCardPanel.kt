@@ -1,5 +1,6 @@
 package com.sendmefile77.chronosphere
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,11 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.people.NotablePerson
@@ -46,27 +49,37 @@ fun CharacterCardPanel(
         .mapNotNull { relationship ->
             val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
             val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
-            "${relationshipLabel(relationship.kind)}: ${other.name} (${String.format("%+.2f", relationship.strength)})"
+            "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
         }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(person.name, style = MaterialTheme.typography.titleMedium)
+                    Text(person.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
-                        "${roleLabel(person.role)} · $age р. · престиж ${String.format("%.2f", person.prestige)} · здібності ${String.format("%.2f", person.aptitude)}",
+                        "${roleLabel(person.role)} · $age р.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "${prestigeLabel(person.prestige)} · ${aptitudeLabel(person.aptitude)}",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (hasPreviousOrNext) {
-                    OutlinedButton(onClick = onNext, enabled = controlsEnabled) { Text("Наступний") }
+                    OutlinedButton(onClick = onNext, enabled = controlsEnabled) { Text("Інша особа") }
                 }
             }
 
@@ -76,15 +89,19 @@ fun CharacterCardPanel(
                 ageYears = age,
             )
 
-            Text(
-                "Династія: ${dynasty ?: "—"} · поселення: ${person.settlementId ?: "—"}",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            if (dynasty != null) {
+                Text(
+                    "Династія · $dynasty",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (person.traits.isNotEmpty()) {
+                Text("Характер", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    "Риси: ${person.traits.sorted().joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall,
+                    person.traits.sorted().joinToString(" · ") { traitLabel(it) },
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
 
@@ -93,35 +110,38 @@ fun CharacterCardPanel(
                     .sortedByDescending { it.value }
                     .take(4)
                     .joinToString(" · ") { (lineageId, share) ->
-                        val label = evolution.lineage(lineageId)?.label ?: lineageId
+                        val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
                         "$label ${String.format("%.0f%%", share * 100.0)}"
                     }
+                Text("Походження", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    "Походження: ${lineage.label} · ${rankLabel(lineage.rank.name)}" +
+                    "${lineage.label} · ${rankLabel(lineage.rank.name)}" +
                         if (ancestry.isNotBlank()) " · $ancestry" else "",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 val covering = descriptor.bodyPlan.covering.name.lowercase()
+                val morphology = buildString {
+                    append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
+                    if (descriptor.bodyPlan.hasTail) append(" · хвіст")
+                    if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
+                }
                 Text(
-                    buildString {
-                        append("Морфологія: рук ${descriptor.bodyPlan.armPairs * 2}, ніг ${descriptor.bodyPlan.legPairs * 2}, очей ${descriptor.bodyPlan.eyeCount}")
-                        if (descriptor.bodyPlan.hasTail) append(" · хвіст")
-                        if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
-                    },
+                    "Морфологія · $morphology",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             if (relationships.isNotEmpty()) {
-                Text("Зв’язки", style = MaterialTheme.typography.titleSmall)
+                Text("Зв’язки", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
                 relationships.forEach { relationship ->
-                    Text("• $relationship", style = MaterialTheme.typography.bodySmall)
+                    Text("• $relationship", style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
             if (age >= 18) {
                 Button(onClick = onToggleWardrobe, enabled = controlsEnabled) {
-                    Text(if (scene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Роздягнути")
+                    Text(if (scene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Змінити вигляд")
                 }
             }
         }
@@ -135,18 +155,54 @@ private fun roleLabel(role: PersonRole): String = when (role) {
     PersonRole.GENERAL -> "Воєначальник"
     PersonRole.SCHOLAR -> "Дослідник"
     PersonRole.MERCHANT -> "Купець"
-    PersonRole.CLERGY -> "Духовенство"
+    PersonRole.CLERGY -> "Духовна особа"
     PersonRole.NOTABLE -> "Впливова особа"
 }
 
 private fun relationshipLabel(kind: RelationshipKind): String = when (kind) {
-    RelationshipKind.PARTNER -> "партнер"
-    RelationshipKind.LOVER -> "коханець/коханка"
-    RelationshipKind.PARENT_CHILD -> "батьки/діти"
+    RelationshipKind.PARTNER -> "партнерство"
+    RelationshipKind.LOVER -> "близькі стосунки"
+    RelationshipKind.PARENT_CHILD -> "родина"
     RelationshipKind.SIBLING -> "брат/сестра"
-    RelationshipKind.RIVAL -> "суперник"
-    RelationshipKind.ALLY -> "союзник"
-    RelationshipKind.MENTOR -> "наставник"
+    RelationshipKind.RIVAL -> "суперництво"
+    RelationshipKind.ALLY -> "союз"
+    RelationshipKind.MENTOR -> "наставництво"
+}
+
+private fun relationshipStrengthLabel(strength: Double): String = when {
+    strength <= -0.65 -> "ворожі"
+    strength < -0.20 -> "напружені"
+    strength < 0.20 -> "нейтральні"
+    strength < 0.65 -> "міцні"
+    else -> "дуже міцні"
+}
+
+private fun prestigeLabel(value: Double): String = when {
+    value >= 0.80 -> "винятковий вплив"
+    value >= 0.60 -> "великий вплив"
+    value >= 0.40 -> "помітний вплив"
+    else -> "обмежений вплив"
+}
+
+private fun aptitudeLabel(value: Double): String = when {
+    value >= 0.80 -> "видатні здібності"
+    value >= 0.60 -> "сильні здібності"
+    value >= 0.40 -> "добрі здібності"
+    else -> "звичайні здібності"
+}
+
+private fun traitLabel(trait: String): String = when (trait.lowercase()) {
+    "ambitious" -> "амбітний"
+    "martial" -> "войовничий"
+    "scholarly" -> "допитливий"
+    "pious" -> "набожний"
+    "charismatic" -> "харизматичний"
+    "mercantile" -> "підприємливий"
+    "cautious" -> "обережний"
+    "bold" -> "сміливий"
+    "diplomatic" -> "дипломатичний"
+    "ruthless" -> "безжальний"
+    else -> trait.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() }
 }
 
 private fun rankLabel(rank: String): String = when (rank.lowercase()) {
@@ -161,5 +217,5 @@ private fun coveringLabel(covering: String): String = when (covering.lowercase()
     "dense_hair" -> "густе волосся"
     "fine_fur" -> "шерсть"
     "scales" -> "луска"
-    else -> covering.lowercase()
+    else -> covering.replace('_', ' ').lowercase()
 }
