@@ -139,6 +139,8 @@ fun ChronosphereApp() {
                         val index = civilizations.indexOfFirst { it.id == selectedCivilization.id }.coerceAtLeast(0)
                         selectedCivilizationId = civilizations[(index + 1) % civilizations.size].id
                     }) { Text("Target: ${selectedCivilization.name}") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { intervene(InterventionKind.HARVEST_AID) }) { Text("Harvest aid") }
                     Button(onClick = { intervene(InterventionKind.DROUGHT) }) { Text("Drought") }
                 }
@@ -164,16 +166,17 @@ fun ChronosphereApp() {
                         session = session.copy(state = forked.activeState)
                         saveStatus = "Alternative history created"
                     }) { Text("Fork") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
-                        val restored = historyTimeline.restoreLatestCheckpoint(workspace)
+                        val before = workspace
+                        val hasCheckpoint = before.checkpoints.any { it.branchId == before.activeBranchId }
+                        val restored = historyTimeline.restoreLatestCheckpoint(before)
                         workspace = restored
                         session = session.copy(state = restored.activeState)
-                        saveStatus = if (restored == workspace) "No checkpoint" else "Checkpoint restored"
+                        saveStatus = if (hasCheckpoint) "Checkpoint restored" else "No checkpoint"
                     }) { Text("Restore") }
-                }
-
-                if (workspace.branches.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (workspace.branches.size > 1) {
                         Button(onClick = {
                             val currentIndex = workspace.branches.indexOfFirst { it.id == workspace.activeBranchId }.coerceAtLeast(0)
                             val nextBranch = workspace.branches[(currentIndex + 1) % workspace.branches.size]
@@ -185,11 +188,11 @@ fun ChronosphereApp() {
                             session = session.copy(state = switched.activeState)
                             saveStatus = "Switched to ${switched.activeBranch.name}"
                         }) { Text("Switch timeline") }
-                        Text(
-                            "Branches ${workspace.branches.size} · checkpoints ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
                     }
+                    Text(
+                        "Branches ${workspace.branches.size} · checkpoints ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
