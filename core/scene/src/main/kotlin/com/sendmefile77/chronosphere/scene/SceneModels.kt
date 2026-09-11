@@ -24,6 +24,8 @@ data class SceneParticipant(
         require(entityId.isNotBlank())
         require(ageYears >= 0)
         require(rigFamily.isNotBlank())
+        require(tags.none { it.isBlank() })
+        require(numeric.keys.none { it.isBlank() })
         require(numeric.values.all { it.isFinite() })
     }
 }
@@ -41,7 +43,14 @@ data class SceneRequest(
     init {
         require(eventId.isNotBlank())
         require(participants.isNotEmpty())
+        require(sceneTags.none { it.isBlank() })
+        require(numericContext.keys.none { it.isBlank() })
         require(numericContext.values.all { it.isFinite() })
+        if (intent == SceneIntent.CHARACTER_UNDRESS) {
+            require(requestedWardrobeState == WardrobeState.UNDRESSED) {
+                "Character undress intent requires UNDRESSED wardrobe state"
+            }
+        }
         if (intent == SceneIntent.CHARACTER_UNDRESS || requestedWardrobeState == WardrobeState.UNDRESSED) {
             require(participants.all { it.ageYears >= 18 }) { "Undressed character scenes require adult participants" }
         }
@@ -76,6 +85,9 @@ data class SceneRecipe(
         require(styleId.isNotBlank())
         require(intents.isNotEmpty())
         require(minParticipants >= 1 && maxParticipants >= minParticipants)
+        require(supportedRigFamilies.none { it.isBlank() })
+        require(requiredTags.none { it.isBlank() })
+        require(forbiddenTags.none { it.isBlank() })
         require(bodyRigKey.isNotBlank())
         require(poseKey.isNotBlank())
         require(backgroundKey.isNotBlank())
@@ -83,6 +95,7 @@ data class SceneRecipe(
         require(lightingKey.isNotBlank())
         require(layerKeys.none { it.isBlank() })
         require(weight.isFinite() && weight >= 0.0)
+        require(fallbackPriority >= 0)
     }
 }
 
