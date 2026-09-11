@@ -7,4 +7,5 @@ data class Civilization(
     val stability: Double,
     val technology: Double,
     val treasury: Double,
+    val cultureTags: Set<String> = emptySet(),
 )

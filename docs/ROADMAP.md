@@ -8,21 +8,26 @@
 - [x] First Compose map renderer.
 - [x] Adult module contract boundary and no-op fallback.
 - [x] Manual Android debug build workflow.
-- [ ] CI/manual build verified on GitHub Actions.
-- [ ] Bootstrap PR reviewed and merged to `main`.
+- [x] Bootstrap PR reviewed and merged to `main`.
+- [ ] Milestone build verification deferred to first game-like checkpoint to conserve GitHub Actions minutes.
 
 ## Stage 1 — Living planet
-- terrain layers, rivers and climate refinement;
-- settlements and resources;
-- simulation tick scheduler;
-- first civilization population/economy model;
-- event log + timeline;
-- save/load v1.
+- [x] deterministic river network;
+- [x] procedural resource deposits;
+- [x] settlements and initial civilizations;
+- [x] deterministic monthly simulation stepping;
+- [x] first population, food, wealth, stability and technology model;
+- [x] simulation event stream and template chronicle text;
+- [x] save snapshot codec v1;
+- [x] local Android save/load UI;
+- [x] settlement expansion / new-city founding;
+- [x] living-map settlement overlays and observer time-step controls;
+- [ ] first game-like milestone build.
 
 ## Stage 2 — History
 - states, borders, diplomacy, conflict;
 - migration and city growth;
-- template chronicle engine;
+- richer template chronicle engine;
 - observer speed controls and filters.
 
 ## Stage 3 — Intervention and time branches
