@@ -24,6 +24,20 @@ data class WarState(
     val startedTick: Long,
     val casualtiesA: Long = 0,
     val casualtiesB: Long = 0,
+    val scoreA: Double = 0.0,
+    val scoreB: Double = 0.0,
+    val capturesA: Int = 0,
+    val capturesB: Int = 0,
+) {
+    fun matches(a: String, b: String): Boolean =
+        (civilizationA == a && civilizationB == b) || (civilizationA == b && civilizationB == a)
+}
+
+data class AllianceState(
+    val id: String,
+    val civilizationA: String,
+    val civilizationB: String,
+    val startedTick: Long,
 ) {
     fun matches(a: String, b: String): Boolean =
         (civilizationA == a && civilizationB == b) || (civilizationA == b && civilizationB == a)

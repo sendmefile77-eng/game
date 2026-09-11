@@ -1,41 +1,43 @@
 # Roadmap
 
 ## Stage 0 — Foundation
-- [x] repository and deterministic core;
-- [x] procedural world and first map renderer;
-- [x] isolated adult-module contract;
-- [x] manual-only build workflow;
-- [ ] milestone build verification deferred to conserve GitHub Actions minutes.
+- [x] Repository initialized.
+- [x] Multi-module Gradle structure.
+- [x] Deterministic RNG and simulation clock.
+- [x] Deterministic procedural world generator.
+- [x] First Compose map renderer.
+- [x] Adult module contract boundary and no-op fallback.
+- [x] Manual Android debug build workflow.
+- [x] Bootstrap merged to `main`.
+- [ ] Milestone build verification deferred intentionally to conserve GitHub Actions minutes.
 
 ## Stage 1 — Living planet
-- [x] rivers and resources;
-- [x] settlements and first civilizations;
-- [x] population/food/wealth/stability/technology simulation;
-- [x] settlement growth and colony founding;
-- [x] event chronicle;
-- [x] local save/load v1;
-- [x] living-map overlays and time-step controls.
+- [x] Rivers and resource deposits.
+- [x] Settlements and initial civilizations.
+- [x] Population, food, wealth, stability and technology simulation.
+- [x] Colony founding and migration.
+- [x] Chronicle/event feed.
+- [x] Local save/load v1.
 
-## Stage 2 — History and politics
-- [x] derived territorial influence and visible borders;
-- [x] pairwise diplomatic relations;
-- [x] deterministic war start/end lifecycle;
-- [x] war casualties and stability cost;
-- [x] internal migration under food pressure;
-- [x] politics/migration chronicle events;
-- [x] leading-state and active-war observer summary;
-- [x] backward-compatible diplomacy initialization for older local saves;
-- [ ] territorial conquest and border transfer;
-- [ ] treaties and alliances;
-- [ ] richer observer filters and continuous speed controls;
-- [ ] first milestone APK build after this layer is sufficiently game-like.
+## Stage 2 — Politics and history
+- [x] Territorial influence and borders.
+- [x] Pairwise diplomacy.
+- [x] Wars and casualties.
+- [x] City capture and territorial transfer.
+- [x] Peace treaties with war outcome.
+- [x] Alliances and alliance dissolution.
+- [x] Observer summaries for wars and alliances.
 
 ## Stage 3 — Intervention and time branches
-- controlled interventions;
+- controlled player interventions;
 - snapshots/checkpoints;
-- alternate history branches.
+- alternate history branches;
+- richer inspection panels and civilization dossiers.
 
 ## Stage 4 — Space
 - star systems;
 - orbital infrastructure;
 - expansion beyond the home planet.
+
+## Build policy
+GitHub Actions stay manual-only. Run a build at a meaningful playable milestone, not after each development stage.
