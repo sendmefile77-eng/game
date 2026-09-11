@@ -11,7 +11,7 @@ import org.junit.Test
 
 class HistoryWorkspaceConsistencyTest {
     @Test
-    fun decoderRejectsWorldAndPeopleFromDifferentTicks() {
+    fun encoderRejectsWorldAndPeopleFromDifferentTicks() {
         val state = LivingPlanetState(
             worldSeed = 55L,
             tick = 120L,
@@ -34,8 +34,7 @@ class HistoryWorkspaceConsistencyTest {
             checkpoints = emptyList(),
         )
 
-        val encoded = HistoryWorkspaceSnapshotV1.encode(workspace)
-        val result = runCatching { HistoryWorkspaceSnapshotV1.decode(encoded) }
+        val result = runCatching { HistoryWorkspaceSnapshotV1.encode(workspace) }
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("tick mismatch") == true)
