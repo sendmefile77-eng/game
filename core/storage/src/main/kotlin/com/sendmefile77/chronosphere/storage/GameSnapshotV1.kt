@@ -1,8 +1,10 @@
 package com.sendmefile77.chronosphere.storage
 
 import com.sendmefile77.chronosphere.civilization.Civilization
+import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
+import com.sendmefile77.chronosphere.civilization.WarState
 
 object GameSnapshotV1 {
     private const val HEADER = "CHRONOSPHERE_SAVE_V1"
@@ -13,8 +15,14 @@ object GameSnapshotV1 {
         state.civilizations.forEach { civ ->
             appendLine(listOf("CIV", esc(civ.id), esc(civ.name), civ.population, civ.stability, civ.technology, civ.treasury, esc(civ.cultureTags.joinToString("|"))).joinToString("\t"))
         }
-        state.settlements.forEach { settlement ->
-            appendLine(listOf("SET", esc(settlement.id), esc(settlement.name), esc(settlement.civilizationId), settlement.x, settlement.y, settlement.population, settlement.foodStock, settlement.wealth, settlement.foundedTick).joinToString("\t"))
+        state.settlements.forEach { s ->
+            appendLine(listOf("SET", esc(s.id), esc(s.name), esc(s.civilizationId), s.x, s.y, s.population, s.foodStock, s.wealth, s.foundedTick).joinToString("\t"))
+        }
+        state.relations.forEach { r ->
+            appendLine(listOf("REL", esc(r.civilizationA), esc(r.civilizationB), r.value, r.lastUpdatedTick).joinToString("\t"))
+        }
+        state.wars.forEach { w ->
+            appendLine(listOf("WAR", esc(w.id), esc(w.civilizationA), esc(w.civilizationB), w.startedTick, w.casualtiesA, w.casualtiesB).joinToString("\t"))
         }
     }
 
@@ -23,38 +31,24 @@ object GameSnapshotV1 {
         require(lines.firstOrNull() == HEADER) { "Unsupported save format" }
         val world = lines.getOrNull(1)?.split('\t') ?: error("Missing WORLD row")
         require(world.size >= 3 && world[0] == "WORLD")
-        val civilizations = lines.drop(2).filter { it.startsWith("CIV\t") }.map { row ->
+        val rows = lines.drop(2)
+        val civilizations = rows.filter { it.startsWith("CIV\t") }.map { row ->
             val p = row.split('\t')
-            Civilization(
-                id = unesc(p[1]),
-                name = unesc(p[2]),
-                population = p[3].toLong(),
-                stability = p[4].toDouble(),
-                technology = p[5].toDouble(),
-                treasury = p[6].toDouble(),
-                cultureTags = unesc(p.getOrElse(7) { "" }).split('|').filter { it.isNotBlank() }.toSet(),
-            )
+            Civilization(unesc(p[1]), unesc(p[2]), p[3].toLong(), p[4].toDouble(), p[5].toDouble(), p[6].toDouble(), unesc(p.getOrElse(7) { "" }).split('|').filter { it.isNotBlank() }.toSet())
         }
-        val settlements = lines.drop(2).filter { it.startsWith("SET\t") }.map { row ->
+        val settlements = rows.filter { it.startsWith("SET\t") }.map { row ->
             val p = row.split('\t')
-            Settlement(
-                id = unesc(p[1]),
-                name = unesc(p[2]),
-                civilizationId = unesc(p[3]),
-                x = p[4].toInt(),
-                y = p[5].toInt(),
-                population = p[6].toLong(),
-                foodStock = p[7].toDouble(),
-                wealth = p[8].toDouble(),
-                foundedTick = p[9].toLong(),
-            )
+            Settlement(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toInt(), p[5].toInt(), p[6].toLong(), p[7].toDouble(), p[8].toDouble(), p[9].toLong())
         }
-        return LivingPlanetState(
-            worldSeed = world[1].toLong(),
-            tick = world[2].toLong(),
-            civilizations = civilizations,
-            settlements = settlements,
-        )
+        val relations = rows.filter { it.startsWith("REL\t") }.map { row ->
+            val p = row.split('\t')
+            DiplomaticRelation(unesc(p[1]), unesc(p[2]), p[3].toDouble(), p[4].toLong())
+        }
+        val wars = rows.filter { it.startsWith("WAR\t") }.map { row ->
+            val p = row.split('\t')
+            WarState(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toLong(), p[5].toLong(), p[6].toLong())
+        }
+        return LivingPlanetState(world[1].toLong(), world[2].toLong(), civilizations, settlements, relations = relations, wars = wars)
     }
 
     private fun esc(value: String): String = value.replace("%", "%25").replace("\t", "%09").replace("\n", "%0A")

@@ -1,34 +1,32 @@
 # Roadmap
 
 ## Stage 0 — Foundation
-- [x] Repository initialized.
-- [x] Multi-module Gradle structure.
-- [x] Deterministic RNG and simulation clock.
-- [x] Deterministic procedural world generator.
-- [x] First Compose map renderer.
-- [x] Adult module contract boundary and no-op fallback.
-- [x] Manual Android debug build workflow.
-- [x] Bootstrap PR reviewed and merged to `main`.
-- [ ] Milestone build verification deferred to first game-like checkpoint to conserve GitHub Actions minutes.
+- [x] repository and deterministic core;
+- [x] procedural world and first map renderer;
+- [x] isolated adult-module contract;
+- [x] manual-only build workflow;
+- [ ] milestone build verification deferred to conserve GitHub Actions minutes.
 
 ## Stage 1 — Living planet
-- [x] deterministic river network;
-- [x] procedural resource deposits;
-- [x] settlements and initial civilizations;
-- [x] deterministic monthly simulation stepping;
-- [x] first population, food, wealth, stability and technology model;
-- [x] simulation event stream and template chronicle text;
-- [x] save snapshot codec v1;
-- [x] local Android save/load UI;
-- [x] settlement expansion / new-city founding;
-- [x] living-map settlement overlays and observer time-step controls;
-- [ ] first game-like milestone build.
+- [x] rivers and resources;
+- [x] settlements and first civilizations;
+- [x] population/food/wealth/stability/technology simulation;
+- [x] settlement growth and colony founding;
+- [x] event chronicle;
+- [x] local save/load v1;
+- [x] living-map overlays and time-step controls.
 
-## Stage 2 — History
-- states, borders, diplomacy, conflict;
-- migration and city growth;
-- richer template chronicle engine;
-- observer speed controls and filters.
+## Stage 2 — History and politics
+- [x] derived territorial influence and visible borders;
+- [x] pairwise diplomatic relations;
+- [x] deterministic war start/end lifecycle;
+- [x] war casualties and stability cost;
+- [x] internal migration under food pressure;
+- [x] politics/migration chronicle events;
+- [ ] territorial conquest and border transfer;
+- [ ] treaties and alliances;
+- [ ] richer observer filters and continuous speed controls;
+- [ ] first milestone APK build after this layer is sufficiently game-like.
 
 ## Stage 3 — Intervention and time branches
 - controlled interventions;
