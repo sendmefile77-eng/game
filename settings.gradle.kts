@@ -21,6 +21,7 @@ include(
     ":core:simulation",
     ":core:worldgen",
     ":core:civilization",
+    ":core:people",
     ":core:history",
     ":core:textgen",
     ":core:storage",

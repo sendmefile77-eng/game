@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere.history
 
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.people.PeopleState
 
 data class HistoryBranch(
     val id: String,
@@ -8,6 +9,7 @@ data class HistoryBranch(
     val parentBranchId: String?,
     val forkTick: Long,
     val state: LivingPlanetState,
+    val peopleState: PeopleState? = null,
 )
 
 data class HistoryCheckpoint(
@@ -16,6 +18,7 @@ data class HistoryCheckpoint(
     val label: String,
     val tick: Long,
     val state: LivingPlanetState,
+    val peopleState: PeopleState? = null,
 )
 
 data class HistoryWorkspace(
@@ -28,10 +31,13 @@ data class HistoryWorkspace(
 
     val activeState: LivingPlanetState
         get() = activeBranch.state
+
+    val activePeopleState: PeopleState?
+        get() = activeBranch.peopleState
 }
 
 class HistoryTimeline {
-    fun create(initialState: LivingPlanetState): HistoryWorkspace = HistoryWorkspace(
+    fun create(initialState: LivingPlanetState, initialPeopleState: PeopleState? = null): HistoryWorkspace = HistoryWorkspace(
         activeBranchId = ROOT_BRANCH_ID,
         branches = listOf(
             HistoryBranch(
@@ -40,13 +46,22 @@ class HistoryTimeline {
                 parentBranchId = null,
                 forkTick = initialState.tick,
                 state = initialState,
+                peopleState = initialPeopleState,
             ),
         ),
     )
 
-    fun syncActive(workspace: HistoryWorkspace, state: LivingPlanetState): HistoryWorkspace = workspace.copy(
+    fun syncActive(
+        workspace: HistoryWorkspace,
+        state: LivingPlanetState,
+        peopleState: PeopleState? = workspace.activePeopleState,
+    ): HistoryWorkspace = workspace.copy(
         branches = workspace.branches.map { branch ->
-            if (branch.id == workspace.activeBranchId) branch.copy(state = state) else branch
+            if (branch.id == workspace.activeBranchId) {
+                branch.copy(state = state, peopleState = peopleState)
+            } else {
+                branch
+            }
         },
     )
 
@@ -59,6 +74,7 @@ class HistoryTimeline {
             label = label?.takeIf { it.isNotBlank() } ?: "Checkpoint $sequence",
             tick = branch.state.tick,
             state = branch.state,
+            peopleState = branch.peopleState,
         )
         return workspace.copy(checkpoints = workspace.checkpoints + checkpoint)
     }
@@ -73,6 +89,7 @@ class HistoryTimeline {
             parentBranchId = parent.id,
             forkTick = parent.state.tick,
             state = parent.state,
+            peopleState = parent.peopleState,
         )
         return workspace.copy(
             activeBranchId = id,
@@ -93,7 +110,11 @@ class HistoryTimeline {
         }
         return workspace.copy(
             branches = workspace.branches.map { branch ->
-                if (branch.id == workspace.activeBranchId) branch.copy(state = checkpoint.state) else branch
+                if (branch.id == workspace.activeBranchId) {
+                    branch.copy(state = checkpoint.state, peopleState = checkpoint.peopleState)
+                } else {
+                    branch
+                }
             },
         )
     }
