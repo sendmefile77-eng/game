@@ -74,7 +74,7 @@ class AdultSceneBridgeTest {
             contractThrew = true
         }
         assertTrue(contractThrew)
-        assertFalse(AdultUndressPolicy.allows(listOf(17)))
+        assertFalse(AdultUndressPolicy.allowsAges(listOf(17)))
     }
 
     @Test
