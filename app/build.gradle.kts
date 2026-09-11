@@ -36,6 +36,7 @@ dependencies {
     implementation(project(":core:textgen"))
     implementation(project(":core:storage"))
     implementation(project(":core:adult-contracts"))
+    implementation(project(":core:scene"))
     implementation(project(":feature:map"))
 
     // Full builds package the optional adult implementation when that module exists.
