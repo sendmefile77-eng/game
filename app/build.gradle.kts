@@ -30,11 +30,16 @@ dependencies {
     implementation(project(":core:civilization"))
     implementation(project(":core:people"))
     implementation(project(":core:economy"))
+    implementation(project(":core:society"))
     implementation(project(":core:history"))
     implementation(project(":core:textgen"))
     implementation(project(":core:storage"))
     implementation(project(":core:adult-contracts"))
     implementation(project(":feature:map"))
+
+    // Full builds package the optional adult implementation when that module exists.
+    // The app itself compiles only against core/adult-contracts and loads the implementation reflectively.
+    project.findProject(":feature:adult")?.let { runtimeOnly(it) }
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
