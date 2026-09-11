@@ -87,7 +87,7 @@ class MorphologyContextAdultModuleTest {
                 deathTick = null,
                 role = PersonRole.NOTABLE,
                 prestige = 0.5,
-                health = 0.8,
+                aptitude = 0.8,
             ),
         ),
         dynasties = emptyList(),
