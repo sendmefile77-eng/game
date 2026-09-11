@@ -25,7 +25,20 @@ class PeopleEngine {
             val rng = DeterministicRng(WorldSeed(deriveSeed(world.worldSeed, civilization.id)))
             profiles += createSocialProfile(civilization, rng)
 
-            val household = initialHousehold(civilization, capital, rng)
+            val baseHousehold = initialHousehold(civilization, capital, rng)
+            val household = if (world.tick == 0L) {
+                baseHousehold
+            } else {
+                baseHousehold.copy(
+                    persons = baseHousehold.persons.map { person ->
+                        person.copy(birthTick = person.birthTick + world.tick)
+                    },
+                    dynasty = baseHousehold.dynasty.copy(foundedTick = world.tick),
+                    relationships = baseHousehold.relationships.map { relationship ->
+                        relationship.copy(startedTick = world.tick)
+                    },
+                )
+            }
             persons += household.persons
             dynasties += household.dynasty
             relationships += household.relationships
@@ -352,7 +365,7 @@ class PeopleEngine {
             .filter { it.civilizationId == civilizationId && it.isAlive && it.id != ruler.id }
             .filter { it.dynastyId != null && it.dynastyId == ruler.dynastyId }
             .sortedWith(
-                compareByDescending<NotablePerson> { it.ageYearsAt(tick) >= 18 }
+                compareByDescending<NotablePerson> { if (it.ageYearsAt(tick) >= 18) 1 else 0 }
                     .thenByDescending { it.prestige }
                     .thenBy { it.id },
             )
