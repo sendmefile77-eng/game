@@ -1,76 +1,67 @@
 CHARACTER_LIBRARY_V1
-version=3
-style=mature_animation
+version=4
+style=mature_semirealistic_raster
 canvas=320x480
 assembly=layered_raster
 identity_key=person.id
 runtime_ai=false
 network=false
 
-# Real runtime raster pack physically cut from the approved character-library board.
-atlas=character_parts_v02.webp
-atlas_size=320x320
+# Primary runtime raster pack. v02 was retired because the committed WebP was truncated.
+atlas_encoding=base64_parts
+atlas_parts=character_parts_v03_480.b64.00,character_parts_v03_480.b64.01
+atlas_decoded_size=480x480
 variants_per_row=6
 
-# Focused adult female lower-front atlas, physically cropped and normalized from the supplied
-# approved source sheet. It is used only by the UNDRESSED character-card path.
-female_lower_front_atlas=female_lower_front_v01.webp
-female_lower_front_atlas_size=960x768
-female_lower_front_cell=240x256
-female_lower_front_columns=4
-female_lower_front_rows=3
-female_lower_front_variants=12
-female_lower_front_view=front
-female_lower_front_adults_only=true
-female_lower_front_undressed_only=true
-female_lower_front_scaling=fit
-
-# Packed runtime cells (pixels in 320x320 atlas)
-head_cell=40x50
+head_cell=70x85
 female_heads_y=0
-male_heads_y=50
-female_garments_y=100
-male_garments_y=150
+male_heads_y=85
+female_garments_y=170
+male_garments_y=255
 head_variants=6
 garment_variants=6
+female_torso=0,340,110,140
+male_torso=110,340,110,140
 
-# Headless torso cells
-female_torso=0,200,60,100
-male_torso=60,200,60,100
+# Adult female UNDRESSED torso library cropped/normalized from the supplied source boards.
+female_undress_torso_encoding=base64_parts
+female_undress_torso_parts=female_undress_torsos_v01_384.b64.00
+female_undress_torso_decoded_size=384x450
+female_undress_torso_cell=128x150
+female_undress_torso_columns=3
+female_undress_torso_rows=3
+female_undress_torso_variants=9
+female_undress_torso_adults_only=true
+female_undress_torso_undressed_only=true
+female_undress_mature_variant=8
 
-# Additional physically cut source details retained in atlas for next face pass
-extra_eyes_region=125,200
-extra_noses_region=188,200
-extra_mouths_region=188,250
-
-# Current real assembly order
+# Current assembly order.
 background
 base_headless_torso
 wardrobe_if_dressed
 selected_identity_head
 foreground
 
-# Deterministic selection
+# Adult female undress override.
+background
+selected_female_undress_torso
+selected_identity_head
+foreground
+
+# Deterministic selection.
 family=stable_hash(person.id)%2
 young_head=stable_hash(person.id)>>3 mod 5
 mature_head=5 when age>=60
 garment=stable_hash(person.id)>>11 mod 6
+female_undress_torso=stable_hash(person.id)>>17 mod 8
+female_undress_mature_torso=8 when age>=40
 wardrobe_toggle_preserves_head=true
 wardrobe_toggle_preserves_family=true
-wardrobe_undressed_uses_same_torso=true
-female_lower_front=stable_hash(person.id)>>16 mod 12
 
-# Canonical anchors for future finer face-part slicing
-anchor.face_center=0.500,0.380
-anchor.eye_left=0.441,0.325
-anchor.eye_right=0.559,0.325
-anchor.nose=0.500,0.445
-anchor.mouth=0.500,0.520
-anchor.neck=0.500,0.625
-anchor.shoulder_left=0.265,0.745
-anchor.shoulder_right=0.735,0.745
+# Never silently substitute the old procedural/cartoon renderer when the raster pack is bad.
+corrupt_primary_atlas=show_asset_error
+silent_vector_fallback=false
 
-# Art direction
 adult_proportions=true
 oversized_anime_head=false
 flat_chibi=false
