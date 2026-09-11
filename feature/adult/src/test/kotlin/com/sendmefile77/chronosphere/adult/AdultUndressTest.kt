@@ -20,8 +20,6 @@ class AdultUndressTest {
         assertEquals(first, second)
         assertTrue(first.assetKey.startsWith("adult://recipe/"))
         assertTrue(first.tags.contains(AdultUndressPolicy.STATE_TAG))
-        assertTrue(first.tags.any { it == "wardrobe:wardrobe.undressed" || it.startsWith("wardrobe:wardrobe.undressed") || it == "wardrobe:wardrobe.undressed" })
-        assertTrue(first.tags.contains("wardrobe:wardrobe.undressed") || first.tags.contains("wardrobe:wardrobe.undressed"))
         assertTrue(first.tags.any { it.startsWith("wardrobe:") && it.contains("undressed") })
     }
 
@@ -58,9 +56,9 @@ class AdultUndressTest {
 
     @Test
     fun under18RejectedByContractAndUndressPolicy() {
-        assertFalse(AdultUndressPolicy.allows(listOf(17)))
-        assertFalse(AdultUndressPolicy.allows(listOf(22, 17)))
-        assertTrue(AdultUndressPolicy.allows(listOf(18, 41)))
+        assertFalse(AdultUndressPolicy.allowsAges(listOf(17)))
+        assertFalse(AdultUndressPolicy.allowsAges(listOf(22, 17)))
+        assertTrue(AdultUndressPolicy.allowsAges(listOf(18, 41)))
         var threw = false
         try {
             AdultEventRequest(
@@ -87,6 +85,11 @@ class AdultUndressTest {
     ): AdultEventRequest = AdultEventRequest(
         requestId = "card-alpha",
         participants = listOf(AdultParticipantRef("person-1", 27)),
-        context = AdultWorldContext(worldSeed = 424242L, tick = 120L, cultureTags = tags, numericContext = mapOf(SocialContextKeys.TENSION to 0.1)),
+        context = AdultWorldContext(
+            worldSeed = 424242L,
+            tick = 120L,
+            cultureTags = tags,
+            numericContext = mapOf(SocialContextKeys.TENSION to 0.1),
+        ),
     )
 }
