@@ -28,7 +28,12 @@ internal fun OfflineSceneView(
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
     val context = LocalContext.current.applicationContext
-    val repository = remember(context) { SceneAssetRepository(context.assets) }
+    val repository = remember(context) {
+        SceneAssetRepository(
+            assets = context.assets,
+            resourceLoader = context.classLoader,
+        )
+    }
     val layers = remember(scene.sceneKey, repository) {
         repository.layersFor(scene).mapNotNull { entry ->
             repository.bitmap(entry)?.let { bitmap -> entry to bitmap }

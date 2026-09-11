@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.sendmefile77.chronosphere.scene.ResolvedScene
+import java.io.InputStream
 
 internal data class SceneAssetEntry(
     val logicalKey: String,
@@ -56,11 +57,15 @@ internal data class SceneAssetManifest(
 }
 
 /**
- * Loads raster layers from APK assets. Optional library-module assets are merged by Android
- * packaging, so the app never references feature/adult resource IDs.
+ * Loads local raster layers without coupling the app to implementation-module resource IDs.
+ *
+ * Base Android content is read from AssetManager. Optional JVM feature packs are packaged as
+ * Java resources and read through the app ClassLoader. AssetManager deliberately wins when a
+ * path exists in both places, while later manifests still override logical keys.
  */
 internal class SceneAssetRepository(
     private val assets: AssetManager,
+    private val resourceLoader: ClassLoader,
     manifestPaths: List<String> = DEFAULT_MANIFESTS,
 ) {
     private val entries: Map<String, SceneAssetEntry>
@@ -72,7 +77,7 @@ internal class SceneAssetRepository(
         val packs = mutableListOf<String>()
         manifestPaths.forEach { manifestPath ->
             val manifest = runCatching {
-                assets.open(manifestPath).bufferedReader().use { reader ->
+                openLocal(manifestPath)?.bufferedReader()?.use { reader ->
                     SceneAssetManifest.parse(reader.readText(), manifestPath)
                 }
             }.getOrNull() ?: return@forEach
@@ -100,8 +105,14 @@ internal class SceneAssetRepository(
 
     fun bitmap(entry: SceneAssetEntry): ImageBitmap? = bitmapCache.getOrPut(entry.path) {
         runCatching {
-            assets.open(entry.path).use { input -> BitmapFactory.decodeStream(input)?.asImageBitmap() }
+            openLocal(entry.path)?.use { input -> BitmapFactory.decodeStream(input)?.asImageBitmap() }
         }.getOrNull()
+    }
+
+    private fun openLocal(path: String): InputStream? {
+        val fromAssets = runCatching { assets.open(path) }.getOrNull()
+        if (fromAssets != null) return fromAssets
+        return resourceLoader.getResourceAsStream(path.removePrefix("/"))
     }
 
     companion object {
