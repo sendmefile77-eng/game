@@ -78,6 +78,7 @@ fun ChronosphereApp() {
     val peopleEngine = remember { PeopleEngine() }
     val adultModule = remember { AdultModuleRuntime.load() }
     val adultModuleActive = remember(adultModule) { AdultModuleRuntime.isActive(adultModule) }
+    val adultSceneRuntime = remember { AdultSceneRuntime.load() }
     val initialSession = remember { newSession(424242L, generator, hydrology, resourceGenerator) }
     val initialPeople = remember(initialSession) { peopleEngine.initialize(initialSession.state) }
     val initialEconomy = remember(initialSession) {
@@ -96,10 +97,21 @@ fun ChronosphereApp() {
         mutableStateOf(historyTimeline.create(initialSession.state, initialPeople, initialEconomy, initialEvolution))
     }
     var selectedCivilizationId by remember { mutableStateOf(initialSession.state.civilizations.first().id) }
+    var selectedPersonId by remember {
+        val civId = initialSession.state.civilizations.first().id
+        mutableStateOf(initialPeople.ruler(civId)?.id ?: initialPeople.livingPeople(civId).firstOrNull()?.id)
+    }
+    var characterUndressed by remember { mutableStateOf(false) }
     var saveStatus by remember {
         mutableStateOf(if (adultModuleActive) "Дорослий модуль активний" else "Базовий режим: дорослий модуль не завантажено")
     }
     var interventionSequence by remember { mutableStateOf(0L) }
+
+    fun resetCharacterSelection(civilizationId: String, people: PeopleState) {
+        selectedPersonId = people.ruler(civilizationId)?.id
+            ?: people.livingPeople(civilizationId).maxByOrNull { it.prestige }?.id
+        characterUndressed = false
+    }
 
     fun syncState(
         nextState: LivingPlanetState,
@@ -177,6 +189,9 @@ fun ChronosphereApp() {
         }
 
         syncState(worldState, people, economy, evolution)
+        if (people.livingPeople(selectedCivilizationId).none { it.id == selectedPersonId }) {
+            resetCharacterSelection(selectedCivilizationId, people)
+        }
     }
 
     fun intervene(kind: InterventionKind) {
@@ -195,15 +210,22 @@ fun ChronosphereApp() {
 
     fun activateWorkspaceState() {
         val branchState = workspace.activeState
-        session = session.copy(state = branchState)
-        peopleState = workspace.activePeopleState ?: peopleEngine.initialize(branchState)
-        economyState = workspace.activeEconomyState
+        val nextPeople = workspace.activePeopleState ?: peopleEngine.initialize(branchState)
+        val nextEconomy = workspace.activeEconomyState
             ?: EconomyEngine(session.world, session.resources).initialize(branchState)
-        evolutionState = workspace.activeEvolutionState
+        val nextEvolution = workspace.activeEvolutionState
             ?: EvolutionEngine(session.world).initialize(branchState)
-        if (branchState.civilizations.none { it.id == selectedCivilizationId }) {
-            selectedCivilizationId = branchState.civilizations.first().id
+        session = session.copy(state = branchState)
+        peopleState = nextPeople
+        economyState = nextEconomy
+        evolutionState = nextEvolution
+        val nextCivilizationId = if (branchState.civilizations.any { it.id == selectedCivilizationId }) {
+            selectedCivilizationId
+        } else {
+            branchState.civilizations.first().id
         }
+        selectedCivilizationId = nextCivilizationId
+        resetCharacterSelection(nextCivilizationId, nextPeople)
     }
 
     MaterialTheme {
@@ -233,6 +255,7 @@ fun ChronosphereApp() {
                         evolutionState = createdEvolution
                         workspace = historyTimeline.create(created.state, createdPeople, createdEconomy, createdEvolution)
                         selectedCivilizationId = created.state.civilizations.first().id
+                        resetCharacterSelection(selectedCivilizationId, createdPeople)
                         interventionSequence = 0L
                         saveStatus = if (adultModuleActive) "Створено новий світ · дорослий модуль активний" else "Створено новий світ · базовий режим"
                     }) { Text("Новий світ") }
@@ -265,7 +288,7 @@ fun ChronosphereApp() {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 315.dp)
+                        .heightIn(max = 360.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
@@ -275,7 +298,9 @@ fun ChronosphereApp() {
                         Button(onClick = {
                             val civilizations = session.state.civilizations
                             val index = civilizations.indexOfFirst { it.id == selectedCivilization.id }.coerceAtLeast(0)
-                            selectedCivilizationId = civilizations[(index + 1) % civilizations.size].id
+                            val nextCivilization = civilizations[(index + 1) % civilizations.size]
+                            selectedCivilizationId = nextCivilization.id
+                            resetCharacterSelection(nextCivilization.id, peopleState)
                         }) { Text("Ціль: ${selectedCivilization.name}") }
                         Text(
                             "техн. ${String.format("%.2f", selectedCivilization.technology)} · стаб. ${String.format("%.2f", selectedCivilization.stability)} · казна ${String.format("%.1f", selectedCivilization.treasury)}",
@@ -320,6 +345,71 @@ fun ChronosphereApp() {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+
+                    val livingCharacters = peopleState.livingPeople(selectedCivilization.id)
+                        .sortedByDescending { it.prestige }
+                    val selectedPerson = livingCharacters.firstOrNull { it.id == selectedPersonId }
+                        ?: ruler
+                        ?: livingCharacters.firstOrNull()
+                    if (selectedPerson != null) {
+                        val age = selectedPerson.ageYearsAt(session.state.tick)
+                        val effectiveUndressed = characterUndressed && age >= 18
+                        val baseScene = remember(
+                            selectedPerson.id,
+                            session.state.tick,
+                            evolutionState,
+                            effectiveUndressed,
+                        ) {
+                            CharacterSceneFactory.resolve(
+                                person = selectedPerson,
+                                tick = session.state.tick,
+                                evolution = evolutionState,
+                                undressed = effectiveUndressed,
+                            )
+                        }
+                        val adultRequest = remember(
+                            selectedPerson.id,
+                            session.state.tick,
+                            peopleState,
+                            evolutionState,
+                        ) {
+                            CharacterSceneFactory.adultRequest(
+                                person = selectedPerson,
+                                tick = session.state.tick,
+                                people = peopleState,
+                                evolution = evolutionState,
+                            )
+                        }
+                        val scene = remember(
+                            baseScene,
+                            adultRequest,
+                            effectiveUndressed,
+                            adultSceneRuntime.isActive,
+                        ) {
+                            if (adultRequest != null && adultSceneRuntime.isActive) {
+                                adultSceneRuntime.resolveCharacterCard(adultRequest, effectiveUndressed) ?: baseScene
+                            } else {
+                                baseScene
+                            }
+                        }
+                        CharacterCardPanel(
+                            person = selectedPerson,
+                            tick = session.state.tick,
+                            people = peopleState,
+                            evolution = evolutionState,
+                            scene = scene,
+                            hasPreviousOrNext = livingCharacters.size > 1,
+                            onNext = {
+                                val index = livingCharacters.indexOfFirst { it.id == selectedPerson.id }.coerceAtLeast(0)
+                                selectedPersonId = livingCharacters[(index + 1) % livingCharacters.size].id
+                                characterUndressed = false
+                            },
+                            onToggleWardrobe = {
+                                if (age >= 18) characterUndressed = !effectiveUndressed
+                            },
+                        )
+                    }
+
                     val latestSocietyEvent = session.state.recentEvents.lastOrNull {
                         it.code == "ADULT_SOCIAL_EVENT" && selectedCivilization.id in it.actorIds
                     }
@@ -432,6 +522,7 @@ fun ChronosphereApp() {
                                     historyTimeline.create(loadedSession.state, loadedPeople, loadedEconomy, loadedEvolution)
                                 }
                                 selectedCivilizationId = loadedSession.state.civilizations.first().id
+                                resetCharacterSelection(selectedCivilizationId, loadedPeople)
                                 seedText = loadedState.worldSeed.toString()
                                 interventionSequence = loadedState.recentEvents.asSequence()
                                     .map { it.id }
