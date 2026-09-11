@@ -31,6 +31,7 @@ internal object AdultPackValidator {
                 if (key.isBlank()) errors += "${event.code} has a blank numeric weight key"
                 checkFiniteBound("numericWeight:$key", value, errors, event.code, min = -2.0, max = 2.0)
             }
+            validateEligibility(event, errors)
         }
         return errors
     }
@@ -46,6 +47,30 @@ internal object AdultPackValidator {
         return packs.map { pack ->
             if (!ids.add(pack.id)) throw AdultPackValidationException(listOf("duplicate pack id ${pack.id}"))
             validateOrThrow(pack)
+        }
+    }
+
+    private fun validateEligibility(event: AdultEventRule, errors: MutableList<String>) {
+        if (event.minParticipants < 1) errors += "${event.code} minParticipants < 1"
+        if (event.maxParticipants < event.minParticipants) {
+            errors += "${event.code} maxParticipants < minParticipants"
+        }
+        event.requiredTags.forEach { tag ->
+            if (tag.isBlank()) errors += "${event.code} has a blank required tag"
+        }
+        event.forbiddenTags.forEach { tag ->
+            if (tag.isBlank()) errors += "${event.code} has a blank forbidden tag"
+        }
+        if (event.requiredTags.map { it.lowercase() }.any { it in event.forbiddenTags.map { tag -> tag.lowercase() } }) {
+            errors += "${event.code} required tag also forbidden"
+        }
+        event.numericGates.forEach { gate ->
+            if (gate.key.isBlank()) errors += "${event.code} has a blank numeric gate key"
+            val min = gate.min
+            val max = gate.max
+            if (min != null && !min.isFinite()) errors += "${event.code} gate ${gate.key} min is not finite"
+            if (max != null && !max.isFinite()) errors += "${event.code} gate ${gate.key} max is not finite"
+            if (min != null && max != null && min > max) errors += "${event.code} gate ${gate.key} min > max"
         }
     }
 

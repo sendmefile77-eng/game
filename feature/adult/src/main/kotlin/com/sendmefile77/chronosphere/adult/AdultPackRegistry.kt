@@ -19,11 +19,14 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
     }
 
     fun selectEvent(pack: AdultContentPack, request: AdultEventRequest, fingerprint: Long): AdultEventRule {
-        if (pack.classicSelection) return pickClassic(pack, request, fingerprint)
-        return pickWeighted(pack, request, fingerprint)
+        val eligible = AdultEligibility.eligibleEvents(pack.events, request)
+        if (eligible.isEmpty()) return SAFE_CONTEXT_FALLBACK
+        if (pack.classicSelection) return pickClassic(eligible, request, fingerprint)
+        return pickWeighted(eligible, request, fingerprint)
     }
 
     fun eventWeight(event: AdultEventRule, request: AdultEventRequest): Double {
+        if (!AdultEligibility.isEligible(event, request)) return 0.0
         val tags = AdultCulture.normalizedTags(request.context.cultureTags)
         var weight = event.baseWeight
         for (tag in tags) {
@@ -45,36 +48,34 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
     ): Int {
         var score = if (pack.matchTags.isEmpty()) 1 else 0
         if (pack.matchTags.any { it in tags }) score = pack.priority
-        val fertility = numeric["fertility"] ?: numeric["lust"] ?: 0.0
+        val fertility = numeric[SocialContextKeys.FERTILITY] ?: numeric[SocialContextKeys.LUST] ?: 0.0
         if (pack.id == PACK_HARDCORE && fertility >= 0.75) score += 1
-        val piety = numeric["piety"] ?: 0.0
+        val piety = numeric[SocialContextKeys.PIETY] ?: 0.0
         if (pack.id == PACK_SACRED && piety >= 0.75) score += 1
         return score
     }
 
     private fun pickClassic(
-        pack: AdultContentPack,
+        eligible: List<AdultEventRule>,
         request: AdultEventRequest,
         fingerprint: Long,
     ): AdultEventRule {
         val tone = AdultCulture.tone(request.context.cultureTags)
-        val preferred = pack.events.filter { rule ->
+        val preferred = eligible.filter { rule ->
             tone.preferredCodes.isEmpty() || rule.code in tone.preferredCodes
         }
-        val pool = preferred.ifEmpty { pack.events }
+        val pool = preferred.ifEmpty { eligible }
         return pool[AdultFingerprint.index(fingerprint, 7L, pool.size)]
     }
 
     private fun pickWeighted(
-        pack: AdultContentPack,
+        eligible: List<AdultEventRule>,
         request: AdultEventRequest,
         fingerprint: Long,
     ): AdultEventRule {
-        val weighted = pack.events.map { it to eventWeight(it, request) }
+        val weighted = eligible.map { it to eventWeight(it, request) }
         val total = weighted.sumOf { it.second }
-        if (total <= 0.0) {
-            return pack.events[AdultFingerprint.index(fingerprint, 7L, pack.events.size)]
-        }
+        if (total <= 0.0) return SAFE_CONTEXT_FALLBACK
         val target = AdultFingerprint.unit01(fingerprint, 7L) * total
         var acc = 0.0
         for ((event, weight) in weighted) {
