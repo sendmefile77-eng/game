@@ -23,6 +23,7 @@ include(
     ":core:civilization",
     ":core:people",
     ":core:economy",
+    ":core:society",
     ":core:history",
     ":core:textgen",
     ":core:storage",
