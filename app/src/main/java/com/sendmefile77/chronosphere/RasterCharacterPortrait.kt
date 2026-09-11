@@ -39,6 +39,34 @@ internal fun RasterCharacterPortrait(
             }
         }.getOrNull()
     }
+    val femaleLowerFrontAtlas = remember(context) {
+        runCatching {
+            context.assets.open(RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_ATLAS_PATH).use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        }.getOrNull()
+    }
+    val selection = remember(characterKey, ageYears) {
+        RasterCharacterLibraryV01.select(characterKey, ageYears)
+    }
+
+    // The supplied lower-front library is an adult, female-only focused view. Keep it entirely
+    // out of ordinary portraits and out of every under-18 rendering path.
+    if (
+        ageYears >= 18 &&
+        wardrobeState == WardrobeState.UNDRESSED &&
+        selection.femaleFamily &&
+        femaleLowerFrontAtlas != null
+    ) {
+        Canvas(modifier = modifier) {
+            drawRect(
+                brush = Brush.verticalGradient(listOf(Color(0xFF1A2229), Color(0xFF10151A))),
+                size = size,
+            )
+            drawFemaleLowerFront(femaleLowerFrontAtlas, selection.lowerFrontIndex)
+        }
+        return
+    }
 
     if (atlas == null) {
         ModularCharacterPortrait(
@@ -50,9 +78,6 @@ internal fun RasterCharacterPortrait(
         return
     }
 
-    val selection = remember(characterKey, ageYears) {
-        RasterCharacterLibraryV01.select(characterKey, ageYears)
-    }
     Canvas(modifier = modifier) {
         drawRect(
             brush = Brush.verticalGradient(listOf(Color(0xFF1A2229), Color(0xFF10151A))),
@@ -64,6 +89,8 @@ internal fun RasterCharacterPortrait(
 
 internal object RasterCharacterLibraryV01 {
     const val ATLAS_PATH = "character_library/v0_1/character_parts_v02.webp"
+    const val FEMALE_LOWER_FRONT_ATLAS_PATH =
+        "character_library/v0_1/female_lower_front_v01.webp"
     const val ATLAS_SIZE = 320
     const val CELL_W = 40
     const val CELL_H = 50
@@ -78,10 +105,16 @@ internal object RasterCharacterLibraryV01 {
     const val TORSO_W = 60
     const val TORSO_H = 100
 
+    const val FEMALE_LOWER_FRONT_CELL_W = 240
+    const val FEMALE_LOWER_FRONT_CELL_H = 256
+    const val FEMALE_LOWER_FRONT_COLUMNS = 4
+    const val FEMALE_LOWER_FRONT_VARIANTS = 12
+
     data class Selection(
         val femaleFamily: Boolean,
         val headIndex: Int,
         val garmentIndex: Int,
+        val lowerFrontIndex: Int,
     )
 
     fun select(characterKey: String, ageYears: Int): Selection {
@@ -93,6 +126,7 @@ internal object RasterCharacterLibraryV01 {
             femaleFamily = (hash and 1) == 0,
             headIndex = head,
             garmentIndex = (hash ushr 11) % VARIANTS,
+            lowerFrontIndex = (hash ushr 16) % FEMALE_LOWER_FRONT_VARIANTS,
         )
     }
 
@@ -103,6 +137,38 @@ internal object RasterCharacterLibraryV01 {
             hash *= 16777619
         }
         return hash
+    }
+}
+
+private fun DrawScope.drawFemaleLowerFront(atlas: Bitmap, variantIndex: Int) {
+    val column = variantIndex % RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_COLUMNS
+    val row = variantIndex / RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_COLUMNS
+    val left = column * RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W
+    val top = row * RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H
+    val source = Rect(
+        left,
+        top,
+        left + RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W,
+        top + RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H,
+    )
+
+    // Fit, do not stretch: the character card is landscape on many phones, while these focused
+    // lower-front cells are nearly square. Independent X/Y scaling would visibly deform anatomy.
+    val scale = minOf(
+        size.width / RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W,
+        size.height / RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H,
+    )
+    val width = RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_W * scale
+    val height = RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_CELL_H * scale
+    val target = RectF(
+        (size.width - width) / 2f,
+        (size.height - height) / 2f,
+        (size.width + width) / 2f,
+        (size.height + height) / 2f,
+    )
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    drawIntoCanvas { canvas ->
+        canvas.nativeCanvas.drawBitmap(atlas, source, target, paint)
     }
 }
 

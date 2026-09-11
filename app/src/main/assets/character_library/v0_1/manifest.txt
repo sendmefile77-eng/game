@@ -1,5 +1,5 @@
 CHARACTER_LIBRARY_V1
-version=2
+version=3
 style=mature_animation
 canvas=320x480
 assembly=layered_raster
@@ -11,6 +11,19 @@ network=false
 atlas=character_parts_v02.webp
 atlas_size=320x320
 variants_per_row=6
+
+# Focused adult female lower-front atlas, physically cropped and normalized from the supplied
+# approved source sheet. It is used only by the UNDRESSED character-card path.
+female_lower_front_atlas=female_lower_front_v01.webp
+female_lower_front_atlas_size=960x768
+female_lower_front_cell=240x256
+female_lower_front_columns=4
+female_lower_front_rows=3
+female_lower_front_variants=12
+female_lower_front_view=front
+female_lower_front_adults_only=true
+female_lower_front_undressed_only=true
+female_lower_front_scaling=fit
 
 # Packed runtime cells (pixels in 320x320 atlas)
 head_cell=40x50
@@ -45,6 +58,7 @@ garment=stable_hash(person.id)>>11 mod 6
 wardrobe_toggle_preserves_head=true
 wardrobe_toggle_preserves_family=true
 wardrobe_undressed_uses_same_torso=true
+female_lower_front=stable_hash(person.id)>>16 mod 12
 
 # Canonical anchors for future finer face-part slicing
 anchor.face_center=0.500,0.380

@@ -42,6 +42,7 @@ class ChronosphereCharacterLibraryV01Test {
         assertEquals(first, second)
         assertTrue(first.headIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
         assertTrue(first.garmentIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
+        assertTrue(first.lowerFrontIndex in 0 until RasterCharacterLibraryV01.FEMALE_LOWER_FRONT_VARIANTS)
     }
 
     @Test
@@ -50,6 +51,7 @@ class ChronosphereCharacterLibraryV01Test {
         val old = RasterCharacterLibraryV01.select("person-alpha", 72)
         assertEquals(young.femaleFamily, old.femaleFamily)
         assertEquals(young.garmentIndex, old.garmentIndex)
+        assertEquals(young.lowerFrontIndex, old.lowerFrontIndex)
         assertEquals(RasterCharacterLibraryV01.VARIANTS - 1, old.headIndex)
     }
 }
