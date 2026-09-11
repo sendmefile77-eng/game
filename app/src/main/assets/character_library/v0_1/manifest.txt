@@ -2,43 +2,40 @@ CHARACTER_LIBRARY_V1
 version=1
 style=mature_animation
 canvas=320x480
-coordinate_space=normalized
-assembly=layered
+assembly=layered_raster
 identity_key=person.id
 runtime_ai=false
 network=false
 
-# Layer order
+# Runtime raster atlas
+atlas=character_parts_v01.webp
+atlas_size=576x720
+cell=96x120
+variants_per_row=6
+row.0=female_heads
+row.1=male_heads
+row.2=female_garments
+row.3=male_garments
+body_row_y=480
+body_cell=96x240
+body.0=female_base
+body.1=male_base
+
+# Current real assembly order
 background
-body_frame
-neck
-face
-hair_back
-ears
-nose
-eyes
-brows
-mouth
-hair_front
-age_details
-wardrobe
-accessories
+base_body_torso
+wardrobe_if_dressed
+selected_head
 foreground
 
-# v0.1 bundled presets
-face=oval,long,square,heart
-eyes=almond,deep_set,narrow,round
-brows=straight,arched,heavy,soft
-nose=straight,narrow,broad,aquiline
-mouth=neutral,full,thin,wide
-hair=crop,side_part,wavy,bob,tied_back,short_curl
-frame=narrow,balanced,broad
-garment=simple,high_collar,coat,tunic
-skin_palettes=6
-hair_palettes=6
-garment_palettes=6
+# Deterministic selection
+family=stable_hash(person.id)%2
+head=stable_hash(person.id)>>3 mod 6
+garment=stable_hash(person.id)>>11 mod 6
+wardrobe_toggle_preserves_head=true
+wardrobe_toggle_preserves_family=true
 
-# Anchors used by all future raster/vector replacements
+# Canonical anchors for future finer face-part slicing
 anchor.face_center=0.500,0.380
 anchor.eye_left=0.441,0.325
 anchor.eye_right=0.559,0.325
@@ -47,6 +44,9 @@ anchor.mouth=0.500,0.520
 anchor.neck=0.500,0.625
 anchor.shoulder_left=0.265,0.745
 anchor.shoulder_right=0.735,0.745
+
+# Source categories retained by art direction
+future.layers=eyes,brows,nose,mouth,hair,ears,hands,footwear,accessories
 
 # Art direction
 adult_proportions=true
