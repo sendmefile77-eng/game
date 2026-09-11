@@ -12,7 +12,7 @@ object EconomySnapshotV1 {
     fun encode(state: EconomyState): String = buildString {
         appendLine(HEADER)
         appendLine("WORLD\t${state.worldSeed}\t${state.tick}")
-        state.civilizations.sortedBy { it.civilizationId }.forEach { economy ->
+        state.civilizations.forEach { economy ->
             appendLine(
                 listOf(
                     "ECON",
@@ -27,7 +27,7 @@ object EconomySnapshotV1 {
                 ).joinToString("\t"),
             )
         }
-        state.routes.sortedBy { it.id }.forEach { route ->
+        state.routes.forEach { route ->
             appendLine(
                 listOf(
                     "TRADE",
