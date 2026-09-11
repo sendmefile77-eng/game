@@ -88,14 +88,9 @@ class HistoryTimeline {
     fun restoreCheckpoint(workspace: HistoryWorkspace, checkpointId: String): HistoryWorkspace {
         val checkpoint = workspace.checkpoints.firstOrNull { it.id == checkpointId }
             ?: error("Unknown history checkpoint: $checkpointId")
-        val targetBranchId = if (checkpoint.branchId == workspace.activeBranchId) {
-            workspace.activeBranchId
-        } else {
-            workspace.activeBranchId
-        }
         return workspace.copy(
             branches = workspace.branches.map { branch ->
-                if (branch.id == targetBranchId) branch.copy(state = checkpoint.state) else branch
+                if (branch.id == workspace.activeBranchId) branch.copy(state = checkpoint.state) else branch
             },
         )
     }
