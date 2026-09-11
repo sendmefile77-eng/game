@@ -100,10 +100,17 @@ class SceneResolver(pack: ScenePack) {
         append('|').append(request.requestedWardrobeState?.name ?: "ANY")
         request.participants.sortedBy { it.entityId }.forEach { participant ->
             append('|').append(participant.entityId)
+            append(':').append(participant.ageYears)
             append(':').append(participant.rigFamily)
-            participant.tags.sorted().forEach { append(':').append(it) }
+            participant.tags.sorted().forEach { append(":t=").append(it) }
+            participant.numeric.toSortedMap().forEach { (key, value) ->
+                append(":n=").append(key).append('=').append(value.toRawBits())
+            }
         }
-        request.sceneTags.sorted().forEach { append('|').append(it) }
+        request.sceneTags.sorted().forEach { append("|t=").append(it) }
+        request.numericContext.toSortedMap().forEach { (key, value) ->
+            append("|n=").append(key).append('=').append(value.toRawBits())
+        }
     }
 
     private fun sceneKey(request: SceneRequest, recipe: SceneRecipe): String =
