@@ -1,9 +1,9 @@
 # Chronosphere character library v0.1
 
-This folder defines the renderer-neutral contract for the first offline modular 2D character constructor.
+This folder contains the first real offline modular 2D character library used by the Android app.
 
-The v0.1 Kotlin renderer intentionally ships with a small mature-animation preset library so the app can prove deterministic layer assembly without depending on runtime AI, network access, or a final portrait engine.
+`character_parts_v02.webp` is a physically cut raster atlas prepared from the approved mature/semi-realistic character-library board. It contains female/male head variants, female/male wardrobe variants, canonical headless torso layers, plus reserved eye / nose / mouth detail regions for the next finer-grained face pass.
 
-Future raster/vector replacements must preserve the canonical 320x480 coordinate system and anchors from `manifest.txt`. Parts are replaced category-by-category; `person.id` remains the identity seed.
+Runtime assembly is deterministic and completely local: `person.id` selects the same visual family, head and wardrobe every time; age can select the mature head variant; wardrobe changes only replace/remove the clothing layer. No runtime AI, no network access, and no simulation/save-format dependency on this concrete renderer.
 
-The style target is adult/semi-realistic animation: normal head/body proportions, restrained facial exaggeration, cinematic shading, and no chibi/anime head scaling.
+The visual target is adult/semi-realistic animation: normal head/body proportions, restrained facial exaggeration, cinematic shading, and no chibi/oversized-anime styling.
