@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere.evolution
 
 import kotlin.math.abs
+import kotlin.math.max
 
 enum class BiologicalRank {
     POPULATION,
@@ -102,6 +103,8 @@ data class PopulationLineage(
     val bodyPlan: BodyPlan = BodyPlan(),
     val divergenceFromOrigin: Double = 0.0,
     val tags: Set<String> = emptySet(),
+    /** Set for stable hybrid lineages; parentLineageId remains the primary parent for backwards/simple traversal. */
+    val secondaryParentLineageId: String? = null,
 ) {
     init {
         require(id.isNotBlank())
@@ -109,7 +112,10 @@ data class PopulationLineage(
         require(formedTick >= 0L)
         require(generation >= 0)
         require(divergenceFromOrigin.isFinite() && divergenceFromOrigin in 0.0..1.0)
+        require(secondaryParentLineageId == null || secondaryParentLineageId != parentLineageId)
     }
+
+    val isHybrid: Boolean get() = secondaryParentLineageId != null || "hybrid" in tags
 }
 
 data class EvolutionPopulation(
@@ -120,6 +126,8 @@ data class EvolutionPopulation(
     val isolation: Double,
     val geneFlow: Double,
     val mutationPressure: Double = 0.0,
+    /** Biological ancestry. Political ownership and cultural identity are intentionally not stored here. */
+    val ancestry: Map<String, Double> = mapOf(lineageId to 1.0),
 ) {
     init {
         require(id.isNotBlank() && settlementId.isNotBlank() && lineageId.isNotBlank())
@@ -127,7 +135,16 @@ data class EvolutionPopulation(
         require(isolation.isFinite() && isolation in 0.0..1.0)
         require(geneFlow.isFinite() && geneFlow in 0.0..1.0)
         require(mutationPressure.isFinite() && mutationPressure in 0.0..1.0)
+        require(ancestry.isNotEmpty())
+        require(ancestry.keys.all { it.isNotBlank() })
+        require(ancestry.values.all { it.isFinite() && it >= 0.0 })
+        require(abs(ancestry.values.sum() - 1.0) <= 0.000_001) { "Ancestry fractions must sum to 1" }
     }
+
+    val admixture: Double
+        get() = (1.0 - (ancestry.values.maxOrNull() ?: 1.0)).coerceIn(0.0, 1.0)
+
+    fun ancestryFraction(lineage: String): Double = ancestry[lineage] ?: 0.0
 }
 
 data class MorphologyVisualDescriptor(
@@ -136,6 +153,7 @@ data class MorphologyVisualDescriptor(
     val bodyPlan: BodyPlan,
     val numeric: Map<String, Double>,
     val tags: Set<String>,
+    val ancestry: Map<String, Double> = emptyMap(),
 )
 
 data class EvolutionState(
@@ -153,8 +171,15 @@ data class EvolutionState(
         population(settlementId)?.let { lineage(it.lineageId) }
 
     fun visualDescriptor(settlementId: String): MorphologyVisualDescriptor? {
-        val lineage = lineageForSettlement(settlementId) ?: return null
+        val population = population(settlementId) ?: return null
+        val lineage = lineage(population.lineageId) ?: return null
         val morphology = lineage.morphology
+        val ancestryTags = population.ancestry.entries
+            .filter { it.value >= 0.08 }
+            .sortedByDescending { it.value }
+            .mapIndexed { index, entry ->
+                "ancestry:${if (index == 0) "major" else "minor"}:${entry.key}"
+            }
         val tags = buildSet {
             add("lineage:${lineage.id}")
             add("bio_rank:${lineage.rank.name.lowercase()}")
@@ -164,6 +189,9 @@ data class EvolutionState(
             add("legs:${lineage.bodyPlan.legPairs * 2}")
             add("eyes:${lineage.bodyPlan.eyeCount}")
             if (lineage.bodyPlan.hasTail) add("tail")
+            if (population.admixture >= 0.08) add("mixed_ancestry")
+            if (lineage.isHybrid) add("hybrid_lineage")
+            addAll(ancestryTags)
             addAll(lineage.tags.map { it.lowercase() })
         }.toSortedSet()
         return MorphologyVisualDescriptor(
@@ -180,8 +208,19 @@ data class EvolutionState(
                 "morph_eye_size" to morphology.eyeSize,
                 "morph_dimorphism" to morphology.sexualDimorphism,
                 "morph_divergence" to lineage.divergenceFromOrigin,
+                "morph_admixture" to population.admixture,
+                "morph_primary_ancestry" to (population.ancestry.values.maxOrNull() ?: 1.0),
             ),
             tags = tags,
+            ancestry = population.ancestry,
         )
+    }
+
+    fun biologicalSimilarity(settlementA: String, settlementB: String): Double {
+        val lineageA = lineageForSettlement(settlementA) ?: return 0.0
+        val lineageB = lineageForSettlement(settlementB) ?: return 0.0
+        val morphologySimilarity = 1.0 - lineageA.morphology.distanceTo(lineageB.morphology)
+        val structuralSimilarity = if (lineageA.bodyPlan == lineageB.bodyPlan) 1.0 else 0.65
+        return (morphologySimilarity * 0.75 + structuralSimilarity * 0.25).coerceIn(0.0, 1.0)
     }
 }
