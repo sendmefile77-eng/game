@@ -14,3 +14,6 @@ The adult feature is isolated behind `core/adult-contracts`. It returns effect p
 
 ## ADR-005 — Milestone-only manual CI
 GitHub Actions workflows use `workflow_dispatch` only. During early development we do not build on every step, commit, PR, or module change. Actions are launched only at meaningful playable/visual milestones when there is something worth installing and testing on Android. Target checkpoints are: first living-map prototype, first civilization simulation prototype, first major integrated gameplay slice, and later release candidates. Between checkpoints, changes are validated by static review, deterministic/unit-test design and code inspection without consuming GitHub Actions minutes.
+
+## ADR-006 — Preserve Grok adult-content intent during integration
+Grok owns the adult/erotic content layer. ChatGPT reviews that module for architecture, contract compliance, determinism, bugs, integration quality, data safety and runtime stability, but does not reduce, soften, rewrite or remove Grok-authored adult content merely because of its erotic intensity. Content changes are made only when technically necessary for compatibility, when explicitly requested by the user, or when required by applicable platform/legal constraints. Architectural integration must preserve the intended adult-module behavior whenever possible.
