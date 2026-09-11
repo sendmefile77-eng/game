@@ -147,7 +147,7 @@ object CharacterSceneFactory {
             addAll(descriptor?.tags ?: emptySet())
         }
         val numeric = linkedMapOf<String, Double>().apply {
-            descriptor?.numeric?.let(::putAll)
+            descriptor?.numeric?.let { putAll(it) }
             if (profile != null) {
                 put("privacy", profile.privacy)
                 put("body_openness", profile.bodyOpenness)
