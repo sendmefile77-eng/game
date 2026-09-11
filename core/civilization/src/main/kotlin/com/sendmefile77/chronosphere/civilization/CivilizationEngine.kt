@@ -17,12 +17,7 @@ class CivilizationEngine(
 
     fun initialize(civilizationCount: Int = 8): LivingPlanetState {
         require(civilizationCount in 1..24)
-        val candidates = world.tiles
-            .asSequence()
-            .filter { isHabitable(it) }
-            .sortedByDescending { settlementScore(it) }
-            .toList()
-
+        val candidates = world.tiles.asSequence().filter { isHabitable(it) }.sortedByDescending { settlementScore(it) }.toList()
         val selected = ArrayList<WorldTile>()
         for (tile in candidates) {
             if (selected.all { distance(it, tile) >= 8 }) selected += tile
@@ -37,7 +32,7 @@ class CivilizationEngine(
             val civId = "civ-${index + 1}"
             val settlementId = "settlement-${index + 1}"
             val civName = civilizationName(index)
-            val settlementName = settlementName(index)
+            val cityName = settlementName(index)
             val population = 520L + (hash01(index.toLong() + world.seed.value, tile.x, tile.y) * 620.0).roundToLong()
             civilizations += Civilization(
                 id = civId,
@@ -48,28 +43,23 @@ class CivilizationEngine(
                 treasury = 80.0,
                 cultureTags = initialCulture(tile),
             )
-            settlements += Settlement(
-                id = settlementId,
-                name = settlementName,
-                civilizationId = civId,
-                x = tile.x,
-                y = tile.y,
-                population = population,
-                foodStock = population * 0.65,
-                wealth = 60.0,
-                foundedTick = 0,
-            )
+            settlements += Settlement(settlementId, cityName, civId, tile.x, tile.y, population, population * 0.65, 60.0, 0)
             events += SimulationEvent(
-                id = "founding-$index",
-                tick = 0,
-                code = "SETTLEMENT_FOUNDED",
-                actorIds = listOf(civId),
-                locationId = settlementId,
+                id = "founding-$index", tick = 0, code = "SETTLEMENT_FOUNDED",
+                actorIds = listOf(civId), locationId = settlementId,
                 numbers = mapOf("population" to population.toDouble()),
-                facts = mapOf("civilization" to civName, "settlement" to settlementName),
+                facts = mapOf("civilization" to civName, "settlement" to cityName),
             )
         }
-        return LivingPlanetState(world.seed.value, 0L, civilizations, settlements, events.takeLast(32))
+
+        return LivingPlanetState(
+            worldSeed = world.seed.value,
+            tick = 0L,
+            civilizations = civilizations,
+            settlements = settlements,
+            recentEvents = events.takeLast(32),
+            relations = initialRelations(civilizations),
+        )
     }
 
     fun advance(state: LivingPlanetState, months: Int): LivingPlanetState {
@@ -81,82 +71,226 @@ class CivilizationEngine(
 
     private fun step(state: LivingPlanetState): LivingPlanetState {
         val nextTick = state.tick + 1
-        val generatedEvents = ArrayList<SimulationEvent>()
-        val updatedSettlements = state.settlements.map { settlement ->
-            val tile = world.tiles[settlement.y * world.width + settlement.x]
-            val resourceBonus = resourceBonus(settlement.x, settlement.y)
-            val habitability = habitability(tile)
-            val carryingPressure = (settlement.population / 45_000.0).coerceIn(0.0, 0.85)
-            val foodProduction = settlement.population * (0.018 + habitability * 0.013 + resourceBonus * 0.004)
-            val foodUse = settlement.population * 0.023
-            val nextFood = (settlement.foodStock + foodProduction - foodUse).coerceAtLeast(0.0)
-            val hungerPenalty = if (nextFood < settlement.population * 0.08) -0.0032 else 0.0
-            val monthlyGrowth = (0.0011 + (habitability - 0.5) * 0.0013 + resourceBonus * 0.00035 - carryingPressure * 0.0018 + hungerPenalty)
-                .coerceIn(-0.0045, 0.0035)
-            val nextPopulation = (settlement.population * (1.0 + monthlyGrowth)).roundToLong().coerceAtLeast(40L)
-            val nextWealth = (settlement.wealth + nextPopulation * (0.0008 + resourceBonus * 0.0006)).coerceAtLeast(0.0)
+        val events = ArrayList<SimulationEvent>()
+        var settlements = growSettlements(state.settlements, nextTick, events).toMutableList()
+        if (nextTick % 240L == 0L) foundColonies(settlements, nextTick, events)
+        if (nextTick % 12L == 0L) migratePopulation(settlements, nextTick, events)
 
-            val oldBand = populationBand(settlement.population)
-            val newBand = populationBand(nextPopulation)
-            if (newBand > oldBand) {
-                generatedEvents += SimulationEvent(
-                    id = "growth-${settlement.id}-$nextTick-$newBand",
-                    tick = nextTick,
-                    code = "SETTLEMENT_GROWTH",
-                    actorIds = listOf(settlement.civilizationId),
-                    locationId = settlement.id,
-                    numbers = mapOf("population" to nextPopulation.toDouble()),
-                    facts = mapOf("settlement" to settlement.name),
-                )
-            }
-            if (hungerPenalty < 0.0 && nextTick % 12L == 0L) {
-                generatedEvents += SimulationEvent(
-                    id = "shortage-${settlement.id}-$nextTick",
-                    tick = nextTick,
-                    code = "FOOD_SHORTAGE",
-                    actorIds = listOf(settlement.civilizationId),
-                    locationId = settlement.id,
-                    numbers = mapOf("population" to nextPopulation.toDouble()),
-                    facts = mapOf("settlement" to settlement.name),
-                )
-            }
-            settlement.copy(population = nextPopulation, foodStock = nextFood, wealth = nextWealth)
-        }.toMutableList()
+        val diplomacy = updateDiplomacy(state, nextTick, events)
+        val warResult = applyWarEffects(settlements, diplomacy.wars, nextTick, events)
+        settlements = warResult.settlements.toMutableList()
 
-        if (nextTick % 240L == 0L) {
-            foundColonies(updatedSettlements, nextTick, generatedEvents)
-        }
-
-        val populations = updatedSettlements.groupBy { it.civilizationId }.mapValues { (_, list) -> list.sumOf { it.population } }
-        val wealth = updatedSettlements.groupBy { it.civilizationId }.mapValues { (_, list) -> list.sumOf { it.wealth } }
+        val populations = settlements.groupBy { it.civilizationId }.mapValues { (_, list) -> list.sumOf { it.population } }
+        val wealth = settlements.groupBy { it.civilizationId }.mapValues { (_, list) -> list.sumOf { it.wealth } }
         val updatedCivilizations = state.civilizations.map { civ ->
             val pop = populations[civ.id] ?: 0L
             civ.copy(
                 population = pop,
                 treasury = (civ.treasury * 0.998 + (wealth[civ.id] ?: 0.0) * 0.002).coerceAtLeast(0.0),
                 technology = (civ.technology + 0.0000025 * (1.0 + pop / 10_000.0)).coerceAtMost(1.0),
-                stability = (civ.stability + stabilityDrift(civ.id, nextTick)).coerceIn(0.15, 0.95),
+                stability = (civ.stability + stabilityDrift(civ.id, nextTick) - warResult.stabilityPenalty(civ.id)).coerceIn(0.15, 0.95),
             )
         }
 
         return state.copy(
             tick = nextTick,
             civilizations = updatedCivilizations,
-            settlements = updatedSettlements,
-            recentEvents = (state.recentEvents + generatedEvents).takeLast(48),
+            settlements = settlements,
+            recentEvents = (state.recentEvents + events).takeLast(64),
+            relations = diplomacy.relations,
+            wars = warResult.wars,
         )
     }
 
-    private fun foundColonies(
+    private fun growSettlements(
+        settlements: List<Settlement>,
+        nextTick: Long,
+        events: MutableList<SimulationEvent>,
+    ): List<Settlement> = settlements.map { settlement ->
+        val tile = world.tiles[settlement.y * world.width + settlement.x]
+        val resourceBonus = resourceBonus(settlement.x, settlement.y)
+        val habitability = habitability(tile)
+        val carryingPressure = (settlement.population / 45_000.0).coerceIn(0.0, 0.85)
+        val foodProduction = settlement.population * (0.018 + habitability * 0.013 + resourceBonus * 0.004)
+        val foodUse = settlement.population * 0.023
+        val nextFood = (settlement.foodStock + foodProduction - foodUse).coerceAtLeast(0.0)
+        val hungerPenalty = if (nextFood < settlement.population * 0.08) -0.0032 else 0.0
+        val monthlyGrowth = (0.0011 + (habitability - 0.5) * 0.0013 + resourceBonus * 0.00035 - carryingPressure * 0.0018 + hungerPenalty)
+            .coerceIn(-0.0045, 0.0035)
+        val nextPopulation = (settlement.population * (1.0 + monthlyGrowth)).roundToLong().coerceAtLeast(40L)
+        val nextWealth = (settlement.wealth + nextPopulation * (0.0008 + resourceBonus * 0.0006)).coerceAtLeast(0.0)
+        if (populationBand(nextPopulation) > populationBand(settlement.population)) {
+            events += SimulationEvent(
+                id = "growth-${settlement.id}-$nextTick", tick = nextTick, code = "SETTLEMENT_GROWTH",
+                actorIds = listOf(settlement.civilizationId), locationId = settlement.id,
+                numbers = mapOf("population" to nextPopulation.toDouble()), facts = mapOf("settlement" to settlement.name),
+            )
+        }
+        if (hungerPenalty < 0.0 && nextTick % 12L == 0L) {
+            events += SimulationEvent(
+                id = "shortage-${settlement.id}-$nextTick", tick = nextTick, code = "FOOD_SHORTAGE",
+                actorIds = listOf(settlement.civilizationId), locationId = settlement.id,
+                numbers = mapOf("population" to nextPopulation.toDouble()), facts = mapOf("settlement" to settlement.name),
+            )
+        }
+        settlement.copy(population = nextPopulation, foodStock = nextFood, wealth = nextWealth)
+    }
+
+    private data class DiplomacyResult(val relations: List<DiplomaticRelation>, val wars: List<WarState>)
+
+    private fun updateDiplomacy(
+        state: LivingPlanetState,
+        tick: Long,
+        events: MutableList<SimulationEvent>,
+    ): DiplomacyResult {
+        if (tick % 12L != 0L) return DiplomacyResult(state.relations, state.wars)
+        val names = state.civilizations.associate { it.id to it.name }
+        var wars = state.wars.toMutableList()
+        val relations = state.relations.map { relation ->
+            val atWar = wars.any { it.matches(relation.civilizationA, relation.civilizationB) }
+            val noise = (hash01(world.seed.value xor tick, relation.civilizationA.hashCode(), relation.civilizationB.hashCode()) - 0.5) * 0.045
+            val peacePull = if (atWar) -0.004 else -relation.value * 0.006
+            relation.copy(value = (relation.value + noise + peacePull).coerceIn(-1.0, 1.0), lastUpdatedTick = tick)
+        }.toMutableList()
+
+        val ended = wars.filter { war ->
+            val age = tick - war.startedTick
+            age >= 36L && hash01(world.seed.value + tick, war.id.hashCode(), age.toInt()) < 0.06
+        }
+        ended.forEach { war ->
+            wars.remove(war)
+            events += SimulationEvent(
+                id = "war-end-${war.id}-$tick", tick = tick, code = "WAR_ENDED",
+                actorIds = listOf(war.civilizationA, war.civilizationB),
+                facts = mapOf("a" to (names[war.civilizationA] ?: war.civilizationA), "b" to (names[war.civilizationB] ?: war.civilizationB)),
+                numbers = mapOf("casualties" to (war.casualtiesA + war.casualtiesB).toDouble()),
+            )
+        }
+
+        for (relation in relations) {
+            if (relation.value > -0.58 || wars.any { it.matches(relation.civilizationA, relation.civilizationB) }) continue
+            val chance = hash01(world.seed.value xor (tick * 31), relation.civilizationA.hashCode(), relation.civilizationB.hashCode())
+            if (chance < 0.025) {
+                val war = WarState(
+                    id = "war-${relation.civilizationA}-${relation.civilizationB}-$tick",
+                    civilizationA = relation.civilizationA,
+                    civilizationB = relation.civilizationB,
+                    startedTick = tick,
+                )
+                wars += war
+                events += SimulationEvent(
+                    id = "war-start-${war.id}", tick = tick, code = "WAR_STARTED",
+                    actorIds = listOf(war.civilizationA, war.civilizationB),
+                    facts = mapOf("a" to (names[war.civilizationA] ?: war.civilizationA), "b" to (names[war.civilizationB] ?: war.civilizationB)),
+                )
+            }
+        }
+        return DiplomacyResult(relations, wars)
+    }
+
+    private data class WarResult(
+        val settlements: List<Settlement>,
+        val wars: List<WarState>,
+        val penalties: Map<String, Double>,
+    ) {
+        fun stabilityPenalty(civilizationId: String): Double = penalties[civilizationId] ?: 0.0
+    }
+
+    private fun applyWarEffects(
+        input: List<Settlement>,
+        wars: List<WarState>,
+        tick: Long,
+        events: MutableList<SimulationEvent>,
+    ): WarResult {
+        val settlements = input.toMutableList()
+        val updatedWars = ArrayList<WarState>(wars.size)
+        val penalties = hashMapOf<String, Double>()
+        for (war in wars) {
+            val a = settlements.filter { it.civilizationId == war.civilizationA }
+            val b = settlements.filter { it.civilizationId == war.civilizationB }
+            val pair = closestPair(a, b)
+            if (pair == null) {
+                updatedWars += war
+                continue
+            }
+            val distance = abs(pair.first.x - pair.second.x) + abs(pair.first.y - pair.second.y)
+            val proximity = (1.0 - distance / 35.0).coerceIn(0.15, 1.0)
+            val lossA = (pair.first.population * proximity * (0.00010 + hash01(world.seed.value xor tick, war.id.hashCode(), 1) * 0.00024)).roundToLong().coerceAtLeast(0L)
+            val lossB = (pair.second.population * proximity * (0.00010 + hash01(world.seed.value xor tick, war.id.hashCode(), 2) * 0.00024)).roundToLong().coerceAtLeast(0L)
+            replacePopulation(settlements, pair.first.id, lossA)
+            replacePopulation(settlements, pair.second.id, lossB)
+            updatedWars += war.copy(casualtiesA = war.casualtiesA + lossA, casualtiesB = war.casualtiesB + lossB)
+            penalties[war.civilizationA] = (penalties[war.civilizationA] ?: 0.0) + 0.00012
+            penalties[war.civilizationB] = (penalties[war.civilizationB] ?: 0.0) + 0.00012
+            if (tick % 12L == 0L && lossA + lossB > 0L) {
+                events += SimulationEvent(
+                    id = "battle-${war.id}-$tick", tick = tick, code = "WAR_CASUALTIES",
+                    actorIds = listOf(war.civilizationA, war.civilizationB),
+                    numbers = mapOf("casualties" to (lossA + lossB).toDouble()),
+                    facts = mapOf("settlementA" to pair.first.name, "settlementB" to pair.second.name),
+                )
+            }
+        }
+        return WarResult(settlements, updatedWars, penalties)
+    }
+
+    private fun replacePopulation(settlements: MutableList<Settlement>, id: String, losses: Long) {
+        val index = settlements.indexOfFirst { it.id == id }
+        if (index >= 0 && losses > 0) {
+            val current = settlements[index]
+            settlements[index] = current.copy(population = (current.population - losses).coerceAtLeast(40L))
+        }
+    }
+
+    private fun closestPair(a: List<Settlement>, b: List<Settlement>): Pair<Settlement, Settlement>? {
+        if (a.isEmpty() || b.isEmpty()) return null
+        var best: Pair<Settlement, Settlement>? = null
+        var bestDistance = Int.MAX_VALUE
+        for (left in a) for (right in b) {
+            val d = abs(left.x - right.x) + abs(left.y - right.y)
+            if (d < bestDistance) {
+                bestDistance = d
+                best = left to right
+            }
+        }
+        return best
+    }
+
+    private fun migratePopulation(
         settlements: MutableList<Settlement>,
         tick: Long,
         events: MutableList<SimulationEvent>,
     ) {
+        val snapshot = settlements.toList()
+        snapshot.forEach { source ->
+            if (source.population < 600L || source.foodStock >= source.population * 0.12) return@forEach
+            val destination = snapshot
+                .asSequence()
+                .filter { it.id != source.id && it.civilizationId == source.civilizationId }
+                .filter { it.foodStock > it.population * 0.30 }
+                .minByOrNull { abs(it.x - source.x) + abs(it.y - source.y) }
+                ?: return@forEach
+            val moved = (source.population * 0.018).roundToLong().coerceAtLeast(25L)
+            val sourceIndex = settlements.indexOfFirst { it.id == source.id }
+            val destinationIndex = settlements.indexOfFirst { it.id == destination.id }
+            if (sourceIndex < 0 || destinationIndex < 0) return@forEach
+            val liveSource = settlements[sourceIndex]
+            val liveDestination = settlements[destinationIndex]
+            settlements[sourceIndex] = liveSource.copy(population = (liveSource.population - moved).coerceAtLeast(40L))
+            settlements[destinationIndex] = liveDestination.copy(population = liveDestination.population + moved)
+            events += SimulationEvent(
+                id = "migration-${source.id}-${destination.id}-$tick", tick = tick, code = "MIGRATION",
+                actorIds = listOf(source.civilizationId), numbers = mapOf("people" to moved.toDouble()),
+                facts = mapOf("from" to source.name, "to" to destination.name),
+            )
+        }
+    }
+
+    private fun foundColonies(settlements: MutableList<Settlement>, tick: Long, events: MutableList<SimulationEvent>) {
         val founders = settlements.toList()
         founders.forEach { founder ->
             if (founder.population < 2_500L) return@forEach
-            val chance = hash01(world.seed.value xor tick, founder.id.hashCode(), tick.toInt())
-            if (chance >= 0.22) return@forEach
+            if (hash01(world.seed.value xor tick, founder.id.hashCode(), tick.toInt()) >= 0.22) return@forEach
             val target = findExpansionTile(founder, settlements) ?: return@forEach
             val founderIndex = settlements.indexOfFirst { it.id == founder.id }
             if (founderIndex < 0) return@forEach
@@ -164,47 +298,32 @@ class CivilizationEngine(
             val transfer = (liveFounder.population * 0.12).roundToLong().coerceIn(250L, liveFounder.population / 3)
             val colonyId = "${founder.civilizationId}-colony-$tick-${target.x}-${target.y}"
             val colonyName = settlementNameFor(world.seed.value xor tick xor (target.x.toLong() shl 32) xor target.y.toLong())
-            settlements[founderIndex] = liveFounder.copy(
-                population = liveFounder.population - transfer,
-                foodStock = (liveFounder.foodStock * 0.88).coerceAtLeast(0.0),
-            )
-            settlements += Settlement(
-                id = colonyId,
-                name = colonyName,
-                civilizationId = founder.civilizationId,
-                x = target.x,
-                y = target.y,
-                population = transfer,
-                foodStock = transfer * 0.52,
-                wealth = liveFounder.wealth * 0.08,
-                foundedTick = tick,
-            )
+            settlements[founderIndex] = liveFounder.copy(population = liveFounder.population - transfer, foodStock = (liveFounder.foodStock * 0.88).coerceAtLeast(0.0))
+            settlements += Settlement(colonyId, colonyName, founder.civilizationId, target.x, target.y, transfer, transfer * 0.52, liveFounder.wealth * 0.08, tick)
             events += SimulationEvent(
-                id = "colony-$colonyId",
-                tick = tick,
-                code = "COLONY_FOUNDED",
-                actorIds = listOf(founder.civilizationId),
-                locationId = colonyId,
-                numbers = mapOf("population" to transfer.toDouble()),
-                facts = mapOf("settlement" to colonyName, "parent" to founder.name),
+                id = "colony-$colonyId", tick = tick, code = "COLONY_FOUNDED", actorIds = listOf(founder.civilizationId), locationId = colonyId,
+                numbers = mapOf("population" to transfer.toDouble()), facts = mapOf("settlement" to colonyName, "parent" to founder.name),
             )
         }
     }
 
-    private fun findExpansionTile(founder: Settlement, settlements: List<Settlement>): WorldTile? = world.tiles
-        .asSequence()
+    private fun findExpansionTile(founder: Settlement, settlements: List<Settlement>): WorldTile? = world.tiles.asSequence()
         .filter { isHabitable(it) }
-        .filter {
-            val d = abs(it.x - founder.x) + abs(it.y - founder.y)
-            d in 5..14
-        }
+        .filter { (abs(it.x - founder.x) + abs(it.y - founder.y)) in 5..14 }
         .filter { tile -> settlements.none { abs(it.x - tile.x) + abs(it.y - tile.y) < 4 } }
         .maxByOrNull { settlementScore(it) }
 
-    private fun isHabitable(tile: WorldTile): Boolean = tile.biome !in setOf(Biome.DEEP_OCEAN, Biome.OCEAN, Biome.ICE, Biome.MOUNTAIN)
+    private fun initialRelations(civs: List<Civilization>): List<DiplomaticRelation> {
+        val result = ArrayList<DiplomaticRelation>()
+        for (i in civs.indices) for (j in i + 1 until civs.size) {
+            val value = (hash01(world.seed.value + 991L, civs[i].id.hashCode(), civs[j].id.hashCode()) * 1.30 - 0.65).coerceIn(-1.0, 1.0)
+            result += DiplomaticRelation(civs[i].id, civs[j].id, value, 0L)
+        }
+        return result
+    }
 
-    private fun settlementScore(tile: WorldTile): Double =
-        habitability(tile) + resourceBonus(tile.x, tile.y) * 0.16 + hash01(world.seed.value, tile.x, tile.y) * 0.08
+    private fun isHabitable(tile: WorldTile): Boolean = tile.biome !in setOf(Biome.DEEP_OCEAN, Biome.OCEAN, Biome.ICE, Biome.MOUNTAIN)
+    private fun settlementScore(tile: WorldTile): Double = habitability(tile) + resourceBonus(tile.x, tile.y) * 0.16 + hash01(world.seed.value, tile.x, tile.y) * 0.08
 
     private fun habitability(tile: WorldTile): Double {
         val temperatureFit = (1.0 - abs(tile.temperature - 0.58) * 1.45).coerceIn(0.0, 1.0)
@@ -233,7 +352,6 @@ class CivilizationEngine(
     }
 
     private fun stabilityDrift(civId: String, tick: Long): Double = (hash01(world.seed.value xor tick, civId.hashCode(), tick.toInt()) - 0.5) * 0.0008
-
     private fun distance(a: WorldTile, b: WorldTile): Int = abs(a.x - b.x) + abs(a.y - b.y)
 
     private fun initialCulture(tile: WorldTile): Set<String> = buildSet {
@@ -251,7 +369,6 @@ class CivilizationEngine(
     }
 
     private fun settlementName(index: Int): String = settlementNameFor(world.seed.value xor (index * 7919L))
-
     private fun settlementNameFor(key: Long): String {
         val a = listOf("Astra", "Bren", "Cala", "Daro", "Eren", "Fara", "Galen", "Hara", "Istra", "Kora", "Lume", "Mira")
         val b = listOf("ford", "mere", "polis", "haven", "grad", "port", "vale", "hold", "reach", "gate")
@@ -260,7 +377,6 @@ class CivilizationEngine(
     }
 
     private fun positiveIndex(value: Long, bound: Int): Int = ((value xor (value ushr 32)) and Long.MAX_VALUE).rem(bound.toLong()).toInt()
-
     private fun hash01(seed: Long, x: Int, y: Int): Double {
         var z = seed xor (x.toLong() * -7046029254386353131L) xor (y.toLong() * -4658895280553007687L)
         z = (z xor (z ushr 30)) * -4658895280553007687L

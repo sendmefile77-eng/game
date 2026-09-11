@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.TerritoryResolver
 import com.sendmefile77.chronosphere.map.SettlementMarker
 import com.sendmefile77.chronosphere.map.WorldMapView
 import com.sendmefile77.chronosphere.simulation.SimulationClock
@@ -38,12 +39,7 @@ import com.sendmefile77.chronosphere.worldgen.WorldResourceGenerator
 
 private const val SAVE_FILE = "chronosphere-save-v1.txt"
 
-data class GameSession(
-    val world: WorldMap,
-    val resources: List<ResourceDeposit>,
-    val rivers: Set<TileCoord>,
-    val state: LivingPlanetState,
-)
+data class GameSession(val world: WorldMap, val resources: List<ResourceDeposit>, val rivers: Set<TileCoord>, val state: LivingPlanetState)
 
 @androidx.compose.runtime.Composable
 fun ChronosphereApp() {
@@ -51,6 +47,7 @@ fun ChronosphereApp() {
     val generator = remember { WorldGenerator() }
     val hydrology = remember { WorldHydrology() }
     val resourceGenerator = remember { WorldResourceGenerator() }
+    val territoryResolver = remember { TerritoryResolver() }
     val clock = remember { SimulationClock() }
     val textGenerator = remember { ChronicleTextGenerator() }
     var seedText by remember { mutableStateOf("424242") }
@@ -59,18 +56,13 @@ fun ChronosphereApp() {
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Chronosphere", style = MaterialTheme.typography.headlineMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = seedText,
                         onValueChange = { seedText = it.filter { c -> c == '-' || c.isDigit() } },
-                        label = { Text("World seed") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
+                        label = { Text("World seed") }, singleLine = true, modifier = Modifier.weight(1f),
                     )
                     Button(onClick = {
                         val seed = seedText.toLongOrNull() ?: return@Button
@@ -80,7 +72,7 @@ fun ChronosphereApp() {
                 }
 
                 val time = clock.at(session.state.tick)
-                Text("Year ${time.year}, month ${time.month} · population ${session.state.totalPopulation} · settlements ${session.state.settlements.size}")
+                Text("Year ${time.year}, month ${time.month} · population ${session.state.totalPopulation} · settlements ${session.state.settlements.size} · wars ${session.state.wars.size}")
                 Text("Map ${session.world.fingerprint} · land ${session.world.landPercent}% · rivers ${session.rivers.size} · resources ${session.resources.size}", style = MaterialTheme.typography.bodySmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -91,17 +83,13 @@ fun ChronosphereApp() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         saveStatus = runCatching {
-                            context.openFileOutput(SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
-                                it.write(GameSnapshotV1.encode(session.state))
-                            }
+                            context.openFileOutput(SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use { it.write(GameSnapshotV1.encode(session.state)) }
                             "Saved locally"
                         }.getOrElse { "Save failed: ${it.message ?: "unknown error"}" }
                     }) { Text("Save") }
                     Button(onClick = {
                         saveStatus = runCatching {
-                            val loaded = context.openFileInput(SAVE_FILE).bufferedReader().use {
-                                GameSnapshotV1.decode(it.readText())
-                            }
+                            val loaded = context.openFileInput(SAVE_FILE).bufferedReader().use { GameSnapshotV1.decode(it.readText()) }
                             session = sessionFromState(loaded, generator, hydrology, resourceGenerator)
                             seedText = loaded.worldSeed.toString()
                             "Loaded local save"
@@ -111,19 +99,16 @@ fun ChronosphereApp() {
                 }
 
                 val civOrder = session.state.civilizations.mapIndexed { index, civ -> civ.id to index }.toMap()
+                val territory = remember(session) { territoryResolver.resolve(session.world, session.state) }
                 WorldMapView(
                     world = session.world,
                     rivers = session.rivers,
-                    settlements = session.state.settlements.map {
-                        SettlementMarker(it.x, it.y, it.population, civOrder[it.civilizationId] ?: 0)
-                    },
+                    territoryOwners = territory,
+                    settlements = session.state.settlements.map { SettlementMarker(it.x, it.y, it.population, civOrder[it.civilizationId] ?: 0) },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
 
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 132.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 132.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Recent chronicle", style = MaterialTheme.typography.titleSmall)
                     session.state.recentEvents.takeLast(4).reversed().forEach { event ->
                         val eventTime = clock.at(event.tick)
@@ -135,32 +120,16 @@ fun ChronosphereApp() {
     }
 }
 
-private fun newSession(
-    seed: Long,
-    generator: WorldGenerator,
-    hydrology: WorldHydrology,
-    resourceGenerator: WorldResourceGenerator,
-): GameSession {
+private fun newSession(seed: Long, generator: WorldGenerator, hydrology: WorldHydrology, resourceGenerator: WorldResourceGenerator): GameSession {
     val world = generator.generate(WorldSeed(seed))
     val resources = resourceGenerator.generate(world)
-    val rivers = hydrology.generateRivers(world)
-    val state = CivilizationEngine(world, resources).initialize()
-    return GameSession(world, resources, rivers, state)
+    return GameSession(world, resources, hydrology.generateRivers(world), CivilizationEngine(world, resources).initialize())
 }
 
-private fun sessionFromState(
-    state: LivingPlanetState,
-    generator: WorldGenerator,
-    hydrology: WorldHydrology,
-    resourceGenerator: WorldResourceGenerator,
-): GameSession {
+private fun sessionFromState(state: LivingPlanetState, generator: WorldGenerator, hydrology: WorldHydrology, resourceGenerator: WorldResourceGenerator): GameSession {
     val world = generator.generate(WorldSeed(state.worldSeed))
     val resources = resourceGenerator.generate(world)
-    val rivers = hydrology.generateRivers(world)
-    return GameSession(world, resources, rivers, state)
+    return GameSession(world, resources, hydrology.generateRivers(world), state)
 }
 
-private fun advance(session: GameSession, months: Int): GameSession {
-    val nextState = CivilizationEngine(session.world, session.resources).advance(session.state, months)
-    return session.copy(state = nextState)
-}
+private fun advance(session: GameSession, months: Int): GameSession = session.copy(state = CivilizationEngine(session.world, session.resources).advance(session.state, months))
