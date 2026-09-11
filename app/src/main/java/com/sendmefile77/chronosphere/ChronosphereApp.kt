@@ -148,7 +148,8 @@ private fun newSession(seed: Long, generator: WorldGenerator, hydrology: WorldHy
 private fun sessionFromState(state: LivingPlanetState, generator: WorldGenerator, hydrology: WorldHydrology, resourceGenerator: WorldResourceGenerator): GameSession {
     val world = generator.generate(WorldSeed(state.worldSeed))
     val resources = resourceGenerator.generate(world)
-    return GameSession(world, resources, hydrology.generateRivers(world), state)
+    val normalizedState = CivilizationEngine(world, resources).prepareState(state)
+    return GameSession(world, resources, hydrology.generateRivers(world), normalizedState)
 }
 
 private fun advance(session: GameSession, months: Int): GameSession = session.copy(state = CivilizationEngine(session.world, session.resources).advance(session.state, months))
