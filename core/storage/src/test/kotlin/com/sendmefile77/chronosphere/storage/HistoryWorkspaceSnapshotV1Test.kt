@@ -11,6 +11,7 @@ import com.sendmefile77.chronosphere.history.HistoryTimeline
 import com.sendmefile77.chronosphere.people.PeopleEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HistoryWorkspaceSnapshotV1Test {
@@ -63,6 +64,26 @@ class HistoryWorkspaceSnapshotV1Test {
         assertEquals(initial, workspace.activeState)
         assertEquals(initialPeople, workspace.activePeopleState)
         assertEquals(initialEconomy, workspace.activeEconomyState)
+    }
+
+    @Test
+    fun stage4HistoryWithoutEconomyStillDecodes() {
+        val timeline = HistoryTimeline()
+        val initial = sampleState(24L)
+        val people = PeopleEngine().initialize(initial)
+        var workspace = timeline.create(initial, people)
+        workspace = timeline.checkpoint(workspace, "Legacy point")
+
+        val stage5Text = HistoryWorkspaceSnapshotV1.encode(workspace)
+        val legacyText = stage5Text.lineSequence().joinToString("\n") { line ->
+            if (line.startsWith("BRANCH\t") || line.startsWith("CHECKPOINT\t")) line.trimEnd('\t') else line
+        }
+        val decoded = HistoryWorkspaceSnapshotV1.decode(legacyText)
+
+        assertEquals(initial, decoded.activeState)
+        assertEquals(people, decoded.activePeopleState)
+        assertNull(decoded.activeEconomyState)
+        assertNull(decoded.checkpoints.single().economyState)
     }
 
     private fun sampleState(tick: Long): LivingPlanetState {
