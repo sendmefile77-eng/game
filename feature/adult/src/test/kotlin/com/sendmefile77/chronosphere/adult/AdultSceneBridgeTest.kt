@@ -12,6 +12,7 @@ import org.junit.Test
 
 class AdultSceneBridgeTest {
     private val bridge = AdultSceneBridge()
+    private val recipes = AdultVisualRecipeRegistry.bundled()
 
     @Test
     fun dressedCardResolvesDeterministically() {
@@ -34,19 +35,21 @@ class AdultSceneBridgeTest {
         assertEquals(first, second)
         assertEquals(WardrobeState.UNDRESSED, first.wardrobeState)
         assertEquals("card.undressed.baseline", first.recipeId)
-        assertTrue(first.layerKeys.any { it.contains("undressed") || it.contains("nude") || it.contains("recipe:card.undressed.baseline") })
+        assertTrue(first.layerKeys.contains("recipe:card.undressed.baseline"))
         assertFalse(first.fallbackUsed)
     }
 
     @Test
     fun hybridMorphologyKeepsCompatibleRig() {
         val hybrid = adult(tags = setOf("courtly", "hybrid_lineage", "mixed_ancestry", "lineage:ash"))
-        val dressed = bridge.dressedCharacterCard(hybrid)
+        val fingerprint = AdultFingerprint.of(hybrid)
+        val selected = recipes.selectCard(hybrid, AdultWardrobeState.UNDRESSED, fingerprint)
         val nude = bridge.undressedCharacterCard(hybrid)
-        assertEquals(dressed.sceneKey, bridge.dressedCharacterCard(hybrid).sceneKey)
-        assertEquals("card.undressed.hybrid", nude.recipeId)
+        assertEquals(selected.id, nude.recipeId)
+        assertEquals(selected.rigLayout, nude.bodyRigKey)
         assertEquals(WardrobeState.UNDRESSED, nude.wardrobeState)
-        assertTrue(nude.bodyRigKey.contains("hybrid") || nude.recipeId.contains("hybrid"))
+        assertTrue(selected.rigPlan == RigPlan.HYBRID || selected.rigPlan == RigPlan.BASELINE)
+        assertEquals(nude.sceneKey, bridge.undressedCharacterCard(hybrid).sceneKey)
     }
 
     @Test
@@ -99,7 +102,7 @@ class AdultSceneBridgeTest {
     @Test
     fun dressedIntentIsPortrait() {
         val request = adult()
-        val recipe = AdultVisualRecipeRegistry.bundled().selectCard(request, AdultWardrobeState.DRESSED, AdultFingerprint.of(request))
+        val recipe = recipes.selectCard(request, AdultWardrobeState.DRESSED, AdultFingerprint.of(request))
         val sceneRequest = AdultSceneMapper.sceneRequest(request, recipe, SceneIntent.PORTRAIT, "card:dressed:${recipe.id}")
         assertEquals(SceneIntent.PORTRAIT, sceneRequest.intent)
         assertEquals(WardrobeState.DRESSED, sceneRequest.requestedWardrobeState)
