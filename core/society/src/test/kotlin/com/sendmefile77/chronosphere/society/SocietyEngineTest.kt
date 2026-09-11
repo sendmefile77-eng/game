@@ -40,7 +40,12 @@ class SocietyEngineTest {
         assertEquals("ADULT_SOCIAL_EVENT", first.events.single().code)
         assertEquals("adult://recipe/test", first.events.single().facts["mediaKey"])
         assertTrue(first.people.relationships.any { it.kind == RelationshipKind.LOVER })
-        assertTrue(first.people.persons.first { it.id == "adult-a" }.prestige > 0.50)
+
+        val primaryId = moduleA.requests.single().participants.first().entityId
+        val beforePrestige = people.persons.first { it.id == primaryId }.prestige
+        val afterPrestige = first.people.persons.first { it.id == primaryId }.prestige
+        assertTrue(afterPrestige > beforePrestige)
+
         assertTrue(first.world.totalPopulation > world.totalPopulation)
         assertTrue(first.people.profile("civ-a")!!.bodyOpenness > people.profile("civ-a")!!.bodyOpenness)
     }
