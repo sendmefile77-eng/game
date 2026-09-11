@@ -4,7 +4,8 @@ class SceneResolver(pack: ScenePack) {
     private val pack: ScenePack = ScenePackValidator.validateOrThrow(pack)
 
     fun compatible(request: SceneRequest): List<SceneRecipe> = pack.recipes.filter { recipe ->
-        request.intent in recipe.intents &&
+        recipe.fallbackPriority == 0 &&
+            request.intent in recipe.intents &&
             request.participants.size in recipe.minParticipants..recipe.maxParticipants &&
             request.sceneTags.containsAll(recipe.requiredTags) &&
             request.sceneTags.none { it in recipe.forbiddenTags } &&
@@ -15,7 +16,6 @@ class SceneResolver(pack: ScenePack) {
     fun resolve(request: SceneRequest): ResolvedScene {
         val eligible = compatible(request)
         val selected = weightedSelect(eligible, request) ?: fallback(request)
-        val isFallback = selected.fallbackPriority > 0 && selected !in eligible
         return ResolvedScene(
             sceneKey = sceneKey(request, selected),
             recipeId = selected.id,
@@ -29,7 +29,7 @@ class SceneResolver(pack: ScenePack) {
             cameraKey = selected.cameraKey,
             lightingKey = selected.lightingKey,
             layerKeys = selected.layerKeys,
-            fallbackUsed = isFallback,
+            fallbackUsed = selected.fallbackPriority > 0,
         )
     }
 
@@ -80,7 +80,12 @@ class SceneResolver(pack: ScenePack) {
             .toList()
         if (candidates.isNotEmpty()) return candidates.first()
 
-        // Last-resort fallback may ignore a requested wardrobe state, but never an adult-only intent.
+        // Do not silently change an explicit wardrobe-state request. Asset packs must provide
+        // a compatible fallback for that state (for example an undressed morphology-safe silhouette).
+        if (request.requestedWardrobeState != null) {
+            error("No fallback recipe for ${request.intent} with ${request.requestedWardrobeState}")
+        }
+
         return pack.recipes.asSequence()
             .filter { it.fallbackPriority > 0 && request.intent in it.intents }
             .sortedWith(compareByDescending<SceneRecipe> { it.fallbackPriority }.thenBy { it.id })
