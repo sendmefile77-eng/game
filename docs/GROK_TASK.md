@@ -2,46 +2,53 @@
 
 **Status: READY**
 
-## G-003 — Context eligibility and social-norm weighting
+## G-004 — Deterministic visual recipes for the offline scene composer
 
-Base: current `main` after merged G-002.
-Branch: `grok/g-003-context-eligibility`.
+Base: current `main` after merged G-003 and Stage 4 people/dynasties.
+Branch: `grok/g-004-visual-recipes`.
 Owner: Grok.
 
 ### Scope
 Work only inside `feature/adult/**`.
 Do not modify `core/**`, `app/**`, `feature/map/**`, root Gradle files, workflows or shared docs.
 
-The stable integration boundary remains `core/adult-contracts` contract version 1. Do not change that contract in G-003.
+The stable integration boundary remains `core/adult-contracts` contract version 1. Do not change that contract in G-004.
 
 ### Goal
-Make the accepted G-002 pack engine context-aware enough for the upcoming people/rulers/culture simulation. Event selection must remain deterministic but should reject logically incompatible rules before weighting them.
+Prepare the adult module for the offline layered scene-composer architecture described in `docs/SCENE_COMPOSER.md` without adding binary image assets yet.
+
+The selected adult event must map deterministically to a valid visual recipe instead of behaving like a single opaque image key. The result still leaves the module through the existing contract-v1 `MediaCue(assetKey, tags)`.
 
 ### Project content rule
-The adult-content intensity remains Grok-owned. Do not reduce, sanitize, soften or remove accepted G-001/G-002 content merely because of erotic intensity. This task is about logic and contextual eligibility, not censorship. All participants remain adults as enforced by the shared contract.
+The accepted adult-content intensity and event catalogue remain Grok-owned. Do not reduce, sanitize, soften or remove accepted G-001/G-002/G-003 content merely because of erotic intensity. This task is a visual-architecture refactor, not a content-reduction task. All participants remain adults as enforced by the shared contract.
 
 ### Technical requirements
-- keep `DeterministicAdultModule` deterministic and compatible with contract v1;
-- add internal eligibility metadata/rules for events without changing `adult-contracts`;
-- support participant-count constraints (minimum/maximum participants) so pair/group/solo contexts cannot select structurally incompatible events;
-- support required and forbidden culture tags;
-- support optional numeric-context gates/ranges with finite validation;
-- standardize support for upcoming social-context keys such as `privacy`, `body_openness`, `monogamy`, `jealousy`, `fertility`, `piety`, `status`, `tension` and `lust` where useful;
-- keep weighting separate from eligibility: ineligible rules have zero chance, eligible rules continue through deterministic weighted selection;
-- provide a deterministic safe fallback when a selected pack has no eligible event, without network/time/randomness and without changing the contract;
-- validate eligibility definitions: sensible participant ranges, nonblank tags/keys, finite numeric thresholds, min <= max;
-- preserve the accepted G-002 packs and their content intensity; adapt metadata rather than deleting existing rules;
-- keep all effect magnitudes finite and bounded to `[-1.0, 1.0]`;
-- no network, cloud, LLM, filesystem, current time or global randomness;
-- logical `MediaCue` references only; no binary assets;
-- add tests for participant-count filtering, required/forbidden tags, numeric gates, deterministic fallback, tag-order independence and G-002 regression behavior;
+- preserve deterministic event selection and all accepted event/effect behavior from G-003;
+- keep contract v1 unchanged;
+- add internal data models for composable visual recipes, with logical fields such as scene family, participant/rig layout, pose key, wardrobe/state key, setting key, camera key, lighting key and effect/style tags;
+- keep the exact field vocabulary implementation-internal; do not leak a new public shared DTO from this task;
+- build recipes from logical asset keys only; no PNG/SVG/WebP/binary assets in G-004;
+- add an internal recipe/catalog registry that maps accepted event codes/packs to one or more compatible visual recipes;
+- support deterministic weighted selection between compatible recipe variants using request/event fingerprint data only;
+- no `Math.random()`, system time, network, filesystem, cloud or LLM;
+- add whitelist-style compatibility checks so a recipe is rejected before selection when participant count, event family, setting/tags or other declared requirements are incompatible;
+- a recipe must never be assembled by independently randomizing unrelated visual pieces;
+- if no recipe is valid, return a deterministic fallback visual cue rather than an invalid mixed scene;
+- encode the chosen recipe through the existing `MediaCue`: `assetKey` should remain a logical namespaced key, while `tags` should carry normalized scene-composer metadata suitable for a future generic renderer;
+- keep tags stable, deterministic and order-independent;
+- keep all currently accepted event content available; refactor media metadata rather than deleting events;
+- validate recipe definitions: nonblank keys, unique recipe ids, valid participant ranges, no contradictory required/forbidden tags, finite nonnegative weights, deterministic fallback present;
+- add tests for deterministic recipe selection, participant compatibility, tag/context filtering, recipe validation, fallback behavior, stable MediaCue output and G-003 event/effect regression;
 - do not run GitHub Actions.
 
+### Compatibility target
+A future generic renderer should be able to consume the logical recipe metadata without knowing Grok's event-selection implementation. G-004 does not need to implement the renderer itself.
+
 ### Integration rule
-If contract v1 truly blocks an important requirement, DO NOT edit `core/adult-contracts`. Document the exact requested v2 field/change in the completion report and let ChatGPT decide.
+If contract v1 truly blocks a necessary requirement, DO NOT edit `core/adult-contracts`. Document the exact requested v2 change in the completion report for ChatGPT review.
 
 ### Completion
-Commit to `grok/g-003-context-eligibility` and open a PR to `main`. Do not merge it.
+Commit to `grok/g-004-visual-recipes` and open a PR to `main`. Do not merge it.
 
 Report:
 1. branch;
@@ -49,7 +56,7 @@ Report:
 3. PR;
 4. changed files;
 5. tests;
-6. compatibility notes;
+6. MediaCue compatibility notes;
 7. any requested contract changes.
 
 ChatGPT will review and integrate the result.
