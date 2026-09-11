@@ -2,48 +2,51 @@
 
 **Status: READY**
 
-## G-001 — First isolated adult-module engine
+## G-002 — Data-driven adult rule/content packs
 
-Base: current `main`.
-Branch: `grok/g-001-adult-engine`.
+Base: current `main` after merged G-001.
+Branch: `grok/g-002-adult-content-packs`.
 Owner: Grok.
 
 ### Scope
 Work only inside `feature/adult/**`.
 Do not modify `core/**`, `app/**`, `feature/map/**`, root Gradle files, workflows or shared docs.
 
-The stable integration boundary is `core/adult-contracts` contract version 1. Do not change that contract in G-001.
+The stable integration boundary remains `core/adult-contracts` contract version 1. Do not change that contract in G-002.
 
 ### Goal
-Replace the placeholder with the first deterministic implementation of `AdultModule` that can later be called by the simulation core without becoming a hard dependency.
+Refactor/extend the accepted G-001 implementation into a scalable data-driven rule/content-pack architecture so adult content can grow substantially without rewriting `DeterministicAdultModule`.
+
+### Project content rule
+The existing adult-content intensity is Grok-owned. Do not reduce, sanitize, soften or censor the existing adult content merely because of its erotic intensity. Preserve existing behavior while improving architecture. All participants remain adults as enforced by the shared contract.
 
 ### Technical requirements
-- implement `AdultModule` and report `ADULT_CONTRACT_VERSION`;
-- pure/deterministic evaluation: the same `AdultEventRequest` must always return the same result;
+- keep `DeterministicAdultModule` deterministic and backward-compatible with G-001;
+- preserve `ADULT_CONTRACT_VERSION == 1` and exact requestId behavior;
+- split event definitions/rules/culture weighting from the engine into maintainable internal pack/catalog structures;
+- support multiple named internal content/rule packs selected deterministically from request context;
+- allow event weights to react to culture tags and numeric context without global randomness;
+- add pack validation: unique nonblank event codes, finite bounded coefficients, nonblank logical media keys/tags;
 - no network, cloud, LLM, filesystem, current time or implicit/global randomness;
-- use only the data supplied by `AdultEventRequest` and deterministic derivation from it;
-- return only `CoreEffectProposal` values that the core can validate later;
-- keep proposal magnitudes finite and bounded to `[-1.0, 1.0]`;
-- preserve `requestId` exactly;
-- return a nonblank stable `eventCode`;
-- `MediaCue` may be returned as a logical asset key/tag description only; do not add binary image/video assets in this task;
-- do not create any direct dependency from the core to `feature/adult`;
-- add unit tests inside `feature/adult/**` for determinism, contract version, bounded effects and stable request IDs;
-- you may edit `feature/adult/build.gradle.kts` only as needed for tests;
+- keep all CoreEffectProposal magnitudes finite and bounded to `[-1.0, 1.0]`;
+- preserve the existing G-001 event set and behavior compatibility as much as practical; extensions are allowed;
+- logical MediaCue references only; no binary assets in this task;
+- add/expand unit tests for deterministic pack selection, validation failures, culture/numeric-context weighting, G-001 compatibility, and bounded effects;
 - do not run GitHub Actions.
 
 ### Integration rule
-If you believe `adult-contracts` lacks a required field, DO NOT edit it. Document the requested contract change in your completion message and let ChatGPT decide whether contract v2 is warranted.
+If `adult-contracts` appears insufficient, DO NOT edit it. Document the requested contract-v2 change in the completion report for ChatGPT review.
 
 ### Completion
-Commit the work to `grok/g-001-adult-engine` and open a PR to `main` if your GitHub access supports it. Do not merge it.
+Commit to `grok/g-002-adult-content-packs` and open a PR to `main`. Do not merge it.
 
-Report to the user:
-1. branch name;
+Report:
+1. branch;
 2. commit SHA;
-3. PR number/link if created;
-4. files changed;
-5. tests added;
-6. any requested contract changes.
+3. PR;
+4. changed files;
+5. tests;
+6. compatibility notes;
+7. any requested contract changes.
 
 ChatGPT will review and integrate the result.
