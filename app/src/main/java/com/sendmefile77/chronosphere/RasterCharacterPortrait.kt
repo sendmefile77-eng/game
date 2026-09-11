@@ -34,7 +34,9 @@ internal fun RasterCharacterPortrait(
     val context = LocalContext.current.applicationContext
     val atlas = remember(context) {
         runCatching {
-            context.assets.open(RasterCharacterLibraryV01.ATLAS_PATH).use(BitmapFactory::decodeStream)
+            context.assets.open(RasterCharacterLibraryV01.ATLAS_PATH).use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
         }.getOrNull()
     }
 
@@ -84,13 +86,13 @@ internal object RasterCharacterLibraryV01 {
 
     fun select(characterKey: String, ageYears: Int): Selection {
         val hash = stableHash(characterKey)
-        val youngHead = (hash ushr 3).mod(VARIANTS - 1)
+        val youngHead = (hash ushr 3) % (VARIANTS - 1)
         // The sixth head in each row is the mature/elder variant from the same source board.
         val head = if (ageYears >= 60) VARIANTS - 1 else youngHead
         return Selection(
             femaleFamily = (hash and 1) == 0,
             headIndex = head,
-            garmentIndex = (hash ushr 11).mod(VARIANTS),
+            garmentIndex = (hash ushr 11) % VARIANTS,
         )
     }
 
