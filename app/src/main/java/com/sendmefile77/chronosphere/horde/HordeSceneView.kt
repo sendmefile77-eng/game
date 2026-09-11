@@ -44,6 +44,7 @@ internal fun HordeSceneView(
 ) {
     val context = LocalContext.current.applicationContext
     val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
+    val references = remember(context) { HordeCharacterReferenceStore(File(context.filesDir, "horde-character-references")) }
     val client = remember { HordeClient() }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var state by remember(request.cacheKey) { mutableStateOf<HordeUiState>(HordeUiState.Loading) }
@@ -52,18 +53,64 @@ internal fun HordeSceneView(
         state = HordeUiState.Loading
         val cached = withContext(Dispatchers.IO) { cache.read(request.cacheKey) }
         if (cached != null) {
-            state = HordeUiState.Ready(cached, null)
+            if (request.saveResultAsReference) {
+                request.referenceCacheKey?.let { key ->
+                    withContext(Dispatchers.IO) { references.writeIfAbsent(key, cached, null) }
+                }
+            }
+            state = HordeUiState.Ready(cached, null, usedReference = false)
             return@LaunchedEffect
         }
 
         try {
-            val result = client.generate(
-                request = request,
-                timeoutMillis = 75_000L,
-                pollIntervalMillis = 3_000L,
-            )
-            withContext(Dispatchers.IO) { cache.write(request.cacheKey, result.imageBytes) }
-            state = HordeUiState.Ready(result.imageBytes, result.model)
+            val reference = request.referenceCacheKey?.let { key ->
+                withContext(Dispatchers.IO) { references.read(key) }
+            }
+            val effectiveRequest = reference?.model?.let { canonicalModel ->
+                request.copy(
+                    preferredModels = (listOf(canonicalModel) + request.preferredModels)
+                        .distinctBy { it.lowercase() },
+                )
+            } ?: request
+
+            val result = if (reference != null) {
+                try {
+                    client.generate(
+                        request = effectiveRequest,
+                        sourceImageBytes = reference.imageBytes,
+                        timeoutMillis = 60_000L,
+                        pollIntervalMillis = 3_000L,
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    // Img2img availability depends on the volunteer worker pool. It is an
+                    // enhancement, never a hard requirement for rendering a playable scene.
+                    client.generate(
+                        request = request,
+                        sourceImageBytes = null,
+                        timeoutMillis = 75_000L,
+                        pollIntervalMillis = 3_000L,
+                    )
+                }
+            } else {
+                client.generate(
+                    request = request,
+                    sourceImageBytes = null,
+                    timeoutMillis = 75_000L,
+                    pollIntervalMillis = 3_000L,
+                )
+            }
+
+            withContext(Dispatchers.IO) {
+                cache.write(request.cacheKey, result.imageBytes)
+                if (request.saveResultAsReference) {
+                    request.referenceCacheKey?.let { key ->
+                        references.writeIfAbsent(key, result.imageBytes, result.model)
+                    }
+                }
+            }
+            state = HordeUiState.Ready(result.imageBytes, result.model, usedReference = reference != null)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -130,9 +177,13 @@ internal fun HordeSceneView(
                             contentScale = ContentScale.Crop,
                         )
                     }
-                    current.model?.let { model ->
+                    if (current.model != null || current.usedReference) {
                         Text(
-                            text = "AI Horde · $model",
+                            text = buildString {
+                                append("AI Horde")
+                                current.model?.let { append(" · $it") }
+                                if (current.usedReference) append(" · reference")
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -178,6 +229,10 @@ private fun FailureRow(
 
 private sealed interface HordeUiState {
     data object Loading : HordeUiState
-    data class Ready(val bytes: ByteArray, val model: String?) : HordeUiState
+    data class Ready(
+        val bytes: ByteArray,
+        val model: String?,
+        val usedReference: Boolean,
+    ) : HordeUiState
     data class Failed(val message: String) : HordeUiState
 }

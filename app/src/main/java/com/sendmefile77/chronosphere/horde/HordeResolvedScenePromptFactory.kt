@@ -62,7 +62,7 @@ object HordeResolvedScenePromptFactory {
             add(morphology)
             add(wardrobe)
             add(camera)
-            add("same facial identity and appearance across images")
+            add("consistent facial identity and appearance across images")
             add("natural proportions")
             add("detailed face")
             add("realistic skin and material detail")
@@ -96,8 +96,9 @@ object HordeResolvedScenePromptFactory {
             }
         }.joinToString(", ")
 
+        val referenceCacheKey = "horde-character-reference-v1|$characterKey|${identity.signature}"
         val cacheKey = listOf(
-            "horde-resolved-scene-v2",
+            "horde-resolved-scene-v3",
             characterKey,
             identity.signature,
             ageYears.toString(),
@@ -112,6 +113,9 @@ object HordeResolvedScenePromptFactory {
             scene.layerKeys.sorted().joinToString(","),
         ).joinToString("|")
 
+        val canonicalPortrait = scene.wardrobeState == WardrobeState.DRESSED &&
+            scene.cameraKey.contains("portrait", ignoreCase = true)
+
         return HordeImageRequest(
             cacheKey = cacheKey,
             positivePrompt = positive,
@@ -120,6 +124,9 @@ object HordeResolvedScenePromptFactory {
             ageYears = ageYears,
             seed = "chronosphere:$characterKey",
             preferredModels = if (undressed) nsfwModels else sfwModels,
+            referenceCacheKey = referenceCacheKey,
+            saveResultAsReference = canonicalPortrait,
+            referenceDenoisingStrength = if (undressed) 0.68 else 0.52,
         )
     }
 }

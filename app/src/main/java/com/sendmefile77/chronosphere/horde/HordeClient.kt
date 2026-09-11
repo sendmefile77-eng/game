@@ -22,16 +22,18 @@ class HordeClient(
 
     suspend fun generate(
         request: HordeImageRequest,
+        sourceImageBytes: ByteArray? = null,
         timeoutMillis: Long = 60_000L,
         pollIntervalMillis: Long = 3_000L,
     ): HordeGenerationResult {
         require(timeoutMillis >= 5_000L)
         require(pollIntervalMillis >= 1_000L)
+        require(sourceImageBytes == null || sourceImageBytes.isNotEmpty())
 
         val selectedModels = resolvePreferredModels(request.preferredModels)
         var jobId: String? = null
         try {
-            jobId = withContext(Dispatchers.IO) { submit(request, selectedModels) }
+            jobId = withContext(Dispatchers.IO) { submit(request, selectedModels, sourceImageBytes) }
             val startedAt = System.nanoTime()
             while (elapsedMillis(startedAt) < timeoutMillis) {
                 val check = withContext(Dispatchers.IO) { getJson("$baseUrl/generate/check/$jobId") }
@@ -86,7 +88,11 @@ class HordeClient(
         }
     }
 
-    private fun submit(request: HordeImageRequest, models: List<String>): String {
+    private fun submit(
+        request: HordeImageRequest,
+        models: List<String>,
+        sourceImageBytes: ByteArray?,
+    ): String {
         val params = JSONObject()
             .put("sampler_name", request.samplerName)
             .put("cfg_scale", request.cfgScale)
@@ -111,6 +117,11 @@ class HordeClient(
             .put("allow_downgrade", true)
 
         if (models.isNotEmpty()) payload.put("models", JSONArray(models))
+        if (sourceImageBytes != null) {
+            params.put("denoising_strength", request.referenceDenoisingStrength)
+            payload.put("source_image", Base64.encodeToString(sourceImageBytes, Base64.NO_WRAP))
+            payload.put("source_processing", "img2img")
+        }
 
         val response = postJson("$baseUrl/generate/async", payload)
         val id = response.optString("id").trim()
@@ -125,7 +136,7 @@ class HordeClient(
         if (preferredModels.isEmpty()) return emptyList()
         val active = runCatching { activeModelNames() }.getOrElse { return emptyList() }
         val activeByLower = active.associateBy { it.lowercase() }
-        return preferredModels.mapNotNull { preferred -> activeByLower[preferred.lowercase()] }.take(3)
+        return preferredModels.mapNotNull { preferred -> activeByLower[preferred.lowercase()] }.distinct().take(3)
     }
 
     private fun activeModelNames(): Set<String> {

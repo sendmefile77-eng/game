@@ -10,15 +10,17 @@ import org.junit.Test
 
 class HordeResolvedScenePromptFactoryTest {
     @Test
-    fun adultUndressedSceneIsMarkedNsfw() {
+    fun adultUndressedSceneIsMarkedNsfwAndNeverBecomesReference() {
         val request = HordeResolvedScenePromptFactory.create(
-            scene = scene(WardrobeState.UNDRESSED),
+            scene = scene(WardrobeState.UNDRESSED, camera = "cam.card.full"),
             characterKey = "person-adult",
             ageYears = 28,
         )
 
         assertTrue(request.nsfw)
         assertTrue(request.apiPrompt().contains("###"))
+        assertFalse(request.saveResultAsReference)
+        assertTrue(request.referenceDenoisingStrength > 0.60)
     }
 
     @Test
@@ -39,7 +41,7 @@ class HordeResolvedScenePromptFactoryTest {
         var rejected = false
         try {
             HordeResolvedScenePromptFactory.create(
-                scene = scene(WardrobeState.UNDRESSED),
+                scene = scene(WardrobeState.UNDRESSED, camera = "cam.card.full"),
                 characterKey = "person-minor",
                 ageYears = 16,
             )
@@ -59,7 +61,7 @@ class HordeResolvedScenePromptFactoryTest {
     }
 
     @Test
-    fun promptContainsStableSexAndAppearanceAndUsesNewCacheVersion() {
+    fun dressedPortraitBecomesStableSafeReference() {
         val characterKey = "person-civ-a-ruler-0"
         val identity = HordeCharacterVisualProfile.from(characterKey)
         val request = HordeResolvedScenePromptFactory.create(
@@ -72,11 +74,17 @@ class HordeResolvedScenePromptFactoryTest {
         assertTrue(request.positivePrompt.contains(sexWord))
         assertTrue(request.positivePrompt.contains(identity.hairColor))
         assertTrue(request.positivePrompt.contains(identity.eyeColor))
-        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v2|"))
+        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v3|"))
+        assertTrue(request.referenceCacheKey?.startsWith("horde-character-reference-v1|") == true)
+        assertTrue(request.saveResultAsReference)
+        assertFalse(request.nsfw)
     }
 
-    private fun scene(wardrobeState: WardrobeState): ResolvedScene = ResolvedScene(
-        sceneKey = "test:${wardrobeState.name}",
+    private fun scene(
+        wardrobeState: WardrobeState,
+        camera: String = "cam.card.portrait",
+    ): ResolvedScene = ResolvedScene(
+        sceneKey = "test:${wardrobeState.name}:$camera",
         recipeId = "test.recipe",
         packId = "test.pack",
         packVersion = 1,
@@ -85,7 +93,7 @@ class HordeResolvedScenePromptFactoryTest {
         bodyRigKey = "rig.human.card",
         poseKey = "pose.card.neutral",
         backgroundKey = "bg.card.neutral",
-        cameraKey = "cam.card.full",
+        cameraKey = camera,
         lightingKey = "light.card.soft",
         layerKeys = emptyList(),
         fallbackUsed = false,

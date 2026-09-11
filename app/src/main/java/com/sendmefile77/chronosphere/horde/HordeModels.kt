@@ -13,6 +13,9 @@ data class HordeImageRequest(
     val samplerName: String = "k_dpmpp_2m",
     val seed: String,
     val preferredModels: List<String> = emptyList(),
+    val referenceCacheKey: String? = null,
+    val saveResultAsReference: Boolean = false,
+    val referenceDenoisingStrength: Double = 0.55,
 ) {
     init {
         require(cacheKey.isNotBlank())
@@ -25,6 +28,9 @@ data class HordeImageRequest(
         require(samplerName.isNotBlank())
         require(seed.isNotBlank())
         require(preferredModels.none { it.isBlank() })
+        require(referenceCacheKey == null || referenceCacheKey.isNotBlank())
+        require(referenceDenoisingStrength.isFinite() && referenceDenoisingStrength in 0.01..1.0)
+        if (saveResultAsReference) require(!nsfw) { "NSFW generations must never become character references" }
         if (nsfw) require(ageYears >= 18) { "NSFW Horde requests require an adult participant" }
     }
 
