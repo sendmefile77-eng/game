@@ -1,6 +1,8 @@
 package com.sendmefile77.chronosphere
 
 import android.content.Context
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -129,126 +131,11 @@ fun ChronosphereApp() {
                     "Війн ${session.state.wars.size} · союзів ${session.state.alliances.size} · гілка: ${workspace.activeBranch.name}",
                     style = MaterialTheme.typography.bodySmall,
                 )
-
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { advanceMonths(12) }) { Text("+1 рік") }
                     Button(onClick = { advanceMonths(120) }) { Text("+10 років") }
                     Button(onClick = { advanceMonths(1200) }) { Text("+100 років") }
                 }
-
-                val selectedCivilization = session.state.civilizations.firstOrNull { it.id == selectedCivilizationId }
-                    ?: session.state.civilizations.first()
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        val civilizations = session.state.civilizations
-                        val index = civilizations.indexOfFirst { it.id == selectedCivilization.id }.coerceAtLeast(0)
-                        selectedCivilizationId = civilizations[(index + 1) % civilizations.size].id
-                    }) { Text("Ціль: ${selectedCivilization.name}") }
-                    Text(
-                        "техн. ${String.format("%.2f", selectedCivilization.technology)} · стаб. ${String.format("%.2f", selectedCivilization.stability)}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { intervene(InterventionKind.HARVEST_AID) }) { Text("Допомога") }
-                    Button(onClick = { intervene(InterventionKind.DROUGHT) }) { Text("Посуха") }
-                    Button(onClick = { intervene(InterventionKind.TECHNOLOGY_BOOST) }) { Text("Технології") }
-                    Button(onClick = { intervene(InterventionKind.STABILITY_SUPPORT) }) { Text("Стабільність") }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        workspace = historyTimeline.checkpoint(
-                            historyTimeline.syncActive(workspace, session.state),
-                            "Рік ${time.year}",
-                        )
-                        saveStatus = "Створено контрольну точку"
-                    }) { Text("Точка") }
-                    Button(onClick = {
-                        val forked = historyTimeline.fork(
-                            historyTimeline.syncActive(workspace, session.state),
-                            "Альтернатива ${workspace.branches.size}",
-                        )
-                        workspace = forked
-                        session = session.copy(state = forked.activeState)
-                        saveStatus = "Створено альтернативну історію"
-                    }) { Text("Відгалуження") }
-                    Button(onClick = {
-                        val before = workspace
-                        val hasCheckpoint = before.checkpoints.any { it.branchId == before.activeBranchId }
-                        val restored = historyTimeline.restoreLatestCheckpoint(before)
-                        workspace = restored
-                        session = session.copy(state = restored.activeState)
-                        saveStatus = if (hasCheckpoint) "Контрольну точку відновлено" else "У цій гілці немає контрольної точки"
-                    }) { Text("Відновити") }
-                    if (workspace.branches.size > 1) {
-                        Button(onClick = {
-                            val currentIndex = workspace.branches.indexOfFirst { it.id == workspace.activeBranchId }.coerceAtLeast(0)
-                            val nextBranch = workspace.branches[(currentIndex + 1) % workspace.branches.size]
-                            val switched = historyTimeline.switchTo(
-                                historyTimeline.syncActive(workspace, session.state),
-                                nextBranch.id,
-                            )
-                            workspace = switched
-                            session = session.copy(state = switched.activeState)
-                            selectedCivilizationId = switched.activeState.civilizations.firstOrNull { it.id == selectedCivilizationId }?.id
-                                ?: switched.activeState.civilizations.first().id
-                            saveStatus = "Активна гілка: ${switched.activeBranch.name}"
-                        }) { Text("Гілка") }
-                    }
-                }
-
-                val originalState = workspace.branches.firstOrNull { it.id == HistoryTimeline.ROOT_BRANCH_ID }?.state
-                    ?: workspace.activeState
-                val divergence = HistoryComparator.compare(originalState, session.state)
-                Text(
-                    "Гілок ${workspace.branches.size} · точок ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }} · Δнас. ${signed(divergence.populationDelta)} · Δміст ${signed(divergence.settlementDelta)} · Δтехн. ${String.format("%+.3f", divergence.averageTechnologyDelta)}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        saveStatus = runCatching {
-                            val syncedWorkspace = historyTimeline.syncActive(workspace, session.state)
-                            context.openFileOutput(HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
-                                it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace))
-                            }
-                            context.openFileOutput(SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
-                                it.write(GameSnapshotV1.encode(session.state))
-                            }
-                            workspace = syncedWorkspace
-                            "Світ і всі гілки збережено"
-                        }.getOrElse { "Помилка збереження: ${it.message ?: "невідома"}" }
-                    }) { Text("Зберегти") }
-                    Button(onClick = {
-                        saveStatus = runCatching {
-                            val loadedWorkspace = runCatching {
-                                context.openFileInput(HISTORY_FILE).bufferedReader().use {
-                                    HistoryWorkspaceSnapshotV1.decode(it.readText())
-                                }
-                            }.getOrNull()
-                            val loadedState = loadedWorkspace?.activeState ?: context.openFileInput(SAVE_FILE).bufferedReader().use {
-                                GameSnapshotV1.decode(it.readText())
-                            }
-                            val loadedSession = sessionFromState(loadedState, generator, hydrology, resourceGenerator)
-                            session = loadedSession
-                            workspace = if (loadedWorkspace != null) {
-                                historyTimeline.syncActive(loadedWorkspace, loadedSession.state)
-                            } else {
-                                historyTimeline.create(loadedSession.state)
-                            }
-                            selectedCivilizationId = loadedSession.state.civilizations.first().id
-                            seedText = loadedState.worldSeed.toString()
-                            interventionSequence = loadedState.recentEvents.asSequence()
-                                .map { it.id }
-                                .filter { it.startsWith("player-") }
-                                .mapNotNull { it.substringAfterLast('-').toLongOrNull() }
-                                .maxOrNull() ?: 0L
-                            if (loadedWorkspace != null) "Світ і гілки завантажено" else "Завантажено старе збереження"
-                        }.getOrElse { "Помилка завантаження: ${it.message ?: "немає збереження"}" }
-                    }) { Text("Завантажити") }
-                }
-                Text(saveStatus, style = MaterialTheme.typography.bodySmall)
 
                 val civOrder = session.state.civilizations.mapIndexed { index, civ -> civ.id to index }.toMap()
                 val territory = remember(session) { territoryResolver.resolve(session.world, session.state) }
@@ -262,30 +149,156 @@ fun ChronosphereApp() {
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
 
-                val leaders = session.state.civilizations.sortedByDescending { it.population }.take(3)
-                Text(
-                    "Провідні держави: " + leaders.joinToString(" · ") { "${it.name} ${it.population}" },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                val names = session.state.civilizations.associate { it.id to it.name }
-                if (session.state.wars.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 285.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    val selectedCivilization = session.state.civilizations.firstOrNull { it.id == selectedCivilizationId }
+                        ?: session.state.civilizations.first()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            val civilizations = session.state.civilizations
+                            val index = civilizations.indexOfFirst { it.id == selectedCivilization.id }.coerceAtLeast(0)
+                            selectedCivilizationId = civilizations[(index + 1) % civilizations.size].id
+                        }) { Text("Ціль: ${selectedCivilization.name}") }
+                        Text(
+                            "техн. ${String.format("%.2f", selectedCivilization.technology)} · стаб. ${String.format("%.2f", selectedCivilization.stability)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { intervene(InterventionKind.HARVEST_AID) }) { Text("Допомога") }
+                        Button(onClick = { intervene(InterventionKind.DROUGHT) }) { Text("Посуха") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { intervene(InterventionKind.TECHNOLOGY_BOOST) }) { Text("Технології") }
+                        Button(onClick = { intervene(InterventionKind.STABILITY_SUPPORT) }) { Text("Стабільність") }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            workspace = historyTimeline.checkpoint(
+                                historyTimeline.syncActive(workspace, session.state),
+                                "Рік ${time.year}",
+                            )
+                            saveStatus = "Створено контрольну точку"
+                        }) { Text("Точка") }
+                        Button(onClick = {
+                            val forked = historyTimeline.fork(
+                                historyTimeline.syncActive(workspace, session.state),
+                                "Альтернатива ${workspace.branches.size}",
+                            )
+                            workspace = forked
+                            session = session.copy(state = forked.activeState)
+                            saveStatus = "Створено альтернативну історію"
+                        }) { Text("Відгалуження") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            val before = workspace
+                            val hasCheckpoint = before.checkpoints.any { it.branchId == before.activeBranchId }
+                            val restored = historyTimeline.restoreLatestCheckpoint(before)
+                            workspace = restored
+                            session = session.copy(state = restored.activeState)
+                            saveStatus = if (hasCheckpoint) "Контрольну точку відновлено" else "У цій гілці немає контрольної точки"
+                        }) { Text("Відновити") }
+                        if (workspace.branches.size > 1) {
+                            Button(onClick = {
+                                val currentIndex = workspace.branches.indexOfFirst { it.id == workspace.activeBranchId }.coerceAtLeast(0)
+                                val nextBranch = workspace.branches[(currentIndex + 1) % workspace.branches.size]
+                                val switched = historyTimeline.switchTo(
+                                    historyTimeline.syncActive(workspace, session.state),
+                                    nextBranch.id,
+                                )
+                                workspace = switched
+                                session = session.copy(state = switched.activeState)
+                                selectedCivilizationId = switched.activeState.civilizations.firstOrNull { it.id == selectedCivilizationId }?.id
+                                    ?: switched.activeState.civilizations.first().id
+                                saveStatus = "Активна гілка: ${switched.activeBranch.name}"
+                            }) { Text("Змінити гілку") }
+                        }
+                    }
+
+                    val originalState = workspace.branches.firstOrNull { it.id == HistoryTimeline.ROOT_BRANCH_ID }?.state
+                        ?: workspace.activeState
+                    val divergence = HistoryComparator.compare(originalState, session.state)
                     Text(
-                        "Активні війни: " + session.state.wars.take(2).joinToString(" · ") {
-                            val score = String.format("%.1f:%.1f", it.scoreA, it.scoreB)
-                            "${names[it.civilizationA] ?: it.civilizationA}–${names[it.civilizationB] ?: it.civilizationB} [$score]"
-                        },
+                        "Гілок ${workspace.branches.size} · точок ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }} · Δнас. ${signed(divergence.populationDelta)} · Δміст ${signed(divergence.settlementDelta)} · Δтехн. ${String.format("%+.3f", divergence.averageTechnologyDelta)}",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                }
 
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 108.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text("Останні події", style = MaterialTheme.typography.titleSmall)
-                    session.state.recentEvents.takeLast(3).reversed().forEach { event ->
-                        val eventTime = clock.at(event.tick)
-                        Text("${eventTime.year}: ${textGenerator.describe(event)}", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            saveStatus = runCatching {
+                                val syncedWorkspace = historyTimeline.syncActive(workspace, session.state)
+                                context.openFileOutput(HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
+                                    it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace))
+                                }
+                                context.openFileOutput(SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
+                                    it.write(GameSnapshotV1.encode(session.state))
+                                }
+                                workspace = syncedWorkspace
+                                "Світ і всі гілки збережено"
+                            }.getOrElse { "Помилка збереження: ${it.message ?: "невідома"}" }
+                        }) { Text("Зберегти") }
+                        Button(onClick = {
+                            saveStatus = runCatching {
+                                val loadedWorkspace = runCatching {
+                                    context.openFileInput(HISTORY_FILE).bufferedReader().use {
+                                        HistoryWorkspaceSnapshotV1.decode(it.readText())
+                                    }
+                                }.getOrNull()
+                                val loadedState = loadedWorkspace?.activeState ?: context.openFileInput(SAVE_FILE).bufferedReader().use {
+                                    GameSnapshotV1.decode(it.readText())
+                                }
+                                val loadedSession = sessionFromState(loadedState, generator, hydrology, resourceGenerator)
+                                session = loadedSession
+                                workspace = if (loadedWorkspace != null) {
+                                    historyTimeline.syncActive(loadedWorkspace, loadedSession.state)
+                                } else {
+                                    historyTimeline.create(loadedSession.state)
+                                }
+                                selectedCivilizationId = loadedSession.state.civilizations.first().id
+                                seedText = loadedState.worldSeed.toString()
+                                interventionSequence = loadedState.recentEvents.asSequence()
+                                    .map { it.id }
+                                    .filter { it.startsWith("player-") }
+                                    .mapNotNull { it.substringAfterLast('-').toLongOrNull() }
+                                    .maxOrNull() ?: 0L
+                                if (loadedWorkspace != null) "Світ і гілки завантажено" else "Завантажено старе збереження"
+                            }.getOrElse { "Помилка завантаження: ${it.message ?: "немає збереження"}" }
+                        }) { Text("Завантажити") }
+                    }
+                    Text(saveStatus, style = MaterialTheme.typography.bodySmall)
+
+                    val leaders = session.state.civilizations.sortedByDescending { it.population }.take(3)
+                    Text(
+                        "Провідні держави: " + leaders.joinToString(" · ") { "${it.name} ${it.population}" },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    val names = session.state.civilizations.associate { it.id to it.name }
+                    if (session.state.wars.isNotEmpty()) {
+                        Text(
+                            "Активні війни: " + session.state.wars.take(2).joinToString(" · ") {
+                                val score = String.format("%.1f:%.1f", it.scoreA, it.scoreB)
+                                "${names[it.civilizationA] ?: it.civilizationA}–${names[it.civilizationB] ?: it.civilizationB} [$score]"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 108.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text("Останні події", style = MaterialTheme.typography.titleSmall)
+                        session.state.recentEvents.takeLast(3).reversed().forEach { event ->
+                            val eventTime = clock.at(event.tick)
+                            Text("${eventTime.year}: ${textGenerator.describe(event)}", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
