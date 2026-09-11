@@ -15,7 +15,7 @@ object EvolutionSnapshotV1 {
     fun encode(state: EvolutionState): String = buildString {
         appendLine(HEADER)
         appendLine("WORLD\t${state.worldSeed}\t${state.tick}")
-        state.lineages.sortedBy { it.id }.forEach { lineage ->
+        state.lineages.forEach { lineage ->
             val m = lineage.morphology
             val b = lineage.bodyPlan
             appendLine(
@@ -38,7 +38,7 @@ object EvolutionSnapshotV1 {
                 ).joinToString("\t"),
             )
         }
-        state.populations.sortedBy { it.id }.forEach { population ->
+        state.populations.forEach { population ->
             appendLine(
                 listOf(
                     "POP",
