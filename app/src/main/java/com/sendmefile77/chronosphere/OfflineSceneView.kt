@@ -42,10 +42,9 @@ internal fun OfflineSceneView(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (layers.isEmpty()) {
-                // First real offline constructor path: the same character identity selects the same
-                // modular face/hair/body presets. Production raster/vector packs can still override
-                // this through SceneAssetRepository without changing simulation/core contracts.
-                ModularCharacterPortrait(
+                // Real local constructor path. It loads the sliced raster library from APK assets,
+                // chooses stable parts by characterKey and composites the portrait completely offline.
+                RasterCharacterPortrait(
                     characterKey = characterKey,
                     ageYears = ageYears,
                     wardrobeState = scene.wardrobeState,
