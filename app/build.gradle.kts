@@ -27,6 +27,9 @@ android {
 dependencies {
     implementation(project(":core:simulation"))
     implementation(project(":core:worldgen"))
+    implementation(project(":core:civilization"))
+    implementation(project(":core:textgen"))
+    implementation(project(":core:storage"))
     implementation(project(":core:adult-contracts"))
     implementation(project(":feature:map"))
 
