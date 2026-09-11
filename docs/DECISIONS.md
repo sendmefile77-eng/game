@@ -26,3 +26,12 @@ Biological ancestry is persistent and may contain multiple source lineages. Long
 Cultural assimilation is explicitly separate from biological ancestry. Political conquest or cultural adoption may change identity, language, clothing and norms much faster than genes. A settlement changing owner never instantly changes the biology of its population. Both biological ancestry and cultural identity branch with the time-machine state.
 
 Scene/portrait rendering must consume lineage, ancestry and morphology descriptors. It must never assume every character uses the baseline human rig; incompatible body plans require a compatible rig/asset recipe or a deterministic fallback.
+
+## ADR-008 — Playability is independent from final portrait technology
+The simulation, saves, history branches and gameplay UI must never depend on one specific portrait renderer or asset pack. `SceneRecipe` / `ResolvedScene` and morphology descriptors are the stable presentation boundary.
+
+The rejected G-008 procedural raster pack is not a release dependency and must not be merged merely to satisfy a visual checklist. v0.1 is allowed to use the deterministic local fallback when no compatible local visual asset exists. Missing presentation assets must degrade visually, never functionally.
+
+A future production portrait renderer may be 2D, 3D-to-pixel or another fully local technique, but it is accepted only after a standalone real-asset prototype demonstrates acceptable visual quality, deterministic identity continuity, dressed/undressed consistency, offline operation and morphology-safe fallback behavior. AI concept images or mockups are not proof of runtime quality.
+
+Renderer replacement must not require changes to simulation state, ancestry/evolution models, save formats, history branching semantics or adult-contract validation.
