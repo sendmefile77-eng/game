@@ -4,5 +4,6 @@ dependencies {
     implementation(project(":core:simulation"))
     implementation(project(":core:civilization"))
     implementation(project(":core:people"))
+    implementation(project(":core:economy"))
     testImplementation(libs.junit)
 }

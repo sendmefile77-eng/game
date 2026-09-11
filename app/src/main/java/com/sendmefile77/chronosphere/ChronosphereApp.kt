@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.TerritoryResolver
+import com.sendmefile77.chronosphere.economy.EconomyEngine
+import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.HistoryComparator
 import com.sendmefile77.chronosphere.history.HistoryTimeline
 import com.sendmefile77.chronosphere.history.InterventionCommand
@@ -71,28 +73,44 @@ fun ChronosphereApp() {
     val peopleEngine = remember { PeopleEngine() }
     val initialSession = remember { newSession(424242L, generator, hydrology, resourceGenerator) }
     val initialPeople = remember(initialSession) { peopleEngine.initialize(initialSession.state) }
+    val initialEconomy = remember(initialSession) {
+        EconomyEngine(initialSession.world, initialSession.resources).initialize(initialSession.state)
+    }
 
     var seedText by remember { mutableStateOf("424242") }
     var session by remember { mutableStateOf(initialSession) }
     var peopleState by remember { mutableStateOf(initialPeople) }
-    var workspace by remember { mutableStateOf(historyTimeline.create(initialSession.state, initialPeople)) }
+    var economyState by remember { mutableStateOf(initialEconomy) }
+    var workspace by remember {
+        mutableStateOf(historyTimeline.create(initialSession.state, initialPeople, initialEconomy))
+    }
     var selectedCivilizationId by remember { mutableStateOf(initialSession.state.civilizations.first().id) }
     var saveStatus by remember { mutableStateOf("Локальне збереження готове") }
     var interventionSequence by remember { mutableStateOf(0L) }
 
-    fun syncState(nextState: LivingPlanetState, nextPeople: PeopleState = peopleState) {
+    fun syncState(
+        nextState: LivingPlanetState,
+        nextPeople: PeopleState = peopleState,
+        nextEconomy: EconomyState = economyState,
+    ) {
         session = session.copy(state = nextState)
         peopleState = nextPeople
-        workspace = historyTimeline.syncActive(workspace, nextState, nextPeople)
+        economyState = nextEconomy
+        workspace = historyTimeline.syncActive(workspace, nextState, nextPeople, nextEconomy)
     }
 
     fun advanceMonths(months: Int) {
         val worldNext = CivilizationEngine(session.world, session.resources).advance(session.state, months)
-        val peopleResult = peopleEngine.advance(peopleState, worldNext)
-        val mergedWorld = worldNext.copy(
-            recentEvents = (worldNext.recentEvents + peopleResult.events).takeLast(96),
+        val economyResult = EconomyEngine(session.world, session.resources).advance(economyState, worldNext)
+        val peopleResult = peopleEngine.advance(peopleState, economyResult.world)
+        val mergedWorld = economyResult.world.copy(
+            recentEvents = (economyResult.world.recentEvents + peopleResult.events).takeLast(96),
         )
-        syncState(mergedWorld, peopleResult.state.copy(tick = mergedWorld.tick))
+        syncState(
+            mergedWorld,
+            peopleResult.state.copy(tick = mergedWorld.tick),
+            economyResult.state.copy(tick = mergedWorld.tick),
+        )
     }
 
     fun intervene(kind: InterventionKind) {
@@ -105,7 +123,7 @@ fun ChronosphereApp() {
             civilizationId = targetId,
             strength = 0.65,
         )
-        syncState(interventionEngine.apply(session.state, command), peopleState)
+        syncState(interventionEngine.apply(session.state, command), peopleState, economyState)
         saveStatus = "Втручання застосовано"
     }
 
@@ -113,6 +131,8 @@ fun ChronosphereApp() {
         val branchState = workspace.activeState
         session = session.copy(state = branchState)
         peopleState = workspace.activePeopleState ?: peopleEngine.initialize(branchState)
+        economyState = workspace.activeEconomyState
+            ?: EconomyEngine(session.world, session.resources).initialize(branchState)
         if (branchState.civilizations.none { it.id == selectedCivilizationId }) {
             selectedCivilizationId = branchState.civilizations.first().id
         }
@@ -137,9 +157,11 @@ fun ChronosphereApp() {
                         val seed = seedText.toLongOrNull() ?: return@Button
                         val created = newSession(seed, generator, hydrology, resourceGenerator)
                         val createdPeople = peopleEngine.initialize(created.state)
+                        val createdEconomy = EconomyEngine(created.world, created.resources).initialize(created.state)
                         session = created
                         peopleState = createdPeople
-                        workspace = historyTimeline.create(created.state, createdPeople)
+                        economyState = createdEconomy
+                        workspace = historyTimeline.create(created.state, createdPeople, createdEconomy)
                         selectedCivilizationId = created.state.civilizations.first().id
                         interventionSequence = 0L
                         saveStatus = "Створено новий світ"
@@ -149,7 +171,7 @@ fun ChronosphereApp() {
                 val time = clock.at(session.state.tick)
                 Text("Рік ${time.year}, місяць ${time.month} · населення ${session.state.totalPopulation} · міст ${session.state.settlements.size}")
                 Text(
-                    "Війн ${session.state.wars.size} · союзів ${session.state.alliances.size} · гілка: ${workspace.activeBranch.name}",
+                    "Війн ${session.state.wars.size} · союзів ${session.state.alliances.size} · торгових потоків ${economyState.routes.size} · гілка: ${workspace.activeBranch.name}",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -173,7 +195,7 @@ fun ChronosphereApp() {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 300.dp)
+                        .heightIn(max = 315.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
@@ -186,7 +208,15 @@ fun ChronosphereApp() {
                             selectedCivilizationId = civilizations[(index + 1) % civilizations.size].id
                         }) { Text("Ціль: ${selectedCivilization.name}") }
                         Text(
-                            "техн. ${String.format("%.2f", selectedCivilization.technology)} · стаб. ${String.format("%.2f", selectedCivilization.stability)}",
+                            "техн. ${String.format("%.2f", selectedCivilization.technology)} · стаб. ${String.format("%.2f", selectedCivilization.stability)} · казна ${String.format("%.1f", selectedCivilization.treasury)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    val selectedEconomy = economyState.economy(selectedCivilization.id)
+                    if (selectedEconomy != null) {
+                        Text(
+                            "Епоха: ${selectedEconomy.era.displayNameUk} · дефіцит ${String.format("%.0f%%", selectedEconomy.shortageIndex * 100.0)} · торг. баланс ${String.format("%+.1f", selectedEconomy.tradeBalance)} · випуск ${String.format("%.1f", selectedEconomy.grossOutput)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -221,14 +251,14 @@ fun ChronosphereApp() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             workspace = historyTimeline.checkpoint(
-                                historyTimeline.syncActive(workspace, session.state, peopleState),
+                                historyTimeline.syncActive(workspace, session.state, peopleState, economyState),
                                 "Рік ${time.year}",
                             )
                             saveStatus = "Створено контрольну точку"
                         }) { Text("Точка") }
                         Button(onClick = {
                             workspace = historyTimeline.fork(
-                                historyTimeline.syncActive(workspace, session.state, peopleState),
+                                historyTimeline.syncActive(workspace, session.state, peopleState, economyState),
                                 "Альтернатива ${workspace.branches.size}",
                             )
                             activateWorkspaceState()
@@ -248,7 +278,7 @@ fun ChronosphereApp() {
                                 val currentIndex = workspace.branches.indexOfFirst { it.id == workspace.activeBranchId }.coerceAtLeast(0)
                                 val nextBranch = workspace.branches[(currentIndex + 1) % workspace.branches.size]
                                 workspace = historyTimeline.switchTo(
-                                    historyTimeline.syncActive(workspace, session.state, peopleState),
+                                    historyTimeline.syncActive(workspace, session.state, peopleState, economyState),
                                     nextBranch.id,
                                 )
                                 activateWorkspaceState()
@@ -268,7 +298,7 @@ fun ChronosphereApp() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             saveStatus = runCatching {
-                                val syncedWorkspace = historyTimeline.syncActive(workspace, session.state, peopleState)
+                                val syncedWorkspace = historyTimeline.syncActive(workspace, session.state, peopleState, economyState)
                                 context.openFileOutput(HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
                                     it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace))
                                 }
@@ -276,7 +306,7 @@ fun ChronosphereApp() {
                                     it.write(GameSnapshotV1.encode(session.state))
                                 }
                                 workspace = syncedWorkspace
-                                "Світ, люди й усі гілки збережено"
+                                "Світ, люди, економіка й усі гілки збережено"
                             }.getOrElse { "Помилка збереження: ${it.message ?: "невідома"}" }
                         }) { Text("Зберегти") }
                         Button(onClick = {
@@ -291,12 +321,15 @@ fun ChronosphereApp() {
                                 }
                                 val loadedSession = sessionFromState(loadedState, generator, hydrology, resourceGenerator)
                                 val loadedPeople = loadedWorkspace?.activePeopleState ?: peopleEngine.initialize(loadedSession.state)
+                                val loadedEconomy = loadedWorkspace?.activeEconomyState
+                                    ?: EconomyEngine(loadedSession.world, loadedSession.resources).initialize(loadedSession.state)
                                 session = loadedSession
                                 peopleState = loadedPeople
+                                economyState = loadedEconomy
                                 workspace = if (loadedWorkspace != null) {
-                                    historyTimeline.syncActive(loadedWorkspace, loadedSession.state, loadedPeople)
+                                    historyTimeline.syncActive(loadedWorkspace, loadedSession.state, loadedPeople, loadedEconomy)
                                 } else {
-                                    historyTimeline.create(loadedSession.state, loadedPeople)
+                                    historyTimeline.create(loadedSession.state, loadedPeople, loadedEconomy)
                                 }
                                 selectedCivilizationId = loadedSession.state.civilizations.first().id
                                 seedText = loadedState.worldSeed.toString()
@@ -305,7 +338,7 @@ fun ChronosphereApp() {
                                     .filter { it.startsWith("player-") }
                                     .mapNotNull { it.substringAfterLast('-').toLongOrNull() }
                                     .maxOrNull() ?: 0L
-                                if (loadedWorkspace != null) "Світ, люди й гілки завантажено" else "Завантажено старе збереження"
+                                if (loadedWorkspace != null) "Світ, люди, економіка й гілки завантажено" else "Завантажено старе збереження"
                             }.getOrElse { "Помилка завантаження: ${it.message ?: "немає збереження"}" }
                         }) { Text("Завантажити") }
                     }
@@ -315,7 +348,8 @@ fun ChronosphereApp() {
                     Text(
                         "Провідні держави: " + leaders.joinToString(" · ") { civilization ->
                             val leaderName = peopleState.ruler(civilization.id)?.name ?: "?"
-                            "${civilization.name} ${civilization.population} ($leaderName)"
+                            val eraName = economyState.economy(civilization.id)?.era?.displayNameUk ?: "?"
+                            "${civilization.name} ${civilization.population} ($leaderName, $eraName)"
                         },
                         style = MaterialTheme.typography.bodySmall,
                     )

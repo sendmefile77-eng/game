@@ -22,6 +22,23 @@ class ChronicleTextGenerator {
         }
         "ALLIANCE_FORMED" -> "${event.facts["a"] ?: "Одна держава"} та ${event.facts["b"] ?: "інша"} уклали союз."
         "ALLIANCE_ENDED" -> "Союз між ${event.facts["a"] ?: "двома державами"} та ${event.facts["b"] ?: "їхнім партнером"} припинив існування."
+        "ECONOMIC_SHORTAGE" -> {
+            val shortage = event.numbers["shortage"]?.let { String.format("%.0f%%", it * 100.0) } ?: "значний"
+            "У державі ${event.facts["civilization"] ?: "невідомого народу"} сформувався системний дефіцит ресурсів ($shortage)."
+        }
+        "TRADE_FLOW" -> {
+            val good = when (event.facts["good"]) {
+                "FOOD" -> "продовольства"
+                "TIMBER" -> "деревини"
+                "STONE" -> "каменю"
+                "METAL" -> "металу"
+                "FUEL" -> "палива"
+                "CRAFTS" -> "ремісничих виробів"
+                else -> "товарів"
+            }
+            "${event.facts["exporter"] ?: "Одна держава"} розширила постачання $good до держави ${event.facts["importer"] ?: "сусіда"}."
+        }
+        "ERA_ADVANCED" -> "Держава ${event.facts["civilization"] ?: "невідомого народу"} увійшла в нову епоху — ${event.facts["era"] ?: "наступний технологічний уклад"}."
         "PERSON_DIED" -> {
             val age = event.numbers["age"]?.toInt()
             if (age != null) "Померла історична постать ${event.facts["person"] ?: "невідома особа"} у віці $age років."

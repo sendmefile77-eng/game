@@ -39,19 +39,26 @@
 - [x] Ukrainian observer/control UI with map-first mobile layout.
 
 ## Stage 4 — People, rulers and culture
-- deterministic person/entity layer;
-- rulers, succession and dynasties;
-- family and relationship graph;
-- evolving cultural traits and social norms;
-- civilization/ruler/person dossiers;
-- validated optional integration of `adult-contracts` effects without making the core depend on `feature/adult`.
+- [x] Deterministic significant-person layer.
+- [x] Rulers, succession and dynasties.
+- [x] Family and relationship graph.
+- [x] Evolving cultural/social profiles.
+- [x] People state branches and restores with alternate history.
+- [x] Observer summaries for rulers, dynasties and culture.
+- [ ] Full civilization/ruler/person dossier screens.
+- [ ] Validated runtime integration of `adult-contracts` effects without making core depend on `feature/adult`.
 
 ## Stage 5 — Economy and eras
-- production and resource chains;
-- trade routes and regional specialization;
-- institutions, taxation and treasury pressure;
-- technology eras and major inventions;
-- infrastructure growth and urban transformation.
+- [x] Aggregate goods and production from population/resources.
+- [x] Demand, strategic stockpiles and shortages.
+- [x] Deterministic trade routes and regional specialization.
+- [x] War blocks bilateral trade; alliances improve capacity.
+- [x] Treasury/stability/technology consequences.
+- [x] Technology-era progression through material prerequisites.
+- [x] Economy state branches with alternate history and persists in history saves.
+- [x] Economy/era observer summary and chronicle events.
+- [ ] Institutions and taxation policies controlled by simulation/player choices.
+- [ ] Infrastructure growth and urban transformation visible on the map.
 
 ## Stage 6 — Industrial and global civilization
 - industrialization and mass logistics;

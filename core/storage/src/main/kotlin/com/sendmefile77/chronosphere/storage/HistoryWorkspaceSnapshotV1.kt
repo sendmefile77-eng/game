@@ -22,6 +22,7 @@ object HistoryWorkspaceSnapshotV1 {
                     branch.forkTick,
                     pack(GameSnapshotV1.encode(branch.state)),
                     branch.peopleState?.let { pack(PeopleSnapshotV1.encode(it)) }.orEmpty(),
+                    branch.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                 ).joinToString("\t"),
             )
         }
@@ -35,6 +36,7 @@ object HistoryWorkspaceSnapshotV1 {
                     checkpoint.tick,
                     pack(GameSnapshotV1.encode(checkpoint.state)),
                     checkpoint.peopleState?.let { pack(PeopleSnapshotV1.encode(it)) }.orEmpty(),
+                    checkpoint.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                 ).joinToString("\t"),
             )
         }
@@ -53,7 +55,9 @@ object HistoryWorkspaceSnapshotV1 {
             require(p.size >= 6) { "Malformed BRANCH row" }
             val state = GameSnapshotV1.decode(unpack(p[5]))
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
+            val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             require(peopleState == null || peopleState.worldSeed == state.worldSeed) { "Branch people/world seed mismatch" }
+            require(economyState == null || economyState.worldSeed == state.worldSeed) { "Branch economy/world seed mismatch" }
             HistoryBranch(
                 id = unesc(p[1]),
                 name = unesc(p[2]),
@@ -61,6 +65,7 @@ object HistoryWorkspaceSnapshotV1 {
                 forkTick = p[4].toLong(),
                 state = state,
                 peopleState = peopleState,
+                economyState = economyState,
             )
         }
         require(branches.isNotEmpty()) { "History contains no branches" }
@@ -71,7 +76,9 @@ object HistoryWorkspaceSnapshotV1 {
             require(p.size >= 6) { "Malformed CHECKPOINT row" }
             val state = GameSnapshotV1.decode(unpack(p[5]))
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
+            val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             require(peopleState == null || peopleState.worldSeed == state.worldSeed) { "Checkpoint people/world seed mismatch" }
+            require(economyState == null || economyState.worldSeed == state.worldSeed) { "Checkpoint economy/world seed mismatch" }
             HistoryCheckpoint(
                 id = unesc(p[1]),
                 branchId = unesc(p[2]),
@@ -79,6 +86,7 @@ object HistoryWorkspaceSnapshotV1 {
                 tick = p[4].toLong(),
                 state = state,
                 peopleState = peopleState,
+                economyState = economyState,
             )
         }
         require(checkpoints.all { checkpoint -> branches.any { it.id == checkpoint.branchId } }) {
