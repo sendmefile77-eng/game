@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -17,10 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.map.WorldMapView
 import com.sendmefile77.chronosphere.simulation.WorldSeed
 import com.sendmefile77.chronosphere.worldgen.WorldGenerator
 import com.sendmefile77.chronosphere.worldgen.WorldMap
-import com.sendmefile77.chronosphere.map.WorldMapView
 
 @androidx.compose.runtime.Composable
 fun ChronosphereApp() {
