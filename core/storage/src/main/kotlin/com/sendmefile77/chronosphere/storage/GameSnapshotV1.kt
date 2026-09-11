@@ -1,5 +1,6 @@
 package com.sendmefile77.chronosphere.storage
 
+import com.sendmefile77.chronosphere.civilization.AllianceState
 import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
@@ -22,7 +23,10 @@ object GameSnapshotV1 {
             appendLine(listOf("REL", esc(r.civilizationA), esc(r.civilizationB), r.value, r.lastUpdatedTick).joinToString("\t"))
         }
         state.wars.forEach { w ->
-            appendLine(listOf("WAR", esc(w.id), esc(w.civilizationA), esc(w.civilizationB), w.startedTick, w.casualtiesA, w.casualtiesB).joinToString("\t"))
+            appendLine(listOf("WAR", esc(w.id), esc(w.civilizationA), esc(w.civilizationB), w.startedTick, w.casualtiesA, w.casualtiesB, w.scoreA, w.scoreB, w.capturesA, w.capturesB).joinToString("\t"))
+        }
+        state.alliances.forEach { a ->
+            appendLine(listOf("ALLY", esc(a.id), esc(a.civilizationA), esc(a.civilizationB), a.startedTick).joinToString("\t"))
         }
     }
 
@@ -46,9 +50,18 @@ object GameSnapshotV1 {
         }
         val wars = rows.filter { it.startsWith("WAR\t") }.map { row ->
             val p = row.split('\t')
-            WarState(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toLong(), p[5].toLong(), p[6].toLong())
+            WarState(
+                id = unesc(p[1]), civilizationA = unesc(p[2]), civilizationB = unesc(p[3]), startedTick = p[4].toLong(),
+                casualtiesA = p.getOrElse(5) { "0" }.toLong(), casualtiesB = p.getOrElse(6) { "0" }.toLong(),
+                scoreA = p.getOrElse(7) { "0.0" }.toDouble(), scoreB = p.getOrElse(8) { "0.0" }.toDouble(),
+                capturesA = p.getOrElse(9) { "0" }.toInt(), capturesB = p.getOrElse(10) { "0" }.toInt(),
+            )
         }
-        return LivingPlanetState(world[1].toLong(), world[2].toLong(), civilizations, settlements, relations = relations, wars = wars)
+        val alliances = rows.filter { it.startsWith("ALLY\t") }.map { row ->
+            val p = row.split('\t')
+            AllianceState(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toLong())
+        }
+        return LivingPlanetState(world[1].toLong(), world[2].toLong(), civilizations, settlements, relations = relations, wars = wars, alliances = alliances)
     }
 
     private fun esc(value: String): String = value.replace("%", "%25").replace("\t", "%09").replace("\n", "%0A")

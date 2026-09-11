@@ -72,8 +72,8 @@ fun ChronosphereApp() {
                 }
 
                 val time = clock.at(session.state.tick)
-                Text("Year ${time.year}, month ${time.month} · population ${session.state.totalPopulation} · settlements ${session.state.settlements.size} · wars ${session.state.wars.size}")
-                Text("Map ${session.world.fingerprint} · land ${session.world.landPercent}% · rivers ${session.rivers.size} · resources ${session.resources.size}", style = MaterialTheme.typography.bodySmall)
+                Text("Year ${time.year}, month ${time.month} · population ${session.state.totalPopulation} · cities ${session.state.settlements.size}")
+                Text("Wars ${session.state.wars.size} · alliances ${session.state.alliances.size} · rivers ${session.rivers.size} · resources ${session.resources.size}", style = MaterialTheme.typography.bodySmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { session = advance(session, 12) }) { Text("+1 year") }
@@ -109,14 +109,20 @@ fun ChronosphereApp() {
                 )
 
                 val leaders = session.state.civilizations.sortedByDescending { it.population }.take(3)
-                Text(
-                    "Leading states: " + leaders.joinToString(" · ") { "${it.name} ${it.population}" },
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("Leading states: " + leaders.joinToString(" · ") { "${it.name} ${it.population}" }, style = MaterialTheme.typography.bodySmall)
+                val names = session.state.civilizations.associate { it.id to it.name }
                 if (session.state.wars.isNotEmpty()) {
-                    val names = session.state.civilizations.associate { it.id to it.name }
                     Text(
-                        "Active wars: " + session.state.wars.take(2).joinToString(" · ") { "${names[it.civilizationA] ?: it.civilizationA}–${names[it.civilizationB] ?: it.civilizationB}" },
+                        "Active wars: " + session.state.wars.take(2).joinToString(" · ") {
+                            val score = String.format("%.1f:%.1f", it.scoreA, it.scoreB)
+                            "${names[it.civilizationA] ?: it.civilizationA}–${names[it.civilizationB] ?: it.civilizationB} [$score]"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (session.state.alliances.isNotEmpty()) {
+                    Text(
+                        "Alliances: " + session.state.alliances.take(2).joinToString(" · ") { "${names[it.civilizationA] ?: it.civilizationA}+${names[it.civilizationB] ?: it.civilizationB}" },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -142,12 +148,7 @@ private fun newSession(seed: Long, generator: WorldGenerator, hydrology: WorldHy
 private fun sessionFromState(state: LivingPlanetState, generator: WorldGenerator, hydrology: WorldHydrology, resourceGenerator: WorldResourceGenerator): GameSession {
     val world = generator.generate(WorldSeed(state.worldSeed))
     val resources = resourceGenerator.generate(world)
-    val normalizedState = if (state.relations.isEmpty() && state.civilizations.size > 1) {
-        val defaultRelations = CivilizationEngine(world, resources).initialize(state.civilizations.size).relations
-        state.copy(relations = defaultRelations)
-    } else {
-        state
-    }
+    val normalizedState = CivilizationEngine(world, resources).prepareState(state)
     return GameSession(world, resources, hydrology.generateRivers(world), normalizedState)
 }
 
