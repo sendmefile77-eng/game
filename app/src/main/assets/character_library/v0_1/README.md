@@ -1,11 +1,11 @@
 # Chronosphere character library v0.1
 
-This folder contains the first real offline modular 2D character library used by the Android app.
+This folder contains the local/offline modular raster character library used by the Android app. Runtime rendering does not call an image generator, LLM, network service, or external API.
 
-`character_parts_v02.webp` is a physically cut raster atlas prepared from the approved mature/semi-realistic character-library board. It contains female/male head variants, female/male wardrobe variants, canonical headless torso layers, plus reserved eye / nose / mouth detail regions for the next finer-grained face pass.
+The previous `character_parts_v02.webp` was committed as a truncated RIFF/WebP stream, so Android decoded it to `null` and the UI silently displayed the old `ModularCharacterPortrait`. That behavior is removed. The current compact v03 raster bytes are stored losslessly as two base64 asset parts (`character_parts_v03_480.b64.00` and `.01`), concatenated and decoded locally before `BitmapFactory`. A damaged/missing primary pack now produces an obvious asset-error card instead of silently switching art styles.
 
-`female_lower_front_v01.webp` is a real 4×3 atlas of 12 selected, cropped and normalized front-facing female lower-torso variants from the supplied source sheet. The runtime uses it only for adult female-family cards in `UNDRESSED`; ordinary portraits, dressed cards and under-18 cards never load it as their visible body layer. Each cell is fitted without X/Y distortion.
+The decoded v03 pack is 480x480 and contains deterministic female/male heads, wardrobe layers and canonical torso layers. `person.id` selects a stable visual family, head and garment; age can select the mature head. Dressed/partial states compose those raster layers.
 
-Runtime assembly is deterministic and completely local: `person.id` selects the same visual family, head and wardrobe every time; age can select the mature head variant; wardrobe changes only replace/remove the clothing layer. No runtime AI, no network access, and no simulation/save-format dependency on this concrete renderer.
+The nine normalized adult female torso variants supplied for `UNDRESSED` are stored in one compact base64 asset (`female_undress_torsos_v01_384.b64.00`), decoding to a 384x450 3x3 atlas. They are reachable only for an adult female character in `UNDRESSED`; the same deterministic character head is composited above the selected torso, so changing wardrobe state does not replace character identity.
 
-The visual target is adult/semi-realistic animation: normal head/body proportions, restrained facial exaggeration, cinematic shading, and no chibi/oversized-anime styling.
+Legacy `character_parts_v01.webp`, `character_parts_v02.webp`, and the earlier focused lower-front atlas remain only as historical assets and are not used by the current renderer.
