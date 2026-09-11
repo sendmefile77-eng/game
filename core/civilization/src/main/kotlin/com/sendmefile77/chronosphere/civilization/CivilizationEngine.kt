@@ -62,15 +62,15 @@ class CivilizationEngine(
         )
     }
 
+    fun prepareState(state: LivingPlanetState): LivingPlanetState =
+        if (state.relations.isEmpty() && state.civilizations.size > 1) state.copy(relations = initialRelations(state.civilizations)) else state
+
     fun advance(state: LivingPlanetState, months: Int): LivingPlanetState {
         require(months in 1..12_000)
-        var current = normalizeDiplomacy(state)
+        var current = prepareState(state)
         repeat(months) { current = step(current) }
         return current
     }
-
-    private fun normalizeDiplomacy(state: LivingPlanetState): LivingPlanetState =
-        if (state.relations.isEmpty() && state.civilizations.size > 1) state.copy(relations = initialRelations(state.civilizations)) else state
 
     private fun step(state: LivingPlanetState): LivingPlanetState {
         val nextTick = state.tick + 1
@@ -171,6 +171,7 @@ class CivilizationEngine(
             if (relation.value > -0.58) continue
             if (wars.any { it.matches(relation.civilizationA, relation.civilizationB) }) continue
             if (alliances.any { it.matches(relation.civilizationA, relation.civilizationB) }) continue
+            if (!statesAreClose(state.settlements, relation.civilizationA, relation.civilizationB)) continue
             val chance = hash01(world.seed.value xor (tick * 31), relation.civilizationA.hashCode(), relation.civilizationB.hashCode())
             if (chance < 0.025) {
                 val war = WarState(
@@ -188,6 +189,13 @@ class CivilizationEngine(
             }
         }
         return DiplomacyResult(relations, wars, alliances)
+    }
+
+    private fun statesAreClose(settlements: List<Settlement>, a: String, b: String, maxDistance: Int = 24): Boolean {
+        val left = settlements.filter { it.civilizationId == a }
+        val right = settlements.filter { it.civilizationId == b }
+        if (left.isEmpty() || right.isEmpty()) return false
+        return left.any { l -> right.any { r -> abs(l.x - r.x) + abs(l.y - r.y) <= maxDistance } }
     }
 
     private data class WarResult(
