@@ -6,6 +6,9 @@ import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.civilization.WarState
+import com.sendmefile77.chronosphere.simulation.SimulationEvent
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 
 object GameSnapshotV1 {
     private const val HEADER = "CHRONOSPHERE_SAVE_V1"
@@ -27,6 +30,20 @@ object GameSnapshotV1 {
         }
         state.alliances.forEach { a ->
             appendLine(listOf("ALLY", esc(a.id), esc(a.civilizationA), esc(a.civilizationB), a.startedTick).joinToString("\t"))
+        }
+        state.recentEvents.forEach { event ->
+            appendLine(
+                listOf(
+                    "EVT",
+                    pack(event.id),
+                    event.tick,
+                    pack(event.code),
+                    encodeStringList(event.actorIds),
+                    event.locationId?.let(::pack).orEmpty(),
+                    encodeDoubleMap(event.numbers),
+                    encodeStringMap(event.facts),
+                ).joinToString("\t"),
+            )
         }
     }
 
@@ -61,8 +78,65 @@ object GameSnapshotV1 {
             val p = row.split('\t')
             AllianceState(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toLong())
         }
-        return LivingPlanetState(world[1].toLong(), world[2].toLong(), civilizations, settlements, relations = relations, wars = wars, alliances = alliances)
+        val events = rows.filter { it.startsWith("EVT\t") }.map { row ->
+            val p = row.split('\t')
+            require(p.size >= 8) { "Malformed EVT row" }
+            SimulationEvent(
+                id = unpack(p[1]),
+                tick = p[2].toLong(),
+                code = unpack(p[3]),
+                actorIds = decodeStringList(p[4]),
+                locationId = p[5].takeIf { it.isNotBlank() }?.let(::unpack),
+                numbers = decodeDoubleMap(p[6]),
+                facts = decodeStringMap(p[7]),
+            )
+        }
+        return LivingPlanetState(
+            worldSeed = world[1].toLong(),
+            tick = world[2].toLong(),
+            civilizations = civilizations,
+            settlements = settlements,
+            recentEvents = events.takeLast(96),
+            relations = relations,
+            wars = wars,
+            alliances = alliances,
+        )
     }
+
+    private fun encodeStringList(values: List<String>): String = values.joinToString(",") { pack(it) }
+    private fun decodeStringList(value: String): List<String> =
+        if (value.isBlank()) emptyList() else value.split(',').map(::unpack)
+
+    private fun encodeDoubleMap(values: Map<String, Double>): String = values.toSortedMap().entries.joinToString(",") {
+        "${pack(it.key)}:${it.value}"
+    }
+
+    private fun decodeDoubleMap(value: String): Map<String, Double> =
+        if (value.isBlank()) emptyMap() else value.split(',').associate { item ->
+            val separator = item.indexOf(':')
+            require(separator > 0) { "Malformed numeric event field" }
+            unpack(item.substring(0, separator)) to item.substring(separator + 1).toDouble()
+        }
+
+    private fun encodeStringMap(values: Map<String, String>): String = values.toSortedMap().entries.joinToString(",") {
+        "${pack(it.key)}:${pack(it.value)}"
+    }
+
+    private fun decodeStringMap(value: String): Map<String, String> =
+        if (value.isBlank()) emptyMap() else value.split(',').associate { item ->
+            val separator = item.indexOf(':')
+            require(separator > 0) { "Malformed text event field" }
+            unpack(item.substring(0, separator)) to unpack(item.substring(separator + 1))
+        }
+
+    private fun pack(value: String): String = Base64.getUrlEncoder().withoutPadding().encodeToString(
+        value.toByteArray(StandardCharsets.UTF_8),
+    )
+
+    private fun unpack(value: String): String = String(
+        Base64.getUrlDecoder().decode(value),
+        StandardCharsets.UTF_8,
+    )
 
     private fun esc(value: String): String = value.replace("%", "%25").replace("\t", "%09").replace("\n", "%0A")
     private fun unesc(value: String): String = value.replace("%0A", "\n").replace("%09", "\t").replace("%25", "%")
