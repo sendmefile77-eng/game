@@ -318,7 +318,10 @@ class SocietyEngine(
         val adults = people.persons.asSequence()
             .filter { it.civilizationId == civilizationId }
             .filter { it.birthTick <= tick - 18L * 12L }
-            .filter { it.deathTick == null || it.deathTick > tick }
+            .filter { person ->
+                val deathTick = person.deathTick
+                deathTick == null || deathTick > tick
+            }
             .sortedBy { it.id }
             .toList()
         if (adults.isEmpty()) return emptyList()

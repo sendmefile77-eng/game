@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -138,8 +137,6 @@ fun ChronosphereApp() {
         var evolution = evolutionState
         var remaining = months
 
-        // A year is the causal integration slice: politics/economy/people/evolution/society
-        // are resolved in sequence before the next year begins.
         while (remaining > 0) {
             val step = minOf(12, remaining)
             val fromTick = worldState.tick

@@ -36,9 +36,24 @@ class AdultMorphologyTest {
 
     @Test
     fun nonFiniteMorphologyIgnored() {
-        val morph = AdultMorphologyParser.parse(setOf("courtly"), mapOf(MorphKeys.DIVERGENCE to Double.NaN, MorphKeys.ADMIXTURE to Double.POSITIVE_INFINITY))
+        val morph = AdultMorphologyParser.parse(
+            setOf("courtly"),
+            mapOf(
+                MorphKeys.DIVERGENCE to Double.NaN,
+                MorphKeys.ADMIXTURE to Double.POSITIVE_INFINITY,
+            ),
+        )
         assertFalse(morph.signaled)
-        assertEquals(module.evaluate(sample()), module.evaluate(sample(numeric = mapOf(MorphKeys.DIVERGENCE to Double.NaN))))
+
+        val baseline = sample()
+        val withInvalidMorphology = sample(
+            numeric = mapOf(
+                SocialContextKeys.TENSION to 0.25,
+                MorphKeys.DIVERGENCE to Double.NaN,
+                MorphKeys.ADMIXTURE to Double.POSITIVE_INFINITY,
+            ),
+        )
+        assertEquals(module.evaluate(baseline), module.evaluate(withInvalidMorphology))
     }
 
     @Test

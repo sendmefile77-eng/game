@@ -20,7 +20,7 @@ class AdultSceneBridge() {
         card(request, AdultWardrobeState.DRESSED, SceneIntent.PORTRAIT)
 
     fun undressedCharacterCard(request: AdultEventRequest): ResolvedScene {
-        require(AdultUndressPolicy.allows(request.participants)) {
+        require(AdultUndressPolicy.allowsParticipants(request.participants)) {
             "Adult module accepts adults only"
         }
         return card(request, AdultWardrobeState.UNDRESSED, SceneIntent.CHARACTER_UNDRESS)

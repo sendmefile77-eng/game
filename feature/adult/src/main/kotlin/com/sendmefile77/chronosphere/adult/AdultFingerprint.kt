@@ -16,8 +16,11 @@ internal object AdultFingerprint {
             hash = mixString(hash, tag.lowercase())
         }
         for (key in request.context.numericContext.keys.sorted()) {
+            if (key.isBlank()) continue
+            val value = request.context.numericContext[key] ?: continue
+            if (!value.isFinite()) continue
             hash = mixString(hash, key)
-            hash = mix(hash, request.context.numericContext.getValue(key).toRawBits())
+            hash = mix(hash, value.toRawBits())
         }
         return hash
     }

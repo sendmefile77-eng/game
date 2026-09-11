@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +31,7 @@ fun CharacterCardPanel(
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
     onToggleWardrobe: () -> Unit,
+    controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
     val dynasty = person.dynastyId?.let { dynastyId ->
@@ -41,11 +41,12 @@ fun CharacterCardPanel(
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
     val relationships = people.relationships
         .filter { it.involves(person.id) }
-        .take(4)
+        .sortedByDescending { kotlin.math.abs(it.strength) }
+        .take(6)
         .mapNotNull { relationship ->
             val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
             val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
-            "${relationshipLabel(relationship.kind)}: ${other.name}"
+            "${relationshipLabel(relationship.kind)}: ${other.name} (${String.format("%+.2f", relationship.strength)})"
         }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -60,26 +61,37 @@ fun CharacterCardPanel(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(person.name, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${roleLabel(person.role)} · $age р. · престиж ${String.format("%.2f", person.prestige)}",
+                        "${roleLabel(person.role)} · $age р. · престиж ${String.format("%.2f", person.prestige)} · здібності ${String.format("%.2f", person.aptitude)}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 if (hasPreviousOrNext) {
-                    OutlinedButton(onClick = onNext) { Text("Наступний") }
+                    OutlinedButton(onClick = onNext, enabled = controlsEnabled) { Text("Наступний") }
                 }
             }
 
-            OfflineSceneView(scene = scene)
+            OfflineSceneView(
+                scene = scene,
+                characterKey = person.id,
+                ageYears = age,
+            )
 
             Text(
                 "Династія: ${dynasty ?: "—"} · поселення: ${person.settlementId ?: "—"}",
                 style = MaterialTheme.typography.bodySmall,
             )
 
+            if (person.traits.isNotEmpty()) {
+                Text(
+                    "Риси: ${person.traits.sorted().joinToString(", ")}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
             if (lineage != null && descriptor != null) {
                 val ancestry = descriptor.ancestry.entries
                     .sortedByDescending { it.value }
-                    .take(3)
+                    .take(4)
                     .joinToString(" · ") { (lineageId, share) ->
                         val label = evolution.lineage(lineageId)?.label ?: lineageId
                         "$label ${String.format("%.0f%%", share * 100.0)}"
@@ -101,11 +113,14 @@ fun CharacterCardPanel(
             }
 
             if (relationships.isNotEmpty()) {
-                Text("Зв’язки: ${relationships.joinToString(" · ")}", style = MaterialTheme.typography.bodySmall)
+                Text("Зв’язки", style = MaterialTheme.typography.titleSmall)
+                relationships.forEach { relationship ->
+                    Text("• $relationship", style = MaterialTheme.typography.bodySmall)
+                }
             }
 
             if (age >= 18) {
-                Button(onClick = onToggleWardrobe) {
+                Button(onClick = onToggleWardrobe, enabled = controlsEnabled) {
                     Text(if (scene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Роздягнути")
                 }
             }

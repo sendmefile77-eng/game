@@ -1,0 +1,64 @@
+CHARACTER_LIBRARY_V1
+version=2
+style=mature_animation
+canvas=320x480
+assembly=layered_raster
+identity_key=person.id
+runtime_ai=false
+network=false
+
+# Real runtime raster pack physically cut from the approved character-library board.
+atlas=character_parts_v02.webp
+atlas_size=320x320
+variants_per_row=6
+
+# Packed runtime cells (pixels in 320x320 atlas)
+head_cell=40x50
+female_heads_y=0
+male_heads_y=50
+female_garments_y=100
+male_garments_y=150
+head_variants=6
+garment_variants=6
+
+# Headless torso cells
+female_torso=0,200,60,100
+male_torso=60,200,60,100
+
+# Additional physically cut source details retained in atlas for next face pass
+extra_eyes_region=125,200
+extra_noses_region=188,200
+extra_mouths_region=188,250
+
+# Current real assembly order
+background
+base_headless_torso
+wardrobe_if_dressed
+selected_identity_head
+foreground
+
+# Deterministic selection
+family=stable_hash(person.id)%2
+young_head=stable_hash(person.id)>>3 mod 5
+mature_head=5 when age>=60
+garment=stable_hash(person.id)>>11 mod 6
+wardrobe_toggle_preserves_head=true
+wardrobe_toggle_preserves_family=true
+wardrobe_undressed_uses_same_torso=true
+
+# Canonical anchors for future finer face-part slicing
+anchor.face_center=0.500,0.380
+anchor.eye_left=0.441,0.325
+anchor.eye_right=0.559,0.325
+anchor.nose=0.500,0.445
+anchor.mouth=0.500,0.520
+anchor.neck=0.500,0.625
+anchor.shoulder_left=0.265,0.745
+anchor.shoulder_right=0.735,0.745
+
+# Art direction
+adult_proportions=true
+oversized_anime_head=false
+flat_chibi=false
+soft_cinematic_shading=true
+realistic_feature_scale=true
