@@ -37,19 +37,22 @@ class ChronosphereCharacterLibraryV01Test {
 
     @Test
     fun rasterLibrarySelectionIsStableAndInRange() {
-        val first = RasterCharacterLibraryV01.select("person-alpha")
-        val second = RasterCharacterLibraryV01.select("person-alpha")
+        val first = RasterCharacterLibraryV01.select("person-alpha", 32)
+        val second = RasterCharacterLibraryV01.select("person-alpha", 32)
         assertEquals(first, second)
-        assertTrue(first.headIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
-        assertTrue(first.garmentIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
+        assertTrue(first.headIndex in 0..2)
+        assertTrue(first.garmentIndex in 0..3)
+        assertTrue(RasterCharacterLibraryV01.region(first.bodyId) != null)
+        assertTrue(RasterCharacterLibraryV01.region(first.headId) != null)
+        assertTrue(RasterCharacterLibraryV01.region(first.garmentId) != null)
     }
 
     @Test
-    fun rasterIdentityDoesNotDependOnWardrobeState() {
-        val first = RasterCharacterLibraryV01.select("person-alpha")
-        val second = RasterCharacterLibraryV01.select("person-alpha")
-        assertEquals(first.femaleFamily, second.femaleFamily)
-        assertEquals(first.headIndex, second.headIndex)
-        assertEquals(first.garmentIndex, second.garmentIndex)
+    fun rasterIdentitySurvivesAgeAndWardrobeChanges() {
+        val young = RasterCharacterLibraryV01.select("person-alpha", 32)
+        val old = RasterCharacterLibraryV01.select("person-alpha", 72)
+        assertEquals(young.sex, old.sex)
+        assertEquals(young.garmentIndex, old.garmentIndex)
+        assertEquals(3, old.headIndex)
     }
 }
