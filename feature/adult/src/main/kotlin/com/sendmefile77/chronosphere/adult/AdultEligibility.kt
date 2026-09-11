@@ -11,6 +11,7 @@ internal object AdultEligibility {
         if (!tags.containsAll(required)) return false
         val forbidden = event.forbiddenTags.map { it.lowercase() }.toSet()
         if (tags.any { it in forbidden }) return false
+        if (!AdultContextSignals.matchesEraRequirement(event.requiredEras, event.forbiddenEras, tags)) return false
         return event.numericGates.all { gatePasses(it, request.context.numericContext) }
     }
 
@@ -20,7 +21,7 @@ internal object AdultEligibility {
     private fun gatePasses(gate: NumericGate, numeric: Map<String, Double>): Boolean {
         val raw = numeric[gate.key]
         if (raw == null) return !gate.required
-        if (!raw.isFinite()) return false
+        if (!raw.isFinite()) return !gate.required
         val min = gate.min
         val max = gate.max
         if (min != null && raw < min) return false
