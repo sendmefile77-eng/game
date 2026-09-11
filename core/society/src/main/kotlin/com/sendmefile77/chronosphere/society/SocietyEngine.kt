@@ -29,6 +29,10 @@ data class SocietyAdvanceResult(
     val mediaCues: List<MediaCue>,
 )
 
+/**
+ * Stable integration boundary between the deterministic core and an optional adult module.
+ * The module never receives mutable core objects and can only propose bounded effects.
+ */
 class SocietyEngine(
     private val adultModule: AdultModule = NoOpAdultModule,
 ) {
@@ -45,12 +49,15 @@ class SocietyEngine(
             return SocietyAdvanceResult(world, people, emptyList(), emptyList())
         }
 
+        val annualTicks = annualBoundaries(fromTick, world.tick)
+        if (annualTicks.isEmpty()) return SocietyAdvanceResult(world, people, emptyList(), emptyList())
+
         var currentWorld = world
         var currentPeople = people
         val events = mutableListOf<SimulationEvent>()
         val media = mutableListOf<MediaCue>()
-        var annualTick = ((fromTick / 12L) + 1L) * 12L
-        while (annualTick <= world.tick) {
+
+        for (annualTick in annualTicks) {
             for (civilization in currentWorld.civilizations.sortedBy { it.id }) {
                 val profile = currentPeople.profile(civilization.id) ?: continue
                 val participants = selectParticipants(
@@ -61,18 +68,17 @@ class SocietyEngine(
                     profile = profile,
                 )
                 if (participants.isEmpty()) continue
+
                 val request = buildRequest(
                     tick = annualTick,
                     civilizationId = civilization.id,
                     world = currentWorld,
-                    people = currentPeople,
                     economy = economy,
                     profile = profile,
                     participants = participants,
                 )
                 val result = runCatching { adultModule.evaluate(request) }.getOrNull() ?: continue
-                if (result.eventCode == "NO_OP") continue
-                if (!validResult(request, result)) continue
+                if (result.eventCode == "NO_OP" || !validResult(request, result)) continue
 
                 val applied = applyEffects(
                     tick = annualTick,
@@ -85,6 +91,7 @@ class SocietyEngine(
                 currentWorld = applied.first
                 currentPeople = applied.second
                 result.mediaCue?.let(media::add)
+
                 events += SimulationEvent(
                     id = "society-${civilization.id}-$annualTick-${stableToken(result.eventCode)}",
                     tick = annualTick,
@@ -103,7 +110,6 @@ class SocietyEngine(
                     },
                 )
             }
-            annualTick += 12L
         }
 
         return SocietyAdvanceResult(
@@ -118,7 +124,6 @@ class SocietyEngine(
         tick: Long,
         civilizationId: String,
         world: LivingPlanetState,
-        people: PeopleState,
         economy: EconomyState?,
         profile: SocialProfile,
         participants: List<NotablePerson>,
@@ -126,7 +131,7 @@ class SocietyEngine(
         val civilization = world.civilizations.first { it.id == civilizationId }
         val economic = economy?.economy(civilizationId)
         val eraTag = economic?.era?.name?.lowercase()?.let { "era_$it" }
-        val atWar = world.wars.count { it.civilizationA == civilizationId || it.civilizationB == civilizationId }
+        val activeWars = world.wars.count { it.civilizationA == civilizationId || it.civilizationB == civilizationId }
         val routeCount = economy?.routes?.count { it.exporterId == civilizationId || it.importerId == civilizationId } ?: 0
         val settlements = world.settlements.filter { it.civilizationId == civilizationId }
         val urbanPopulation = settlements.filter { it.population >= 5_000L }.sumOf { it.population }
@@ -137,18 +142,19 @@ class SocietyEngine(
         val wealth = (civilization.treasury / wealthBase).coerceIn(0.0, 1.0)
         val scarcity = (economic?.shortageIndex ?: 0.0).coerceIn(0.0, 1.0)
         val tradeOpenness = (routeCount / 6.0).coerceIn(0.0, 1.0)
-        val warPressure = (atWar / 2.0).coerceIn(0.0, 1.0)
+        val warPressure = (activeWars / 2.0).coerceIn(0.0, 1.0)
         val lust = (
             profile.bodyOpenness * 0.34 +
                 profile.fertilityNorm * 0.24 +
                 (1.0 - profile.privacy) * 0.20 +
                 profile.socialTension * 0.22
             ).coerceIn(0.0, 1.0)
+
         val tags = buildSet {
             addAll(civilization.cultureTags)
             addAll(profile.tags)
-            if (eraTag != null) add(eraTag)
-            if (atWar > 0) add("at_war")
+            eraTag?.let(::add)
+            if (activeWars > 0) add("at_war")
             if (tradeOpenness >= 0.45) add("trade_open")
             if (urbanization >= 0.55) add("urbanized")
         }.map { it.lowercase() }.toSortedSet()
@@ -188,7 +194,9 @@ class SocietyEngine(
         if (result.requestId != request.requestId || result.eventCode.isBlank()) return false
         val participantIds = request.participants.mapTo(hashSetOf()) { it.entityId }
         if (result.effects.any { effect ->
-                effect.targetId.isBlank() || effect.reasonCode.isBlank() || !effect.magnitude.isFinite() ||
+                effect.targetId.isBlank() ||
+                    effect.reasonCode.isBlank() ||
+                    !effect.magnitude.isFinite() ||
                     effect.magnitude !in -1.0..1.0 ||
                     (effect.kind != CoreEffectKind.CULTURE && effect.targetId !in participantIds)
             }) return false
@@ -209,31 +217,37 @@ class SocietyEngine(
         var nextWorld = world
         val participantIds = participants.mapTo(hashSetOf()) { it.id }
 
-        result.effects.filter { it.kind == CoreEffectKind.REPUTATION && it.targetId in participantIds }.forEach { effect ->
-            nextPeople = nextPeople.copy(
-                persons = nextPeople.persons.map { person ->
-                    if (person.id == effect.targetId) {
-                        person.copy(prestige = (person.prestige + effect.magnitude * 0.035).coerceIn(0.0, 1.0))
-                    } else person
-                },
-            )
-        }
+        result.effects
+            .filter { it.kind == CoreEffectKind.REPUTATION && it.targetId in participantIds }
+            .forEach { effect ->
+                nextPeople = nextPeople.copy(
+                    persons = nextPeople.persons.map { person ->
+                        if (person.id == effect.targetId) {
+                            person.copy(prestige = (person.prestige + effect.magnitude * 0.035).coerceIn(0.0, 1.0))
+                        } else person
+                    },
+                )
+            }
 
-        val relationshipEffects = result.effects.filter { it.kind == CoreEffectKind.RELATIONSHIP && it.targetId in participantIds }
+        val relationshipEffects = result.effects.filter {
+            it.kind == CoreEffectKind.RELATIONSHIP && it.targetId in participantIds
+        }
         if (participants.size >= 2 && relationshipEffects.isNotEmpty()) {
             val a = participants[0].id
             val b = participants[1].id
             val magnitude = relationshipEffects.map { it.magnitude }.average().coerceIn(-1.0, 1.0)
-            val existingIndex = nextPeople.relationships.indexOfFirst { it.involves(a) && it.involves(b) }
-            nextPeople = if (existingIndex >= 0) {
-                nextPeople.copy(
+            val relationshipIndex = nextPeople.relationships.indexOfFirst {
+                connects(it, a, b) && (it.kind == RelationshipKind.PARTNER || it.kind == RelationshipKind.LOVER)
+            }
+            nextPeople = when {
+                relationshipIndex >= 0 -> nextPeople.copy(
                     relationships = nextPeople.relationships.mapIndexed { index, relation ->
-                        if (index == existingIndex) relation.copy(strength = (relation.strength + magnitude * 0.08).coerceIn(-1.0, 1.0))
-                        else relation
+                        if (index == relationshipIndex) {
+                            relation.copy(strength = (relation.strength + magnitude * 0.08).coerceIn(-1.0, 1.0))
+                        } else relation
                     },
                 )
-            } else if (magnitude > 0.15) {
-                nextPeople.copy(
+                magnitude > 0.15 -> nextPeople.copy(
                     relationships = nextPeople.relationships + PersonRelationship(
                         id = "rel-lover-$a-$b-$tick",
                         personA = a,
@@ -243,7 +257,8 @@ class SocietyEngine(
                         startedTick = tick,
                     ),
                 )
-            } else nextPeople
+                else -> nextPeople
+            }
         }
 
         val demography = result.effects
@@ -258,8 +273,11 @@ class SocietyEngine(
             if (targetIndex != null) {
                 val settlement = settlements[targetIndex]
                 val delta = (settlement.population * demography * 0.0008).roundToLong()
-                settlements[targetIndex] = settlement.copy(population = (settlement.population + delta).coerceAtLeast(40L))
-                val populations = settlements.groupBy { it.civilizationId }.mapValues { (_, values) -> values.sumOf { it.population } }
+                settlements[targetIndex] = settlement.copy(
+                    population = (settlement.population + delta).coerceAtLeast(40L),
+                )
+                val populations = settlements.groupBy { it.civilizationId }
+                    .mapValues { (_, values) -> values.sumOf { it.population } }
                 nextWorld = nextWorld.copy(
                     settlements = settlements,
                     civilizations = nextWorld.civilizations.map { civilization ->
@@ -269,7 +287,10 @@ class SocietyEngine(
             }
         }
 
-        val culture = result.effects.filter { it.kind == CoreEffectKind.CULTURE }.sumOf { it.magnitude }.coerceIn(-1.0, 1.0)
+        val culture = result.effects
+            .filter { it.kind == CoreEffectKind.CULTURE }
+            .sumOf { it.magnitude }
+            .coerceIn(-1.0, 1.0)
         if (abs(culture) > 0.0001) {
             nextPeople = nextPeople.copy(
                 socialProfiles = nextPeople.socialProfiles.map { profile ->
@@ -283,6 +304,7 @@ class SocietyEngine(
                 },
             )
         }
+
         return nextWorld to nextPeople
     }
 
@@ -303,13 +325,15 @@ class SocietyEngine(
         if (adults.size == 1) return adults
 
         val adultById = adults.associateBy { it.id }
+        val rng = DeterministicRng(WorldSeed(deriveSeed(worldSeed, "$civilizationId:$tick")))
+        val selected = mutableListOf<NotablePerson>()
+
         val partnerRelations = people.relationships.asSequence()
             .filter { it.kind == RelationshipKind.PARTNER || it.kind == RelationshipKind.LOVER }
             .filter { it.personA in adultById && it.personB in adultById }
+            .filter { !closeFamily(it.personA, it.personB, people) }
             .sortedBy { it.id }
             .toList()
-        val rng = DeterministicRng(WorldSeed(deriveSeed(worldSeed, "$civilizationId:$tick")))
-        val selected = mutableListOf<NotablePerson>()
         if (partnerRelations.isNotEmpty()) {
             val relation = partnerRelations[rng.nextInt(partnerRelations.size)]
             selected += adultById.getValue(relation.personA)
@@ -317,19 +341,27 @@ class SocietyEngine(
         } else {
             val first = adults[rng.nextInt(adults.size)]
             selected += first
-            val compatible = adults.filter { it.id != first.id && !closeFamily(first.id, it.id, people) }
-            selected += if (compatible.isNotEmpty()) compatible[rng.nextInt(compatible.size)] else adults.first { it.id != first.id }
+            val compatible = adults.filter { candidate ->
+                candidate.id != first.id && !closeFamily(first.id, candidate.id, people)
+            }
+            if (compatible.isNotEmpty()) selected += compatible[rng.nextInt(compatible.size)]
         }
 
-        val groupChance = (profile.bodyOpenness * 0.42 + profile.fertilityNorm * 0.20 + (1.0 - profile.privacy) * 0.18)
-            .coerceIn(0.0, 0.75)
+        if (selected.size < 2) return selected
+
+        val groupChance = (
+            profile.bodyOpenness * 0.42 +
+                profile.fertilityNorm * 0.20 +
+                (1.0 - profile.privacy) * 0.18
+            ).coerceIn(0.0, 0.75)
         val desired = when {
             adults.size >= 4 && rng.nextDouble() < groupChance * 0.35 -> 4
             adults.size >= 3 && rng.nextDouble() < groupChance * 0.55 -> 3
             else -> 2
         }
+        val selectedIds = selected.mapTo(hashSetOf()) { it.id }
         val remaining = adults.filter { candidate ->
-            candidate.id !in selected.map { it.id } && selected.none { closeFamily(it.id, candidate.id, people) }
+            candidate.id !in selectedIds && selected.none { closeFamily(it.id, candidate.id, people) }
         }.toMutableList()
         while (selected.size < desired && remaining.isNotEmpty()) {
             selected += remaining.removeAt(rng.nextInt(remaining.size))
@@ -337,20 +369,42 @@ class SocietyEngine(
         return selected
     }
 
-    private fun closeFamily(a: String, b: String, people: PeopleState): Boolean = people.relationships.any { relation ->
-        relation.involves(a) && relation.involves(b) &&
-            (relation.kind == RelationshipKind.PARENT_CHILD || relation.kind == RelationshipKind.SIBLING)
+    private fun closeFamily(a: String, b: String, people: PeopleState): Boolean {
+        if (a == b) return true
+        return people.relationships.any { relation ->
+            connects(relation, a, b) &&
+                (relation.kind == RelationshipKind.PARENT_CHILD || relation.kind == RelationshipKind.SIBLING)
+        }
     }
 
-    private fun deriveSeed(seed: Long, value: String): Long {
-        var hash = seed xor 0x243F6A8885A308D3L
-        value.forEach { char ->
-            hash = hash xor char.code.toLong()
-            hash *= 1099511628211L
-            hash = hash xor (hash ushr 31)
+    private fun connects(relation: PersonRelationship, a: String, b: String): Boolean =
+        (relation.personA == a && relation.personB == b) ||
+            (relation.personA == b && relation.personB == a)
+
+    private fun annualBoundaries(fromTick: Long, toTick: Long): List<Long> {
+        if (toTick <= fromTick) return emptyList()
+        val first = ((fromTick / 12L) + 1L) * 12L
+        if (first > toTick) return emptyList()
+        return buildList {
+            var tick = first
+            while (tick <= toTick) {
+                add(tick)
+                tick += 12L
+            }
+        }
+    }
+
+    private fun deriveSeed(seed: Long, key: String): Long {
+        var hash = seed xor -3750763034362895579L
+        key.forEach { char ->
+            hash = (hash xor char.code.toLong()) * 1099511628211L
         }
         return hash
     }
 
-    private fun stableToken(value: String): String = java.lang.Long.toUnsignedString(deriveSeed(0x13198A2E03707344L, value), 16)
+    private fun stableToken(value: String): String {
+        var hash = -3750763034362895579L
+        value.forEach { char -> hash = (hash xor char.code.toLong()) * 1099511628211L }
+        return java.lang.Long.toUnsignedString(hash, 16)
+    }
 }
