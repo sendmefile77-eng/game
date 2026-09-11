@@ -28,6 +28,7 @@ dependencies {
     implementation(project(":core:simulation"))
     implementation(project(":core:worldgen"))
     implementation(project(":core:civilization"))
+    implementation(project(":core:people"))
     implementation(project(":core:history"))
     implementation(project(":core:textgen"))
     implementation(project(":core:storage"))
