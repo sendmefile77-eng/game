@@ -34,6 +34,7 @@ internal data class AdultVisualRecipe(
     val minDivergence: Double? = null,
     val maxDivergence: Double? = 0.44,
     val requireHybrid: Boolean = false,
+    val wardrobeState: AdultWardrobeState? = null,
 )
 
 internal val SAFE_VISUAL_FALLBACK = AdultVisualRecipe(
@@ -59,4 +60,30 @@ internal val SAFE_VISUAL_FALLBACK = AdultVisualRecipe(
     maxEyes = 16,
     forbidTail = false,
     maxDivergence = null,
+)
+
+internal val SAFE_UNDRESSED_FALLBACK = AdultVisualRecipe(
+    id = "fallback.silhouette.undressed",
+    eventCodes = setOf("CHARACTER_CARD"),
+    sceneFamily = "character-card",
+    rigLayout = "morph-bust",
+    poseKey = "pose.card-idle",
+    wardrobeKey = "wardrobe.undressed",
+    settingKey = "set.card",
+    cameraKey = "cam.portrait",
+    lightingKey = "light.soft",
+    effectTags = setOf("fallback", "silhouette", "morph-safe", "undressed"),
+    minParticipants = 1,
+    maxParticipants = 99,
+    weight = 1.0,
+    rigPlan = RigPlan.SILHOUETTE,
+    minArms = 0,
+    maxArms = 16,
+    minLegs = 0,
+    maxLegs = 16,
+    minEyes = 0,
+    maxEyes = 16,
+    forbidTail = false,
+    maxDivergence = null,
+    wardrobeState = AdultWardrobeState.UNDRESSED,
 )
