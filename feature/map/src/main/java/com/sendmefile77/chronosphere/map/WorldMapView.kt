@@ -1,11 +1,13 @@
 package com.sendmefile77.chronosphere.map
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import com.sendmefile77.chronosphere.worldgen.Biome
 import com.sendmefile77.chronosphere.worldgen.TileCoord
 import com.sendmefile77.chronosphere.worldgen.WorldMap
@@ -26,8 +28,37 @@ fun WorldMapView(
     rivers: Set<TileCoord> = emptySet(),
     settlements: List<SettlementMarker> = emptyList(),
     territoryOwners: IntArray? = null,
+    selectedCivilizationIndex: Int? = null,
+    onCivilizationSelected: ((Int) -> Unit)? = null,
 ) {
-    Canvas(modifier = modifier) {
+    val interactiveModifier = if (onCivilizationSelected == null) modifier else {
+        modifier.pointerInput(world.width, world.height, settlements) {
+            detectTapGestures { tap ->
+                if (settlements.isEmpty() || size.width <= 0 || size.height <= 0) return@detectTapGestures
+                val cellW = size.width.toFloat() / world.width.toFloat()
+                val cellH = size.height.toFloat() / world.height.toFloat()
+                val nearest = settlements.minByOrNull { settlement ->
+                    val cx = (settlement.x + 0.5f) * cellW
+                    val cy = (settlement.y + 0.5f) * cellH
+                    val dx = tap.x - cx
+                    val dy = tap.y - cy
+                    dx * dx + dy * dy
+                } ?: return@detectTapGestures
+                val cx = (nearest.x + 0.5f) * cellW
+                val cy = (nearest.y + 0.5f) * cellH
+                val dx = tap.x - cx
+                val dy = tap.y - cy
+                val distanceSquared = dx * dx + dy * dy
+                val radius = (2.2f + sqrt(nearest.population.coerceAtLeast(1).toFloat()) / 36f).coerceIn(2.2f, 8.5f)
+                val hitRadius = (radius * 2.5f).coerceAtLeast(22f)
+                if (distanceSquared <= hitRadius * hitRadius) {
+                    onCivilizationSelected(nearest.civilizationIndex)
+                }
+            }
+        }
+    }
+
+    Canvas(modifier = interactiveModifier) {
         val cellW = size.width / world.width
         val cellH = size.height / world.height
         world.tiles.forEach { tile ->
@@ -38,11 +69,13 @@ fun WorldMapView(
             world.tiles.forEachIndexed { index, tile ->
                 val owner = territoryOwners[index]
                 if (owner >= 0 && tile.biome != Biome.OCEAN && tile.biome != Biome.DEEP_OCEAN) {
-                    drawRect(civilizationPalette[owner % civilizationPalette.size].copy(alpha = 0.20f), Offset(tile.x * cellW, tile.y * cellH), Size(cellW + 0.5f, cellH + 0.5f))
+                    val selected = owner == selectedCivilizationIndex
+                    val alpha = if (selected) 0.34f else 0.20f
+                    drawRect(civilizationPalette[owner % civilizationPalette.size].copy(alpha = alpha), Offset(tile.x * cellW, tile.y * cellH), Size(cellW + 0.5f, cellH + 0.5f))
                     val rightOwner = if (tile.x + 1 < world.width) territoryOwners[index + 1] else owner
                     val downOwner = if (tile.y + 1 < world.height) territoryOwners[index + world.width] else owner
-                    if (rightOwner != owner) drawLine(Color.White.copy(alpha = 0.40f), Offset((tile.x + 1) * cellW, tile.y * cellH), Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH), 0.8f)
-                    if (downOwner != owner) drawLine(Color.White.copy(alpha = 0.40f), Offset(tile.x * cellW, (tile.y + 1) * cellH), Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH), 0.8f)
+                    if (rightOwner != owner) drawLine(Color.White.copy(alpha = if (selected) 0.72f else 0.40f), Offset((tile.x + 1) * cellW, tile.y * cellH), Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH), if (selected) 1.25f else 0.8f)
+                    if (downOwner != owner) drawLine(Color.White.copy(alpha = if (selected) 0.72f else 0.40f), Offset(tile.x * cellW, (tile.y + 1) * cellH), Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH), if (selected) 1.25f else 0.8f)
                 }
             }
         }
@@ -53,6 +86,10 @@ fun WorldMapView(
         settlements.forEach { settlement ->
             val radius = (2.2f + sqrt(settlement.population.coerceAtLeast(1).toFloat()) / 36f).coerceIn(2.2f, 8.5f)
             val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
+            if (settlement.civilizationIndex == selectedCivilizationIndex) {
+                drawCircle(Color.White.copy(alpha = 0.92f), radius + 3.2f, center)
+                drawCircle(Color.Black.copy(alpha = 0.58f), radius + 1.6f, center)
+            }
             drawCircle(civilizationPalette[settlement.civilizationIndex % civilizationPalette.size], radius, center)
             drawCircle(Color.White.copy(alpha = 0.8f), (radius * 0.34f).coerceAtLeast(1f), center)
         }
