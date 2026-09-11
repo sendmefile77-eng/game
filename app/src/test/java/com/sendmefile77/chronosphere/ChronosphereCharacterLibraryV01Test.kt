@@ -36,28 +36,20 @@ class ChronosphereCharacterLibraryV01Test {
     }
 
     @Test
-    fun rasterLibrarySelectionIsStableAndInRange() {
-        val first = RasterCharacterLibraryV01.select("person-alpha", 32)
-        val second = RasterCharacterLibraryV01.select("person-alpha", 32)
+    fun boardRuntimeSelectionIsStableAndInRange() {
+        val first = CharacterBoardRuntime.select("person-alpha", 32)
+        val second = CharacterBoardRuntime.select("person-alpha", 32)
         assertEquals(first, second)
-        assertTrue(first.headIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
-        assertTrue(first.garmentIndex in 0 until RasterCharacterLibraryV01.VARIANTS)
-        assertTrue(
-            first.femaleUndressTorsoIndex in
-                0 until RasterCharacterLibraryV01.FEMALE_UNDRESS_TORSO_VARIANTS,
-        )
+        assertTrue(first.headIndex in 0 until CharacterBoardRuntime.HEAD_VARIANTS)
+        assertTrue(first.garmentIndex in 0 until CharacterBoardRuntime.GARMENT_VARIANTS)
     }
 
     @Test
-    fun rasterIdentitySurvivesAgeAndWardrobeChanges() {
-        val young = RasterCharacterLibraryV01.select("person-alpha", 32)
-        val old = RasterCharacterLibraryV01.select("person-alpha", 72)
+    fun boardRuntimeIdentitySurvivesAgeAndWardrobeChanges() {
+        val young = CharacterBoardRuntime.select("person-alpha", 32)
+        val old = CharacterBoardRuntime.select("person-alpha", 72)
         assertEquals(young.femaleFamily, old.femaleFamily)
         assertEquals(young.garmentIndex, old.garmentIndex)
-        assertEquals(RasterCharacterLibraryV01.VARIANTS - 1, old.headIndex)
-        assertEquals(
-            RasterCharacterLibraryV01.FEMALE_UNDRESS_MATURE_INDEX,
-            old.femaleUndressTorsoIndex,
-        )
+        assertEquals(CharacterBoardRuntime.HEAD_VARIANTS - 1, old.headIndex)
     }
 }
