@@ -20,8 +20,22 @@ jobs:
           gradle-version: '8.9'
       - name: Create local Gradle wrapper
         run: gradle wrapper --gradle-version 8.9
-      - name: Unit tests
-        run: ./gradlew :core:simulation:test :core:worldgen:test
+      - name: Full JVM regression suite
+        run: >-
+          ./gradlew
+          :core:simulation:test
+          :core:worldgen:test
+          :core:civilization:test
+          :core:people:test
+          :core:economy:test
+          :core:evolution:test
+          :core:society:test
+          :core:scene:test
+          :core:history:test
+          :core:textgen:test
+          :core:storage:test
+          :core:adult-contracts:test
+          :feature:adult:test
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug
       - uses: actions/upload-artifact@v4

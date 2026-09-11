@@ -70,10 +70,6 @@ fun CharacterCardPanel(
             }
 
             OfflineSceneView(scene = scene)
-            Text(
-                if (scene.fallbackUsed) "Візуал: сумісний резервний силует" else "Візуал: локальний пакет ${scene.packId}",
-                style = MaterialTheme.typography.bodySmall,
-            )
 
             Text(
                 "Династія: ${dynasty ?: "—"} · поселення: ${person.settlementId ?: "—"}",
@@ -84,14 +80,22 @@ fun CharacterCardPanel(
                 val ancestry = descriptor.ancestry.entries
                     .sortedByDescending { it.value }
                     .take(3)
-                    .joinToString(" · ") { "${it.key} ${String.format("%.0f%%", it.value * 100.0)}" }
+                    .joinToString(" · ") { (lineageId, share) ->
+                        val label = evolution.lineage(lineageId)?.label ?: lineageId
+                        "$label ${String.format("%.0f%%", share * 100.0)}"
+                    }
                 Text(
-                    "Походження: ${lineage.label} · ${lineage.rank.name.lowercase()} · $ancestry",
+                    "Походження: ${lineage.label} · ${rankLabel(lineage.rank.name)}" +
+                        if (ancestry.isNotBlank()) " · $ancestry" else "",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                val covering = descriptor.bodyPlan.covering.name.lowercase()
                 Text(
-                    "Морфологія: рук ${descriptor.bodyPlan.armPairs * 2}, ніг ${descriptor.bodyPlan.legPairs * 2}, очей ${descriptor.bodyPlan.eyeCount}" +
-                        if (descriptor.bodyPlan.hasTail) " · хвіст" else "",
+                    buildString {
+                        append("Морфологія: рук ${descriptor.bodyPlan.armPairs * 2}, ніг ${descriptor.bodyPlan.legPairs * 2}, очей ${descriptor.bodyPlan.eyeCount}")
+                        if (descriptor.bodyPlan.hasTail) append(" · хвіст")
+                        if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -128,4 +132,19 @@ private fun relationshipLabel(kind: RelationshipKind): String = when (kind) {
     RelationshipKind.RIVAL -> "суперник"
     RelationshipKind.ALLY -> "союзник"
     RelationshipKind.MENTOR -> "наставник"
+}
+
+private fun rankLabel(rank: String): String = when (rank.lowercase()) {
+    "population" -> "популяція"
+    "morph" -> "морф"
+    "subspecies" -> "підвид"
+    "species" -> "вид"
+    else -> rank.lowercase()
+}
+
+private fun coveringLabel(covering: String): String = when (covering.lowercase()) {
+    "dense_hair" -> "густе волосся"
+    "fine_fur" -> "шерсть"
+    "scales" -> "луска"
+    else -> covering.lowercase()
 }
