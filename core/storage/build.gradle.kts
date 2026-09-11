@@ -9,5 +9,6 @@ dependencies {
     implementation(project(":core:simulation"))
     testImplementation(project(":core:worldgen"))
     testImplementation(project(":core:society"))
+    testImplementation(project(":core:adult-contracts"))
     testImplementation(libs.junit)
 }
