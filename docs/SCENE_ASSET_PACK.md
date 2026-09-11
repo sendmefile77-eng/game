@@ -1,6 +1,6 @@
 # Offline scene asset packs
 
-`core:scene.ResolvedScene` is deliberately renderer-agnostic. Android rendering uses local asset packs merged into the APK; there is no network fetch, runtime image generation or paid service.
+`core:scene.ResolvedScene` is deliberately renderer-agnostic. Android rendering uses only local packaged content; there is no network fetch, runtime image generation or paid service.
 
 ## Layout contract
 
@@ -14,15 +14,25 @@ Recommended layer order:
 4. scene/effect overlays (`300-399`)
 5. lighting / grading (`400-499`)
 
-A pack may also provide a full precomposed illustration for `recipe:<recipeId>`. It is still addressed through the same deterministic scene and may be used as a temporary high-quality asset while a more modular rig is being built.
+A pack may also provide a full precomposed illustration for `recipe:<recipeId>`. It is still addressed through the same deterministic scene and may be used while a more modular rig is being built.
+
+## Where files live
+
+The base Android app stores its pack in Android assets:
+
+`app/src/main/assets/scene_packs/base/...`
+
+The optional adult implementation is a Kotlin/JVM module, so its pack must be Java classpath resources:
+
+`feature/adult/src/main/resources/scene_packs/adult/...`
+
+At runtime `SceneAssetRepository` checks Android `AssetManager` first and then the application `ClassLoader`. This keeps `app` independent of `feature/adult` resource IDs and lets the optional JVM JAR contribute images to the installed APK.
 
 ## Manifest
 
-Known manifests are merged in order. The base app uses:
+Known manifests are merged in order:
 
 `scene_packs/base/manifest.tsv`
-
-The optional adult module uses:
 
 `scene_packs/adult/manifest.tsv`
 
@@ -44,15 +54,15 @@ Rules:
 - blank lines and `#` comments are ignored;
 - logical keys and paths must be nonblank;
 - `zIndex` must be an integer in `-1000..1000`;
-- asset paths are APK asset paths, not URLs;
+- paths are local packaged resource paths, never URLs;
 - later manifests override the same logical key;
 - duplicate keys inside one manifest are invalid;
-- renderer accepts PNG, WebP and JPEG through Android `BitmapFactory`;
+- PNG, WebP and JPEG are decoded through Android `BitmapFactory`;
 - no asset may require network, filesystem writes, system time or uncontrolled randomness.
 
 ## ResolvedScene → asset keys
 
-The Android renderer asks for keys in this order and then sorts resolved assets by `zIndex`:
+The renderer requests these logical keys and then sorts resolved layers by `zIndex`:
 
 - `backgroundKey`
 - `bodyRigKey`
@@ -65,6 +75,6 @@ Missing optional keys are allowed. If no drawable layer resolves, the app render
 
 ## Compatibility
 
-Asset content must match the `ResolvedScene` chosen by recipe/rig compatibility. An asset pack must never reinterpret `UNDRESSED` as `DRESSED`, replace a divergent rig with a baseline body, or change participants. The renderer only draws the already-resolved scene.
+Asset content must match the `ResolvedScene` already chosen by recipe/rig compatibility. A pack must never reinterpret `UNDRESSED` as `DRESSED`, replace a divergent rig with a baseline body, or change participants. The renderer draws the resolved scene; it does not reinterpret it.
 
-The optional adult pack remains owned by `feature/adult`; `app` reads its merged APK assets by logical path and never references that module's resource IDs.
+The optional adult pack remains owned by `feature/adult` and is loaded only as local classpath resources packaged with that optional implementation.
