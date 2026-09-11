@@ -15,11 +15,11 @@ internal object AdultUndressPolicy {
     const val STATE_TAG = "wardrobe-state:undressed"
     const val CARD_EVENT = "CHARACTER_CARD"
 
-    fun allows(ages: List<Int>): Boolean =
+    fun allowsAges(ages: List<Int>): Boolean =
         ages.isNotEmpty() && ages.all { it >= MIN_ADULT_AGE }
 
-    fun allows(participants: List<AdultParticipantRef>): Boolean =
-        allows(participants.map { it.ageYears })
+    fun allowsParticipants(participants: List<AdultParticipantRef>): Boolean =
+        allowsAges(participants.map { it.ageYears })
 
     fun requested(request: AdultEventRequest): Boolean =
         AdultCulture.normalizedTags(request.context.cultureTags).contains(REQUEST_TAG)
@@ -29,7 +29,7 @@ internal class AdultCharacterCardVisuals(
     private val recipes: AdultVisualRecipeRegistry = AdultVisualRecipeRegistry.bundled(),
 ) {
     fun resolve(request: AdultEventRequest, state: AdultWardrobeState): MediaCue {
-        require(AdultUndressPolicy.allows(request.participants)) {
+        require(AdultUndressPolicy.allowsParticipants(request.participants)) {
             "Adult module accepts adults only"
         }
         val fingerprint = AdultFingerprint.of(request)
