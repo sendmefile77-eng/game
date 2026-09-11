@@ -18,6 +18,7 @@ import com.sendmefile77.chronosphere.scene.WardrobeState
 
 /**
  * Offline portrait renderer backed by the actual approved character-board artwork.
+ * The atlas contains transparent, normalized crops cut from the supplied board itself.
  * No procedural/cartoon fallback is used here.
  */
 @Composable
@@ -30,7 +31,9 @@ internal fun RasterCharacterPortrait(
     val context = LocalContext.current.applicationContext
     val atlas = remember(context) {
         runCatching {
-            context.assets.open(CharacterBoardRuntime.ATLAS_PATH).use(BitmapFactory::decodeStream)
+            context.assets.open(CharacterBoardRuntime.ATLAS_PATH).use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
         }.getOrNull()
     }
     val selection = remember(characterKey, ageYears) {
@@ -40,6 +43,7 @@ internal fun RasterCharacterPortrait(
     Canvas(modifier = modifier) {
         drawRect(Color(0xFF0F171C), size = size)
         if (atlas == null) {
+            // Do not silently substitute the old cartoon renderer. A broken asset pack must be visible.
             drawRect(Color(0xFF26171B), size = size)
             return@Canvas
         }
@@ -48,7 +52,7 @@ internal fun RasterCharacterPortrait(
 }
 
 internal object CharacterBoardRuntime {
-    const val ATLAS_PATH = "character_library/v0_2/character_board_runtime_v01.webp"
+    const val ATLAS_PATH = "character_library/v0_2/character_board_runtime_alpha_v01.webp"
     const val HEAD_VARIANTS = 5
     const val GARMENT_VARIANTS = 6
 
@@ -109,8 +113,11 @@ private fun DrawScope.drawBoardPortrait(
         }
     }
 
-    // Head is taken directly from the approved HEADS rows.
-    val headY = if (selection.femaleFamily) CharacterBoardRuntime.FEMALE_HEAD_Y else CharacterBoardRuntime.MALE_HEAD_Y
+    val headY = if (selection.femaleFamily) {
+        CharacterBoardRuntime.FEMALE_HEAD_Y
+    } else {
+        CharacterBoardRuntime.MALE_HEAD_Y
+    }
     val headX = selection.headIndex * CharacterBoardRuntime.HEAD_W
     val headSrc = Rect(
         headX,
@@ -120,21 +127,27 @@ private fun DrawScope.drawBoardPortrait(
     )
 
     if (wardrobeState == WardrobeState.UNDRESSED) {
-        // Use the actual base-body front render from the same board. This is deliberately not a
-        // procedural body: it keeps the art direction of the approved library intact.
-        val torsoX = if (selection.femaleFamily) CharacterBoardRuntime.FEMALE_TORSO_X else CharacterBoardRuntime.MALE_TORSO_X
+        val torsoX = if (selection.femaleFamily) {
+            CharacterBoardRuntime.FEMALE_TORSO_X
+        } else {
+            CharacterBoardRuntime.MALE_TORSO_X
+        }
+        // Use the upper 70% of the normalized base-body crop. A bust/three-quarter composition
+        // keeps adult proportions natural inside the landscape phone card.
         val torsoSrc = Rect(
             torsoX,
             CharacterBoardRuntime.TORSO_Y,
             torsoX + CharacterBoardRuntime.TORSO_W,
-            CharacterBoardRuntime.TORSO_Y + CharacterBoardRuntime.TORSO_H,
+            CharacterBoardRuntime.TORSO_Y + 210,
         )
-        drawPart(torsoSrc, fitRect(88f, 135f, 232f, 480f))
-        drawPart(headSrc, fitRect(90f, 4f, 230f, 215f))
+        drawPart(torsoSrc, logicalRect(45f, 150f, 275f, 480f))
+        drawPart(headSrc, logicalRect(100f, 5f, 220f, 185f))
     } else {
-        // Clothes are also direct crops from the board. Render torso/clothes as a bust so the
-        // dark source background stays visually continuous instead of producing a fake paper-doll seam.
-        val garmentY = if (selection.femaleFamily) CharacterBoardRuntime.FEMALE_GARMENT_Y else CharacterBoardRuntime.MALE_GARMENT_Y
+        val garmentY = if (selection.femaleFamily) {
+            CharacterBoardRuntime.FEMALE_GARMENT_Y
+        } else {
+            CharacterBoardRuntime.MALE_GARMENT_Y
+        }
         val garmentX = selection.garmentIndex * CharacterBoardRuntime.GARMENT_W
         val garmentSrc = Rect(
             garmentX,
@@ -146,12 +159,15 @@ private fun DrawScope.drawBoardPortrait(
             WardrobeState.PARTIAL, WardrobeState.DAMAGED -> 228
             else -> 255
         }
-        drawPart(headSrc, fitRect(78f, 0f, 242f, 235f))
-        drawPart(garmentSrc, fitRect(42f, 205f, 278f, 478f), garmentAlpha)
+
+        // Garment first, then head. Both are transparent cut-outs from the same approved sheet,
+        // so the neck/collar overlap reads as one portrait rather than as two rectangular crops.
+        drawPart(garmentSrc, logicalRect(20f, 180f, 300f, 480f), garmentAlpha)
+        drawPart(headSrc, logicalRect(85f, 5f, 235f, 230f))
     }
 }
 
-private fun DrawScope.fitRect(left: Float, top: Float, right: Float, bottom: Float): RectF {
+private fun DrawScope.logicalRect(left: Float, top: Float, right: Float, bottom: Float): RectF {
     val sx = size.width / 320f
     val sy = size.height / 480f
     return RectF(left * sx, top * sy, right * sx, bottom * sy)
