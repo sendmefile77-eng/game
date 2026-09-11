@@ -1,17 +1,5 @@
 package com.sendmefile77.chronosphere.adult
 
-internal object SocialContextKeys {
-    const val PRIVACY = "privacy"
-    const val BODY_OPENNESS = "body_openness"
-    const val MONOGAMY = "monogamy"
-    const val JEALOUSY = "jealousy"
-    const val FERTILITY = "fertility"
-    const val PIETY = "piety"
-    const val STATUS = "status"
-    const val TENSION = "tension"
-    const val LUST = "lust"
-}
-
 internal data class NumericGate(
     val key: String,
     val min: Double? = null,
@@ -30,11 +18,14 @@ internal data class AdultEventRule(
     val baseWeight: Double = 1.0,
     val cultureWeights: Map<String, Double> = emptyMap(),
     val numericWeights: Map<String, Double> = emptyMap(),
+    val eraWeights: Map<String, Double> = emptyMap(),
     val preferredFor: Set<String> = emptySet(),
     val minParticipants: Int = 1,
     val maxParticipants: Int = 8,
     val requiredTags: Set<String> = emptySet(),
     val forbiddenTags: Set<String> = emptySet(),
+    val requiredEras: Set<String> = emptySet(),
+    val forbiddenEras: Set<String> = emptySet(),
     val numericGates: List<NumericGate> = emptyList(),
 )
 
