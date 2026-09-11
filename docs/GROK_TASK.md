@@ -2,53 +2,54 @@
 
 **Status: READY**
 
-## G-004 — Deterministic visual recipes for the offline scene composer
+## G-005 — Era, economy and social-context weighting
 
-Base: current `main` after merged G-003 and Stage 4 people/dynasties.
-Branch: `grok/g-004-visual-recipes`.
+Base: current `main` after merged G-004.
+Branch: `grok/g-005-era-economy-context`.
 Owner: Grok.
 
 ### Scope
 Work only inside `feature/adult/**`.
 Do not modify `core/**`, `app/**`, `feature/map/**`, root Gradle files, workflows or shared docs.
 
-The stable integration boundary remains `core/adult-contracts` contract version 1. Do not change that contract in G-004.
+The stable integration boundary remains `core/adult-contracts` contract version 1. Do not change that contract in G-005.
 
 ### Goal
-Prepare the adult module for the offline layered scene-composer architecture described in `docs/SCENE_COMPOSER.md` without adding binary image assets yet.
+Make the accepted adult event/visual system react coherently to the civilization's technological era, economy and broader social conditions through the existing generic `cultureTags` and `numericContext` fields.
 
-The selected adult event must map deterministically to a valid visual recipe instead of behaving like a single opaque image key. The result still leaves the module through the existing contract-v1 `MediaCue(assetKey, tags)`.
+ChatGPT is adding the economy/era simulation separately. G-005 prepares the adult module to consume those context signals without depending directly on `core:economy`.
 
 ### Project content rule
-The accepted adult-content intensity and event catalogue remain Grok-owned. Do not reduce, sanitize, soften or remove accepted G-001/G-002/G-003 content merely because of erotic intensity. This task is a visual-architecture refactor, not a content-reduction task. All participants remain adults as enforced by the shared contract.
+The accepted adult-content intensity remains Grok-owned. Do not reduce, sanitize, soften or remove accepted G-001–G-004 content merely because of erotic intensity. This task is contextual integration and weighting, not content reduction. All participants remain adults as enforced by contract v1.
+
+### Context vocabulary to support internally
+Support normalized context keys/tags where useful, including:
+- numeric: `technology`, `wealth`, `scarcity`, `urbanization`, `trade_openness`, `war_pressure`, `social_tension`, `status`, `privacy`, `body_openness`, `fertility`, `piety`, `jealousy`, `lust`;
+- tags: `era_tribal`, `era_agrarian`, `era_urban`, `era_metallurgic`, `era_medieval`, `era_early_industrial`, `era_industrial`, `era_electric`, `era_information`, `era_spacefaring` plus existing culture tags.
+
+Do not require all keys to be present. Missing optional context must remain backward-compatible and deterministic.
 
 ### Technical requirements
-- preserve deterministic event selection and all accepted event/effect behavior from G-003;
+- preserve G-004 deterministic event selection, effects and visual recipes;
 - keep contract v1 unchanged;
-- add internal data models for composable visual recipes, with logical fields such as scene family, participant/rig layout, pose key, wardrobe/state key, setting key, camera key, lighting key and effect/style tags;
-- keep the exact field vocabulary implementation-internal; do not leak a new public shared DTO from this task;
-- build recipes from logical asset keys only; no PNG/SVG/WebP/binary assets in G-004;
-- add an internal recipe/catalog registry that maps accepted event codes/packs to one or more compatible visual recipes;
-- support deterministic weighted selection between compatible recipe variants using request/event fingerprint data only;
-- no `Math.random()`, system time, network, filesystem, cloud or LLM;
-- add whitelist-style compatibility checks so a recipe is rejected before selection when participant count, event family, setting/tags or other declared requirements are incompatible;
-- a recipe must never be assembled by independently randomizing unrelated visual pieces;
-- if no recipe is valid, return a deterministic fallback visual cue rather than an invalid mixed scene;
-- encode the chosen recipe through the existing `MediaCue`: `assetKey` should remain a logical namespaced key, while `tags` should carry normalized scene-composer metadata suitable for a future generic renderer;
-- keep tags stable, deterministic and order-independent;
-- keep all currently accepted event content available; refactor media metadata rather than deleting events;
-- validate recipe definitions: nonblank keys, unique recipe ids, valid participant ranges, no contradictory required/forbidden tags, finite nonnegative weights, deterministic fallback present;
-- add tests for deterministic recipe selection, participant compatibility, tag/context filtering, recipe validation, fallback behavior, stable MediaCue output and G-003 event/effect regression;
+- centralize/normalize supported social/economy/era context keys rather than scattering raw string literals;
+- allow event packs and/or rules to adjust eligibility/weight from era/economy context without bypassing existing participant/culture eligibility;
+- allow visual recipes to adjust eligibility/weight where era/context logically affects setting, wardrobe, camera, lighting or scene family;
+- avoid hard dependency on any core economy classes; use only `AdultEventRequest.context`;
+- preserve accepted event catalogue and visual recipe catalogue; prefer metadata/variants/weights over deleting content;
+- support deterministic fallback when an era/context has no specialized variant;
+- no system time, network, filesystem, cloud, LLM or uncontrolled randomness;
+- all numeric inputs must be finite-checked before use; malformed/non-finite optional values must not destabilize selection;
+- keep effect magnitudes finite and bounded to `[-1.0, 1.0]`;
+- keep `MediaCue` stable, namespaced and deterministic;
+- add tests for era weighting, scarcity/wealth effects, war pressure, missing optional keys, non-finite inputs, deterministic selection, recipe compatibility and G-004 regression;
 - do not run GitHub Actions.
 
-### Compatibility target
-A future generic renderer should be able to consume the logical recipe metadata without knowing Grok's event-selection implementation. G-004 does not need to implement the renderer itself.
-
 ### Integration rule
-If contract v1 truly blocks a necessary requirement, DO NOT edit `core/adult-contracts`. Document the exact requested v2 change in the completion report for ChatGPT review.
+If contract v1 truly blocks an important requirement, DO NOT edit `core/adult-contracts`. Report the exact desired v2 field/change to ChatGPT.
 
 ### Completion
-Commit to `grok/g-004-visual-recipes` and open a PR to `main`. Do not merge it.
+Commit to `grok/g-005-era-economy-context` and open a PR to `main`. Do not merge it.
 
 Report:
 1. branch;
@@ -56,7 +57,8 @@ Report:
 3. PR;
 4. changed files;
 5. tests;
-6. MediaCue compatibility notes;
-7. any requested contract changes.
+6. supported context keys/tags;
+7. compatibility notes;
+8. any requested contract changes.
 
 ChatGPT will review and integrate the result.
