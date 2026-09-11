@@ -125,9 +125,9 @@ internal object AdultMorphCompatibility {
         if (morph.eyes < recipe.minEyes || morph.eyes > recipe.maxEyes) return false
         if (recipe.requireTail && !morph.tail) return false
         if (recipe.forbidTail && morph.tail) return false
-        val divergence = morph.divergence
-        if (recipe.maxDivergence != null && divergence != null && divergence > recipe.maxDivergence) return false
-        if (recipe.minDivergence != null && (divergence == null || divergence < recipe.minDivergence)) return false
+        val effectiveDiv = morph.divergence ?: if (!morph.structuralBaseline) 0.6 else null
+        if (recipe.maxDivergence != null && effectiveDiv != null && effectiveDiv > recipe.maxDivergence) return false
+        if (recipe.minDivergence != null && effectiveDiv != null && effectiveDiv < recipe.minDivergence) return false
         if (recipe.requireHybrid && !(morph.hybridLineage || morph.mixedAncestry || (morph.admixture != null && morph.admixture >= 0.35))) {
             return false
         }
