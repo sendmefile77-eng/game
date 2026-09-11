@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                ChronospherePlayableApp()
+                ChronosphereGameApp()
             }
         }
     }
