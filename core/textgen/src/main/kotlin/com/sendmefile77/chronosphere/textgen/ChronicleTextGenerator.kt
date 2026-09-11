@@ -14,6 +14,11 @@ class ChronicleTextGenerator {
             val population = event.numbers["population"]?.toLong()
             if (population != null) "$settlement grew to about $population inhabitants." else "$settlement entered a new period of growth."
         }
+        "COLONY_FOUNDED" -> {
+            val settlement = event.facts["settlement"] ?: "A new settlement"
+            val parent = event.facts["parent"] ?: "an older city"
+            "$settlement was established by settlers from $parent."
+        }
         "FOOD_SHORTAGE" -> {
             val settlement = event.facts["settlement"] ?: "A settlement"
             "$settlement experienced a food shortage."

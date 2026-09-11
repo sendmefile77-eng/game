@@ -121,6 +121,10 @@ class CivilizationEngine(
                 )
             }
             settlement.copy(population = nextPopulation, foodStock = nextFood, wealth = nextWealth)
+        }.toMutableList()
+
+        if (nextTick % 240L == 0L) {
+            foundColonies(updatedSettlements, nextTick, generatedEvents)
         }
 
         val populations = updatedSettlements.groupBy { it.civilizationId }.mapValues { (_, list) -> list.sumOf { it.population } }
@@ -142,6 +146,60 @@ class CivilizationEngine(
             recentEvents = (state.recentEvents + generatedEvents).takeLast(48),
         )
     }
+
+    private fun foundColonies(
+        settlements: MutableList<Settlement>,
+        tick: Long,
+        events: MutableList<SimulationEvent>,
+    ) {
+        val founders = settlements.toList()
+        founders.forEach { founder ->
+            if (founder.population < 2_500L) return@forEach
+            val chance = hash01(world.seed.value xor tick, founder.id.hashCode(), tick.toInt())
+            if (chance >= 0.22) return@forEach
+            val target = findExpansionTile(founder, settlements) ?: return@forEach
+            val founderIndex = settlements.indexOfFirst { it.id == founder.id }
+            if (founderIndex < 0) return@forEach
+            val liveFounder = settlements[founderIndex]
+            val transfer = (liveFounder.population * 0.12).roundToLong().coerceIn(250L, liveFounder.population / 3)
+            val colonyId = "${founder.civilizationId}-colony-$tick-${target.x}-${target.y}"
+            val colonyName = settlementNameFor(world.seed.value xor tick xor (target.x.toLong() shl 32) xor target.y.toLong())
+            settlements[founderIndex] = liveFounder.copy(
+                population = liveFounder.population - transfer,
+                foodStock = (liveFounder.foodStock * 0.88).coerceAtLeast(0.0),
+            )
+            settlements += Settlement(
+                id = colonyId,
+                name = colonyName,
+                civilizationId = founder.civilizationId,
+                x = target.x,
+                y = target.y,
+                population = transfer,
+                foodStock = transfer * 0.52,
+                wealth = liveFounder.wealth * 0.08,
+                foundedTick = tick,
+            )
+            events += SimulationEvent(
+                id = "colony-$colonyId",
+                tick = tick,
+                code = "COLONY_FOUNDED",
+                actorIds = listOf(founder.civilizationId),
+                locationId = colonyId,
+                numbers = mapOf("population" to transfer.toDouble()),
+                facts = mapOf("settlement" to colonyName, "parent" to founder.name),
+            )
+        }
+    }
+
+    private fun findExpansionTile(founder: Settlement, settlements: List<Settlement>): WorldTile? = world.tiles
+        .asSequence()
+        .filter { isHabitable(it) }
+        .filter {
+            val d = abs(it.x - founder.x) + abs(it.y - founder.y)
+            d in 5..14
+        }
+        .filter { tile -> settlements.none { abs(it.x - tile.x) + abs(it.y - tile.y) < 4 } }
+        .maxByOrNull { settlementScore(it) }
 
     private fun isHabitable(tile: WorldTile): Boolean = tile.biome !in setOf(Biome.DEEP_OCEAN, Biome.OCEAN, Biome.ICE, Biome.MOUNTAIN)
 
@@ -192,10 +250,12 @@ class CivilizationEngine(
         return a[n % a.size] + b[(n / a.size) % b.size]
     }
 
-    private fun settlementName(index: Int): String {
+    private fun settlementName(index: Int): String = settlementNameFor(world.seed.value xor (index * 7919L))
+
+    private fun settlementNameFor(key: Long): String {
         val a = listOf("Astra", "Bren", "Cala", "Daro", "Eren", "Fara", "Galen", "Hara", "Istra", "Kora", "Lume", "Mira")
         val b = listOf("ford", "mere", "polis", "haven", "grad", "port", "vale", "hold", "reach", "gate")
-        val n = positiveIndex(world.seed.value xor (index * 7919L), a.size * b.size)
+        val n = positiveIndex(key, a.size * b.size)
         return a[n % a.size] + b[(n / a.size) % b.size]
     }
 

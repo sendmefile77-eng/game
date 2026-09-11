@@ -19,9 +19,9 @@
 - [x] first population, food, wealth, stability and technology model;
 - [x] simulation event stream and template chronicle text;
 - [x] save snapshot codec v1;
+- [x] local Android save/load UI;
+- [x] settlement expansion / new-city founding;
 - [x] living-map settlement overlays and observer time-step controls;
-- [ ] local Android save/load UI;
-- [ ] settlement expansion / new-city founding;
 - [ ] first game-like milestone build.
 
 ## Stage 2 — History
