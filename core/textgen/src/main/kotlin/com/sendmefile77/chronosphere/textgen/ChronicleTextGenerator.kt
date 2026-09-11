@@ -4,24 +4,28 @@ import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
 class ChronicleTextGenerator {
     fun describe(event: SimulationEvent): String = when (event.code) {
-        "SETTLEMENT_FOUNDED" -> "${event.facts["settlement"] ?: "A settlement"} was founded by ${event.facts["civilization"] ?: "a new people"}."
+        "SETTLEMENT_FOUNDED" -> "${event.facts["settlement"] ?: "Поселення"} заснувала цивілізація ${event.facts["civilization"] ?: "невідомого народу"}."
         "SETTLEMENT_GROWTH" -> {
-            val settlement = event.facts["settlement"] ?: "The settlement"
+            val settlement = event.facts["settlement"] ?: "Поселення"
             val population = event.numbers["population"]?.toLong()
-            if (population != null) "$settlement grew to about $population inhabitants." else "$settlement entered a new period of growth."
+            if (population != null) "$settlement виросло приблизно до $population мешканців." else "$settlement увійшло в новий період зростання."
         }
-        "COLONY_FOUNDED" -> "${event.facts["settlement"] ?: "A new settlement"} was established by settlers from ${event.facts["parent"] ?: "an older city"}."
-        "FOOD_SHORTAGE" -> "${event.facts["settlement"] ?: "A settlement"} experienced a food shortage."
-        "MIGRATION" -> "About ${event.numbers["people"]?.toLong() ?: 0L} people moved from ${event.facts["from"] ?: "one settlement"} to ${event.facts["to"] ?: "another"}."
-        "WAR_STARTED" -> "${event.facts["a"] ?: "One state"} and ${event.facts["b"] ?: "another state"} entered open war."
-        "WAR_CASUALTIES" -> "Fighting near ${event.facts["settlementA"] ?: "the frontier"} and ${event.facts["settlementB"] ?: "the opposing frontier"} caused about ${event.numbers["casualties"]?.toLong() ?: 0L} casualties."
-        "CITY_CAPTURED" -> "${event.facts["settlement"] ?: "A frontier city"} changed hands after a successful offensive."
+        "COLONY_FOUNDED" -> "${event.facts["settlement"] ?: "Нове поселення"} заснували переселенці з ${event.facts["parent"] ?: "старішого міста"}."
+        "FOOD_SHORTAGE" -> "${event.facts["settlement"] ?: "Поселення"} зіткнулося з нестачею продовольства."
+        "MIGRATION" -> "Близько ${event.numbers["people"]?.toLong() ?: 0L} людей переселилися з ${event.facts["from"] ?: "одного поселення"} до ${event.facts["to"] ?: "іншого"}."
+        "WAR_STARTED" -> "${event.facts["a"] ?: "Одна держава"} та ${event.facts["b"] ?: "інша держава"} вступили у відкриту війну."
+        "WAR_CASUALTIES" -> "Бої біля ${event.facts["settlementA"] ?: "кордону"} та ${event.facts["settlementB"] ?: "сусіднього фронту"} призвели приблизно до ${event.numbers["casualties"]?.toLong() ?: 0L} втрат."
+        "CITY_CAPTURED" -> "${event.facts["settlement"] ?: "Прикордонне місто"} перейшло під контроль іншої держави після успішного наступу."
         "PEACE_TREATY" -> {
-            val winner = event.facts["winner"] ?: "No clear victor"
-            "${event.facts["a"] ?: "One state"} and ${event.facts["b"] ?: "another"} signed peace. Result: $winner. ${event.numbers["captures"]?.toInt() ?: 0} cities changed hands during the war."
+            val winner = event.facts["winner"] ?: "без однозначного переможця"
+            "${event.facts["a"] ?: "Одна держава"} та ${event.facts["b"] ?: "інша"} уклали мир. Підсумок: $winner. За час війни змінили власника ${event.numbers["captures"]?.toInt() ?: 0} міст."
         }
-        "ALLIANCE_FORMED" -> "${event.facts["a"] ?: "One state"} and ${event.facts["b"] ?: "another"} formed an alliance."
-        "ALLIANCE_ENDED" -> "The alliance between ${event.facts["a"] ?: "two states"} and ${event.facts["b"] ?: "their partner"} dissolved."
+        "ALLIANCE_FORMED" -> "${event.facts["a"] ?: "Одна держава"} та ${event.facts["b"] ?: "інша"} уклали союз."
+        "ALLIANCE_ENDED" -> "Союз між ${event.facts["a"] ?: "двома державами"} та ${event.facts["b"] ?: "їхнім партнером"} припинив існування."
+        "INTERVENTION_HARVEST_AID" -> "Зовнішнє втручання посилило врожайність у державі ${event.facts["civilization"] ?: "невідомого народу"}."
+        "INTERVENTION_DROUGHT" -> "Штучно спричинена посуха вдарила по державі ${event.facts["civilization"] ?: "невідомого народу"}, скоротивши запаси продовольства та населення."
+        "INTERVENTION_TECH_BOOST" -> "Держава ${event.facts["civilization"] ?: "невідомого народу"} отримала різкий технологічний імпульс."
+        "INTERVENTION_STABILITY_SUPPORT" -> "Політичну стабільність держави ${event.facts["civilization"] ?: "невідомого народу"} штучно посилили."
         else -> event.code.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() } + "."
     }
 }
