@@ -32,6 +32,7 @@ fun CharacterCardPanel(
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
     onToggleWardrobe: () -> Unit,
+    controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
     val dynasty = person.dynastyId?.let { dynastyId ->
@@ -65,7 +66,7 @@ fun CharacterCardPanel(
                     )
                 }
                 if (hasPreviousOrNext) {
-                    OutlinedButton(onClick = onNext) { Text("Наступний") }
+                    OutlinedButton(onClick = onNext, enabled = controlsEnabled) { Text("Наступний") }
                 }
             }
 
@@ -105,7 +106,7 @@ fun CharacterCardPanel(
             }
 
             if (age >= 18) {
-                Button(onClick = onToggleWardrobe) {
+                Button(onClick = onToggleWardrobe, enabled = controlsEnabled) {
                     Text(if (scene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Роздягнути")
                 }
             }
