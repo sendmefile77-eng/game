@@ -16,15 +16,15 @@ class WorldHydrology {
         for (source in sources) {
             var current = source
             val visited = hashSetOf<TileCoord>()
-            repeat(90) {
+            for (step in 0 until 90) {
                 val coord = TileCoord(current.x, current.y)
-                if (!visited.add(coord)) return@repeat
+                if (!visited.add(coord)) break
                 rivers += coord
-                if (current.biome == Biome.OCEAN || current.biome == Biome.DEEP_OCEAN) return@repeat
+                if (current.biome == Biome.OCEAN || current.biome == Biome.DEEP_OCEAN) break
                 val next = neighbors(world, current.x, current.y)
                     .filter { it.elevation < current.elevation - 0.002 }
                     .minByOrNull { it.elevation - it.moisture * 0.03 }
-                    ?: return@repeat
+                    ?: break
                 current = next
             }
         }
