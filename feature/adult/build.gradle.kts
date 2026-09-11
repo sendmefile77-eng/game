@@ -2,4 +2,7 @@ plugins { alias(libs.plugins.kotlin.jvm) }
 
 kotlin { jvmToolchain(17) }
 
-dependencies { implementation(project(":core:adult-contracts")) }
+dependencies {
+    implementation(project(":core:adult-contracts"))
+    testImplementation(libs.junit)
+}
