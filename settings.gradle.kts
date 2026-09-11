@@ -29,5 +29,9 @@ include(
     ":core:storage",
     ":core:adult-contracts",
     ":feature:map",
-    ":feature:adult",
 )
+
+// The adult implementation is optional. Core and the base app remain compilable without it.
+if (file("feature/adult").exists()) {
+    include(":feature:adult")
+}
