@@ -15,6 +15,10 @@ internal data class AdultVisualRecipe(
     val maxParticipants: Int = 8,
     val requiredTags: Set<String> = emptySet(),
     val forbiddenTags: Set<String> = emptySet(),
+    val requiredEras: Set<String> = emptySet(),
+    val forbiddenEras: Set<String> = emptySet(),
+    val eraWeights: Map<String, Double> = emptyMap(),
+    val numericWeights: Map<String, Double> = emptyMap(),
     val weight: Double = 1.0,
 )
 

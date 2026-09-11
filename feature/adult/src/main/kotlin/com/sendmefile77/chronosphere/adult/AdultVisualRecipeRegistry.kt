@@ -16,14 +16,21 @@ internal class AdultVisualRecipeRegistry(
             event.code in recipe.eventCodes &&
                 count in recipe.minParticipants..recipe.maxParticipants &&
                 tags.containsAll(recipe.requiredTags.map { it.lowercase() }) &&
-                tags.none { it in recipe.forbiddenTags.map { tag -> tag.lowercase() } }
+                tags.none { it in recipe.forbiddenTags.map { tag -> tag.lowercase() } } &&
+                AdultContextSignals.matchesEraRequirement(recipe.requiredEras, recipe.forbiddenEras, tags)
         }
+    }
+
+    fun recipeWeight(recipe: AdultVisualRecipe, request: AdultEventRequest): Double {
+        val base = if (recipe.weight.isFinite()) recipe.weight.coerceAtLeast(0.0) else 0.0
+        val scaled = base * AdultContextSignals.weightMultiplier(request, recipe.eraWeights, recipe.numericWeights)
+        return if (scaled.isFinite()) scaled.coerceAtLeast(0.0) else 0.0
     }
 
     fun select(event: AdultEventRule, request: AdultEventRequest, fingerprint: Long): AdultVisualRecipe {
         val pool = compatible(event, request)
         if (pool.isEmpty()) return fallback
-        val weighted = pool.sortedBy { it.id }.map { it to it.weight.coerceAtLeast(0.0) }
+        val weighted = pool.sortedBy { it.id }.map { it to recipeWeight(it, request) }
         val total = weighted.sumOf { it.second }
         if (total <= 0.0) return fallback
         val target = AdultFingerprint.unit01(fingerprint, 41L) * total
@@ -36,13 +43,13 @@ internal class AdultVisualRecipeRegistry(
     }
 
     fun mediaCue(event: AdultEventRule, request: AdultEventRequest, fingerprint: Long): MediaCue {
-        val recipe = select(event, request, fingerprint)
-        return encode(recipe, event, request)
+        return encode(select(event, request, fingerprint), event, request)
     }
 
     fun encode(recipe: AdultVisualRecipe, event: AdultEventRule, request: AdultEventRequest): MediaCue {
         val tone = AdultCulture.tone(request.context.cultureTags)
         val cultures = request.context.cultureTags.map { it.lowercase() }.sorted()
+        val eras = AdultContextSignals.eraTags(request.context.cultureTags).sorted()
         val tags = buildSet {
             add("recipe:${recipe.id}")
             add("family:${recipe.sceneFamily}")
@@ -59,6 +66,7 @@ internal class AdultVisualRecipeRegistry(
             addAll(recipe.effectTags.map { it.lowercase() })
             addAll(event.mediaTags.map { it.lowercase() })
             addAll(cultures.take(4))
+            eras.firstOrNull()?.let { add("era:$it") }
         }
         return MediaCue(assetKey = "adult://recipe/${recipe.id}", tags = tags)
     }
