@@ -55,7 +55,9 @@ class EconomyEngineTest {
             wars = listOf(WarState("war-a-b", "a", "b", 1L)),
         )
         val warResult = engine.advance(initial, wartimeFuture)
-        assertTrue(warResult.state.routes.none { it.exporterId == "a" && it.importerId == "b" || it.exporterId == "b" && it.importerId == "a" })
+        assertTrue(warResult.state.routes.none {
+            it.exporterId == "a" && it.importerId == "b" || it.exporterId == "b" && it.importerId == "a"
+        })
     }
 
     @Test
@@ -104,7 +106,7 @@ class EconomyEngineTest {
             civilizations = listOf(a, b),
             settlements = listOf(
                 Settlement("a-city", "Астра", "a", 4, 4, 3_000L, 2_000.0, 100.0, 0L),
-                Settlement("b-city", "Брен", "b", 9, 4, 3_000L, 2_000.0, 100.0, 0L),
+                Settlement("b-city", "Брен", "b", 14, 4, 3_000L, 2_000.0, 100.0, 0L),
             ),
             relations = listOf(DiplomaticRelation("a", "b", 0.8, tick)),
         )
