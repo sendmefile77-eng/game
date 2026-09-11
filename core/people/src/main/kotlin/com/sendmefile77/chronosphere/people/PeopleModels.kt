@@ -13,6 +13,7 @@ enum class PersonRole {
 
 enum class RelationshipKind {
     PARTNER,
+    LOVER,
     PARENT_CHILD,
     SIBLING,
     RIVAL,
