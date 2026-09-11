@@ -71,7 +71,11 @@ fun CharacterCardPanel(
                 }
             }
 
-            OfflineSceneView(scene = scene)
+            OfflineSceneView(
+                scene = scene,
+                characterKey = person.id,
+                ageYears = age,
+            )
 
             Text(
                 "Династія: ${dynasty ?: "—"} · поселення: ${person.settlementId ?: "—"}",
