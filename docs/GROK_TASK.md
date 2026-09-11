@@ -1,124 +1,44 @@
 # GROK TASK
 
-**Status: READY**
+**Status: ARCHIVED / REJECTED AS FINAL VISUAL PATH**
 
-## G-008 — First real offline adult visual asset pack
+## G-008 — First offline adult visual asset pack
 
-Base: current `main` after merged Stage 7 + Stage 7B (`core:scene` renderer, playable character cards, G-007 bridge, classpath resource loading).
+The experimental branch `grok/g-008-offline-visual-asset-pack` was evaluated and is **not** accepted as the final Chronosphere visual layer. The procedural raster result did not meet the required character quality and must not be merged merely to satisfy a milestone checklist.
 
-Branch: `grok/g-008-offline-visual-asset-pack`
+### What remains valid
+The architecture work completed before G-008 remains valid:
 
-Owner: Grok.
+- `core:scene` owns the deterministic, content-neutral scene contract;
+- `SceneRecipe` / `ResolvedScene` remain the renderer boundary;
+- `feature/adult` stays optional and must not become a dependency of simulation core;
+- APK/classpath local scene-pack loading remains supported;
+- missing or incompatible assets must use deterministic morphology-safe fallback;
+- no visual path may require network access, cloud generation, runtime AI or external APIs;
+- adult visual requests remain strictly 18+.
 
-### Scope
-Work only inside `feature/adult/**`.
+### What is explicitly rejected
+Do not treat the G-008 PNG/art-pack output as production character art. In particular:
 
-You may add:
-- `feature/adult/src/main/resources/scene_packs/adult/**`;
-- tests under `feature/adult/src/test/**` that validate resource presence/coverage;
-- minimal `feature/adult` code only if strictly required to expose or validate the existing visual pack.
+- do not merge the old G-008 branch into `main` as the final renderer;
+- do not make v0.1 Playable depend on G-008 raster coverage;
+- do not reintroduce primitive procedural bodies, capsule limbs, ellipse-built figures or placeholder pixel characters as a claimed final solution;
+- do not change simulation, saves or morphology contracts to fit an inadequate art pack.
 
-Do **not** modify `core/**`, `app/**`, `feature/map/**`, root Gradle files, workflows or shared contracts.
-Do not change `core/adult-contracts` v1.
-Do not run GitHub Actions.
-Do not merge to `main`.
+### Current presentation policy
+v0.1 may use the built-in deterministic local fallback when no compatible visual asset is available. That fallback is a resilience mechanism, not the final art target.
 
-### Read first
-Use the current:
-- `docs/SCENE_ASSET_PACK.md`;
-- `AdultCardRecipes.kt`;
-- `BundledVisualRecipes.kt`;
-- `AdultSceneBridge.kt`;
-- `AdultSceneMapper.kt`.
+Any future production portrait system must first be proven outside the main game with a **real runtime prototype**, not a concept image. The prototype must demonstrate:
 
-The renderer is already implemented. This task is **asset/content production and mapping**, not another renderer rewrite.
+1. one adult character with acceptable face and anatomy;
+2. stable identity across pose/age/wardrobe changes;
+3. DRESSED and UNDRESSED states based on the same identity/body rig or equivalent canonical body representation;
+4. fully local/offline operation;
+5. deterministic input-to-output behavior;
+6. morphology-safe handling of non-baseline body plans;
+7. a visual result that is genuinely acceptable before integration work starts.
 
-### Goal
-Provide the first real offline raster pack that makes the accepted G-006/G-007 adult scenes visible in the Android character cards and event scene pipeline.
+Possible future implementations may use 2D, 3D-to-pixel or another fully local technique. The simulation must remain independent from that choice.
 
-Do not reduce, sanitize, rename or delete the already accepted adult catalogue. Map assets to the existing recipe ids and resolved logical keys.
-
-### Packaging contract
-Because `feature/adult` is a Kotlin/JVM module, all pack files must be Java resources under:
-
-`feature/adult/src/main/resources/scene_packs/adult/`
-
-Required manifest:
-
-`feature/adult/src/main/resources/scene_packs/adult/manifest.tsv`
-
-Header/format must be exactly `CHRONOSPHERE_SCENE_ASSET_V1` as documented in `docs/SCENE_ASSET_PACK.md`.
-
-Target canvas: `1024 x 1536` portrait.
-Use local PNG or WebP only. Transparent aligned layers are preferred; a full precomposed image mapped to `recipe:<recipeId>` is allowed for this first pack.
-No URLs, network fetching, cloud calls, runtime generation, filesystem writes, system time or uncontrolled randomness.
-
-### Required character-card coverage
-The first pack must visibly cover every current `AdultCardRecipes` recipe id:
-
-- `card.dressed.baseline`
-- `card.undressed.baseline`
-- `card.dressed.hybrid`
-- `card.undressed.hybrid`
-- `card.undressed.quad`
-- `card.undressed.tailed`
-- `card.undressed.scaled`
-- `card.dressed.scaled`
-
-Each must map to a real local raster layer or precomposed illustration through the manifest.
-
-Dressed/undressed pairs must use one coherent visual style and compatible anatomy. Hybrid/divergent cards must visibly respect the morphology implied by the recipe instead of silently reverting to a baseline human body.
-
-### Event-scene coverage
-Also add a representative first set of real local event visuals from the **existing** `BundledVisualRecipes` catalogue.
-
-Minimum:
-- at least 12 distinct existing event recipe ids;
-- coverage across the existing major adult content packs/families rather than 12 near-identical scenes from one family;
-- include baseline and morphology-safe/fallback-capable coverage where the current recipe system can select it;
-- use exact existing recipe ids and logical keys from the current code.
-
-Do not invent a parallel event system just for assets.
-
-### Visual consistency
-This is one coherent first art pack, not a random collection.
-
-Requirements:
-- consistent art direction, body construction, perspective and lighting language;
-- same canonical 1024x1536 alignment for composable layers;
-- no accidental floating wardrobe/body parts;
-- asset content must match the selected rig/wardrobe/setting intent;
-- `UNDRESSED` assets must remain `UNDRESSED`; do not disguise them as dressed fallback;
-- morphology-safe fallback must remain visually morphology-safe;
-- no minors anywhere in the adult asset pack.
-
-Preserve the adult content level already defined by Grok's accepted catalogue; this task does not ask for censorship or intensity changes.
-
-### Manifest/resource tests
-Add JVM tests that at minimum verify:
-- `scene_packs/adult/manifest.tsv` is loadable through the classloader;
-- every manifest path resolves through `ClassLoader.getResourceAsStream`;
-- all eight current `AdultCardRecipes` ids have manifest coverage as `recipe:<id>` or an equivalent exact logical mapping used by G-007;
-- at least 12 existing event recipe ids have raster coverage;
-- no duplicate logical keys in the manifest;
-- referenced files are non-empty;
-- no manifest path is an HTTP/HTTPS URL;
-- existing G-004/G-005/G-006/G-007 behavior is not changed by the asset files.
-
-### Completion
-Commit to `grok/g-008-offline-visual-asset-pack` and open a PR to `main`.
-Do not merge it. Do not run GitHub Actions.
-
-Report:
-1. branch;
-2. commit SHA;
-3. PR;
-4. manifest path;
-5. number of raster files and total pack size;
-6. all covered character-card recipe ids;
-7. all covered event recipe ids;
-8. whether assets are layered or precomposed;
-9. tests added/results;
-10. any exact renderer/contract limitation discovered, without modifying `core`/`app` to work around it.
-
-ChatGPT will review and integrate the result.
+### Integration rule for future visual work
+A future visual branch may only be proposed for merge after the standalone prototype has been visually approved. Until then, work should focus on gameplay, simulation stability, UI, persistence and renderer-independent contracts.
