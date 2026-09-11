@@ -26,7 +26,6 @@ female_torso=0,200,60,100
 male_torso=60,200,60,100
 
 # Additional physically cut source details retained in atlas for next face pass
-# (not yet overlaid in v0.2 because heads already contain coherent facial identity)
 extra_eyes_region=125,200
 extra_noses_region=188,200
 extra_mouths_region=188,250
@@ -40,7 +39,8 @@ foreground
 
 # Deterministic selection
 family=stable_hash(person.id)%2
-head=stable_hash(person.id)>>3 mod 6
+young_head=stable_hash(person.id)>>3 mod 5
+mature_head=5 when age>=60
 garment=stable_hash(person.id)>>11 mod 6
 wardrobe_toggle_preserves_head=true
 wardrobe_toggle_preserves_family=true
