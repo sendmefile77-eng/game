@@ -19,6 +19,19 @@ Make the accepted adult event/visual system morphology-aware so the future offli
 
 This is a compatibility/visual-recipe task. Preserve the accepted adult-content catalogue and intensity from G-001–G-005. Do not sanitize, soften or delete accepted content merely because of erotic intensity. All participants remain adults as enforced by contract v1.
 
+### Character-card undress integration
+The playable UI will expose an **"Роздягнути" / "Раздеть"** action on every adult character card. G-006 must make the visual recipe layer ready for that action.
+
+Requirements:
+- treat undressed state as an explicit visual/wardrobe state, not as a random overlay;
+- the state must resolve through the same morphology/rig compatibility filtering as any other recipe;
+- keep the result deterministic for the same character/scene context;
+- non-baseline body plans must use compatible undressed rig families or a morphology-safe fallback;
+- mixed ancestry/hybrid morphology must remain visually continuous with the dressed character;
+- the adult module may expose logical recipe/asset metadata for this state through its existing internal recipe system and `MediaCue` conventions;
+- do not add UI code in this task; ChatGPT owns the character-card button and core/UI integration;
+- no such action or undressed visual recipe may ever be produced for a participant under 18.
+
 ### Evolution context vocabulary to support internally
 Consume normalized scene-level context when present through existing `cultureTags` and `numericContext` only.
 
@@ -82,6 +95,8 @@ Add tests for at least:
 - mixed ancestry/hybrid tags remain deterministic and stable in `MediaCue`;
 - missing morphology context uses previous baseline fallback;
 - no compatible visual recipe produces stable morphology-safe fallback;
+- undressed state is deterministic and morphology-compatible for adult characters;
+- under-18 participants cannot produce an undressed recipe/state;
 - G-004/G-005 regression coverage remains passing.
 
 ### Completion
@@ -97,6 +112,7 @@ Report:
 7. rig/recipe compatibility behavior;
 8. fallback behavior;
 9. compatibility notes with G-005;
-10. any requested contract-v2 changes.
+10. undressed-state support notes;
+11. any requested contract-v2 changes.
 
 ChatGPT will review and integrate the result.
