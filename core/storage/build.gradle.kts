@@ -7,5 +7,7 @@ dependencies {
     implementation(project(":core:economy"))
     implementation(project(":core:evolution"))
     implementation(project(":core:simulation"))
+    testImplementation(project(":core:worldgen"))
+    testImplementation(project(":core:society"))
     testImplementation(libs.junit)
 }
