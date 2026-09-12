@@ -47,12 +47,13 @@ internal class LocalDreamClient(
         request: HordeImageRequest,
         sourceImageBytes: ByteArray? = null,
         timeoutMillis: Long = 135_000L,
+        onProgress: ((LocalDreamProgress) -> Unit)? = null,
     ): LocalDreamGenerationResult = generationMutex.withLock {
         require(timeoutMillis >= 5_000L)
         require(sourceImageBytes == null || sourceImageBytes.isNotEmpty())
         try {
             withContext(Dispatchers.IO) {
-                generateBlocking(request, sourceImageBytes, timeoutMillis)
+                generateBlocking(request, sourceImageBytes, timeoutMillis, onProgress)
             }.also {
                 availability = AvailabilityCache(
                     checkedAtNanos = System.nanoTime(),
@@ -133,6 +134,7 @@ internal class LocalDreamClient(
         request: HordeImageRequest,
         sourceImageBytes: ByteArray?,
         timeoutMillis: Long,
+        onProgress: ((LocalDreamProgress) -> Unit)?,
     ): LocalDreamGenerationResult {
         val payload = JSONObject()
             .put("prompt", request.positivePrompt)
@@ -176,7 +178,7 @@ internal class LocalDreamClient(
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) {
-                        decodeSseEvent(event.toString(), data.toString())?.let { return it }
+                        decodeSseEvent(event.toString(), data.toString(), onProgress)?.let { return it }
                         event.setLength(0)
                         data.setLength(0)
                         continue
@@ -189,7 +191,7 @@ internal class LocalDreamClient(
                         }
                     }
                 }
-                decodeSseEvent(event.toString(), data.toString())?.let { return it }
+                decodeSseEvent(event.toString(), data.toString(), onProgress)?.let { return it }
             }
             throw LocalDreamGenerationException("Local Dream завершив потік без готового зображення")
         } finally {
@@ -214,14 +216,23 @@ internal class LocalDreamClient(
         }
     }
 
-    private fun decodeSseEvent(eventName: String, data: String): LocalDreamGenerationResult? {
+    private fun decodeSseEvent(
+        eventName: String,
+        data: String,
+        onProgress: ((LocalDreamProgress) -> Unit)? = null,
+    ): LocalDreamGenerationResult? {
         if (data.isBlank()) return null
         val json = runCatching { JSONObject(data) }.getOrElse {
-            if (eventName == "progress") return null
+            if (eventName.equals("progress", ignoreCase = true)) return null
             throw LocalDreamGenerationException("Local Dream повернув пошкоджену SSE-відповідь", it)
         }
         val type = json.optString("type", eventName).lowercase()
-        if (type == "progress") return null
+        if (type == "progress" || eventName.equals("progress", ignoreCase = true)) {
+            parseLocalDreamProgress(json)?.let { progress ->
+                runCatching { onProgress?.invoke(progress) }
+            }
+            return null
+        }
         if (type == "error" || eventName.equals("error", ignoreCase = true)) {
             throw LocalDreamGenerationException(
                 json.optString("message").takeIf { it.isNotBlank() } ?: "Local Dream повідомив про помилку",
@@ -405,6 +416,27 @@ internal data class LocalDreamStatus(
         fun ready(method: LocalDreamProbeMethod): LocalDreamStatus =
             LocalDreamStatus(available = true, probeMethod = method)
     }
+}
+
+internal data class LocalDreamProgress(
+    val step: Int,
+    val totalSteps: Int,
+) {
+    val fraction: Float
+        get() = if (totalSteps <= 0) 0f else (step.toFloat() / totalSteps.toFloat()).coerceIn(0f, 1f)
+
+    val captionUk: String
+        get() = if (totalSteps > 0) "Local Dream · крок $step/$totalSteps" else "Local Dream · генерація…"
+}
+
+internal fun parseLocalDreamProgress(json: JSONObject): LocalDreamProgress? {
+    val total = max(json.optInt("total_steps", 0), json.optInt("totalSteps", 0))
+    val step = json.optInt("step", 0)
+    if (total <= 0 && step <= 0) return null
+    return LocalDreamProgress(
+        step = step.coerceAtLeast(0),
+        totalSteps = if (total > 0) total else step.coerceAtLeast(1),
+    )
 }
 
 internal data class LocalDreamGenerationResult(
