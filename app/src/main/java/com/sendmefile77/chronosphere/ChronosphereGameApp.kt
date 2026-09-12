@@ -25,6 +25,7 @@ import com.sendmefile77.chronosphere.economy.EconomyEngine
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.evolution.PlayerEvolutionInterventionEngine
 import com.sendmefile77.chronosphere.history.HistoryComparator
 import com.sendmefile77.chronosphere.history.HistoryTimeline
 import com.sendmefile77.chronosphere.history.HistoryWorkspace
@@ -80,6 +81,7 @@ fun ChronosphereGameApp() {
     val textGenerator = remember { ChronicleTextGenerator() }
     val historyTimeline = remember { HistoryTimeline() }
     val interventionEngine = remember { InterventionEngine() }
+    val playerEvolutionEngine = remember { PlayerEvolutionInterventionEngine() }
     val peopleEngine = remember { PeopleEngine() }
     val adultModule = remember { AdultModuleRuntime.load() }
     val adultModuleActive = remember(adultModule) { AdultModuleRuntime.isActive(adultModule) }
@@ -232,6 +234,25 @@ fun ChronosphereGameApp() {
         saveStatus = "Втручання застосовано до $targetName"
     }
 
+    fun interveneEvolution(kind: PlayerEvolutionInterventionEngine.Kind, settlementId: String) {
+        if (isAdvancing) return
+        val result = runCatching {
+            playerEvolutionEngine.apply(kind, evolutionState, session.state, settlementId)
+        }.getOrElse { error ->
+            saveStatus = error.message ?: "Еволюційне втручання недоступне"
+            return
+        }
+        val nextWorld = session.state.copy(
+            recentEvents = (session.state.recentEvents + result.event).takeLast(96),
+        )
+        syncState(nextWorld, nextEvolution = result.state)
+        saveStatus = when (kind) {
+            PlayerEvolutionInterventionEngine.Kind.DIVERGE -> "Лінію примусово відокремлено та прискорено її розходження"
+            PlayerEvolutionInterventionEngine.Kind.MUTATE -> "Створено нову структурно змінену лінію"
+            PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE -> "Створено нову гібридну лінію"
+        }
+    }
+
     fun activateWorkspaceState() {
         val branchState = workspace.activeState
         val nextPeople = workspace.activePeopleState ?: peopleEngine.initialize(branchState)
@@ -330,7 +351,11 @@ fun ChronosphereGameApp() {
     MaterialTheme(colorScheme = ChronosphereColors) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val mapHeight = (maxHeight * 0.46f).coerceIn(220.dp, 360.dp)
+                val mapHeight = when (selectedPanel) {
+                    GamePanel.WORLD -> (maxHeight * 0.46f).coerceIn(220.dp, 360.dp)
+                    GamePanel.PERSON -> (maxHeight * 0.27f).coerceIn(150.dp, 220.dp)
+                    GamePanel.HISTORY, GamePanel.CHRONICLE -> (maxHeight * 0.24f).coerceIn(140.dp, 205.dp)
+                }
                 Column(modifier = Modifier.fillMaxSize()) {
                     ChronosphereTopBar(
                         year = time.year,
@@ -428,6 +453,7 @@ fun ChronosphereGameApp() {
                                         selectCivilization(civilizations[(index + 1) % civilizations.size].id)
                                     },
                                     onIntervene = ::intervene,
+                                    onEvolutionIntervene = ::interveneEvolution,
                                 )
 
                                 GamePanel.PERSON -> {
@@ -486,6 +512,7 @@ fun ChronosphereGameApp() {
                                             people = peopleState,
                                             evolution = evolutionState,
                                             scene = scene,
+                                            technologyEra = selectedEconomy?.era,
                                             hasPreviousOrNext = livingCharacters.size > 1,
                                             controlsEnabled = !isAdvancing,
                                             onNext = {
@@ -772,6 +799,7 @@ private fun WorldPanel(
     isAdvancing: Boolean,
     onNextCivilization: () -> Unit,
     onIntervene: (InterventionKind) -> Unit,
+    onEvolutionIntervene: (PlayerEvolutionInterventionEngine.Kind, String) -> Unit,
 ) {
     val economy = economyState.economy(civilization.id)
     val ruler = peopleState.ruler(civilization.id)
@@ -781,6 +809,13 @@ private fun WorldPanel(
         .maxByOrNull { it.population }
     val representativePopulation = representativeSettlement?.let { evolutionState.population(it.id) }
     val representativeLineage = representativePopulation?.let { evolutionState.lineage(it.lineageId) }
+    val evolutionInterventionEngine = remember { PlayerEvolutionInterventionEngine() }
+    val hybridCandidate = remember(evolutionState, representativeSettlement?.id) {
+        representativeSettlement?.let { evolutionInterventionEngine.bestHybridCandidate(evolutionState, it.id) }
+    }
+    val hybridSettlementName = hybridCandidate?.let { candidate ->
+        session.state.settlements.firstOrNull { it.id == candidate.settlementId }?.name
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -836,6 +871,53 @@ private fun WorldPanel(
         val culture = profile.tags.sorted().take(6).joinToString(separator = " · ", transform = ::humanizeTag)
         InfoLine("Культура", culture.ifBlank { "Без виразної домінантної традиції" })
         InfoLine("Суспільство", tensionBand(profile.socialTension))
+    }
+
+    if (representativeSettlement != null && representativePopulation != null && representativeLineage != null) {
+        val bodyPlan = representativeLineage.bodyPlan
+        Text("Керування еволюцією", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        InfoLine(
+            "Активна лінія",
+            "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · тиск мутацій ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
+        )
+        InfoLine(
+            "План тіла",
+            "рук ${bodyPlan.armPairs * 2} · ніг ${bodyPlan.legPairs * 2} · очей ${bodyPlan.eyeCount}" +
+                if (bodyPlan.hasTail) " · хвіст" else "",
+        )
+        InfoLine(
+            "Гібридизація",
+            if (hybridCandidate != null) {
+                "${hybridCandidate.lineageLabel}${hybridSettlementName?.let { " ($it)" } ?: ""} · відмінність ${String.format("%.0f%%", hybridCandidate.difference * 100.0)}"
+            } else {
+                "Поки немає достатньо відмінної другої лінії"
+            },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            InterventionButton("Розходження", Modifier.weight(1f), !isAdvancing) {
+                onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.DIVERGE, representativeSettlement.id)
+            }
+            InterventionButton("Мутація", Modifier.weight(1f), !isAdvancing) {
+                onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.MUTATE, representativeSettlement.id)
+            }
+        }
+        OutlinedButton(
+            onClick = { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE, representativeSettlement.id) },
+            enabled = !isAdvancing && hybridCandidate != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Гібридизувати з найвідміннішою доступною лінією")
+        }
+        if (hybridCandidate == null) {
+            Text(
+                "Спочатку розведіть лінії: змінюйте різні держави окремо, а потім поверніться до гібридизації.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 
     Text("Втручання у світ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -976,6 +1058,7 @@ private fun ChroniclePanel(
     ChronicleHordeEventCard(
         events = session.state.recentEvents,
         peopleState = peopleState,
+        economyState = economyState,
         clock = clock,
         textGenerator = textGenerator,
     )
