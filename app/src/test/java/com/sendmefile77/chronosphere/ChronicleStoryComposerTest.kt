@@ -111,7 +111,7 @@ class ChronicleStoryComposerTest {
                 events = events,
                 civilizationNames = mapOf("civ-1" to "Астарі"),
                 textGenerator = textGenerator,
-                economyState = economy,
+                era = economy.civilizations.first().era,
             ),
         )
         val text = (story.lead + " " + story.paragraphs.joinToString(" ")).lowercase()
