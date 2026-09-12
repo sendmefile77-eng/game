@@ -55,7 +55,7 @@ internal object ChronicleDecisionMailbox {
 
     @Synchronized
     fun drain(): List<PendingChronicleDecision> =
-        PendingInterventionRegistry.drain().map(PendingInterventionState::toChronicleDecision)
+        PendingInterventionRegistry.drain().map { it.toChronicleDecision() }
 
     @Synchronized
     fun restore(decisions: List<PendingChronicleDecision>) {
