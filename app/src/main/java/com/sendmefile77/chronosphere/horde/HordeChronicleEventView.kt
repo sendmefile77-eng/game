@@ -30,8 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
@@ -41,31 +39,25 @@ internal fun HordeChronicleEventView(
 ) {
     val context = LocalContext.current.applicationContext
     val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
-    val client = remember { HordeClient() }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<ChronicleHordeUiState>(ChronicleHordeUiState.Loading) }
 
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = ChronicleHordeUiState.Loading
-        val cached = withContext(Dispatchers.IO) { cache.read(request.cacheKey) }
-        if (cached != null && retryNonce == 0) {
-            state = ChronicleHordeUiState.Ready(cached, null)
-            return@LaunchedEffect
-        }
-
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
         val timeout = if (request.qualityPriority) 135_000L else 75_000L
         try {
-            val result = client.generate(
+            val prepared = HordeGenerationCoordinator.load(
+                filesDir = context.filesDir,
                 request = attempt,
-                sourceImageBytes = null,
                 timeoutMillis = timeout,
                 pollIntervalMillis = 3_000L,
             )
-            withContext(Dispatchers.IO) { cache.write(request.cacheKey, result.imageBytes) }
-            state = ChronicleHordeUiState.Ready(result.imageBytes, result.model)
+            state = ChronicleHordeUiState.Ready(prepared.bytes, prepared.model)
         } catch (cancelled: CancellationException) {
+            // Changing tabs only detaches this observer; the process-level coordinator keeps the
+            // Horde job alive and stores its result in cache for the next visit.
             throw cancelled
         } catch (error: Throwable) {
             state = ChronicleHordeUiState.Failed(error.message ?: "невідома помилка")
@@ -85,7 +77,11 @@ internal fun HordeChronicleEventView(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (request.qualityPriority) "AI Horde · якісний кадр події генерується…" else "AI Horde · ілюстрація події генерується…",
+                            if (request.qualityPriority) {
+                                "AI Horde · якісний кадр події генерується у фоні…"
+                            } else {
+                                "AI Horde · ілюстрація події генерується у фоні…"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
