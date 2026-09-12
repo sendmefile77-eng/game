@@ -11,6 +11,8 @@ import com.sendmefile77.chronosphere.adultcontracts.MediaCue
 import com.sendmefile77.chronosphere.adultcontracts.NoOpAdultModule
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.history.HistoricalMemoryEngine
+import com.sendmefile77.chronosphere.history.HistoricalMemoryState
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.people.PersonRelationship
@@ -41,9 +43,12 @@ class SocietyEngine(
         world: LivingPlanetState,
         people: PeopleState,
         economy: EconomyState?,
+        historicalMemory: HistoricalMemoryState? = null,
+        historyBranchId: String? = null,
     ): SocietyAdvanceResult {
         require(world.worldSeed == people.worldSeed) { "Society world/people seed mismatch" }
         require(economy == null || economy.worldSeed == world.worldSeed) { "Society world/economy seed mismatch" }
+        require(historicalMemory == null || historicalMemory.worldSeed == world.worldSeed) { "Society world/history seed mismatch" }
         require(world.tick >= fromTick) { "Cannot move society simulation backward" }
         if (adultModule.contractVersion != ADULT_CONTRACT_VERSION || world.tick <= fromTick) {
             return SocietyAdvanceResult(world, people, emptyList(), emptyList())
@@ -54,10 +59,22 @@ class SocietyEngine(
 
         var currentWorld = world
         var currentPeople = people
+        var currentHistoricalMemory = HistoricalMemoryEngine.reconcile(
+            previous = historicalMemory,
+            world = currentWorld,
+            people = currentPeople,
+            economy = economy,
+        )
         val events = mutableListOf<SimulationEvent>()
         val media = mutableListOf<MediaCue>()
 
         for (annualTick in annualTicks) {
+            currentHistoricalMemory = HistoricalMemoryEngine.reconcile(
+                previous = currentHistoricalMemory,
+                world = currentWorld,
+                people = currentPeople,
+                economy = economy,
+            )
             for (civilization in currentWorld.civilizations.sortedBy { it.id }) {
                 val profile = currentPeople.profile(civilization.id) ?: continue
                 val participants = selectParticipants(
@@ -76,6 +93,8 @@ class SocietyEngine(
                     economy = economy,
                     profile = profile,
                     participants = participants,
+                    historicalMemory = currentHistoricalMemory,
+                    historyBranchId = historyBranchId,
                 )
                 val result = runCatching { adultModule.evaluate(request) }.getOrNull() ?: continue
                 if (result.eventCode == "NO_OP" || !validResult(request, result)) continue
@@ -110,6 +129,14 @@ class SocietyEngine(
                     },
                 )
             }
+            if (events.isNotEmpty()) {
+                currentHistoricalMemory = HistoricalMemoryEngine.reconcile(
+                    previous = currentHistoricalMemory,
+                    world = currentWorld.copy(recentEvents = (currentWorld.recentEvents + events).takeLast(96)),
+                    people = currentPeople,
+                    economy = economy,
+                )
+            }
         }
 
         return SocietyAdvanceResult(
@@ -127,6 +154,8 @@ class SocietyEngine(
         economy: EconomyState?,
         profile: SocialProfile,
         participants: List<NotablePerson>,
+        historicalMemory: HistoricalMemoryState?,
+        historyBranchId: String?,
     ): AdultEventRequest {
         val civilization = world.civilizations.first { it.id == civilizationId }
         val economic = economy?.economy(civilizationId)
@@ -150,14 +179,21 @@ class SocietyEngine(
                 profile.socialTension * 0.22
             ).coerceIn(0.0, 1.0)
 
-        val tags = buildSet {
+        val baseTags = buildSet {
             addAll(civilization.cultureTags)
             addAll(profile.tags)
             eraTag?.let(::add)
             if (activeWars > 0) add("at_war")
             if (tradeOpenness >= 0.45) add("trade_open")
             if (urbanization >= 0.55) add("urbanized")
-        }.map { it.lowercase() }.toSortedSet()
+        }.map { it.lowercase() }.toSet()
+        val tags = HistoricalAdultContextBridge.tags(
+            baseTags = baseTags,
+            civilizationId = civilizationId,
+            historicalMemory = historicalMemory,
+            branchId = historyBranchId,
+            primaryPerson = participants.maxWithOrNull(compareBy<NotablePerson> { it.prestige }.thenBy { it.id }),
+        )
 
         return AdultEventRequest(
             requestId = "society-$civilizationId-$tick-${participants.joinToString("-") { it.id }}",

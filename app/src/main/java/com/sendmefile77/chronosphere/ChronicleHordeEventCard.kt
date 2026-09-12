@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.history.HistoricalChronicleNarrator
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventView
 import com.sendmefile77.chronosphere.horde.HordeGenerationCoordinator
@@ -51,6 +52,9 @@ internal fun ChronicleHordeEventCard(
             era = storyEra,
             economyState = economyState,
         )
+    }
+    val causalBridge = remember(events, civilizationNames) {
+        HistoricalChronicleNarrator.fromEvents(events, civilizationNames)
     }
     if (story != null) {
         PanelCard(accent = MaterialTheme.colorScheme.primary) {
@@ -96,6 +100,29 @@ internal fun ChronicleHordeEventCard(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (causalBridge != null) {
+        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusPill("ПРИЧИНИ", color = MaterialTheme.colorScheme.secondary)
+                    Text(causalBridge.titleUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                Text(causalBridge.bodyUk, style = MaterialTheme.typography.bodyMedium)
+                causalBridge.tracesUk.forEach { trace ->
+                    Text(
+                        "• $trace",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

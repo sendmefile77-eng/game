@@ -15,6 +15,7 @@ data class HistoryBranch(
     val economyState: EconomyState? = null,
     val evolutionState: EvolutionState? = null,
     val historicalMemory: HistoricalMemoryState? = null,
+    val pendingInterventions: List<PendingInterventionState> = emptyList(),
 )
 
 data class HistoryCheckpoint(
@@ -27,6 +28,7 @@ data class HistoryCheckpoint(
     val economyState: EconomyState? = null,
     val evolutionState: EvolutionState? = null,
     val historicalMemory: HistoricalMemoryState? = null,
+    val pendingInterventions: List<PendingInterventionState> = emptyList(),
 )
 
 data class HistoryWorkspace(
@@ -40,6 +42,9 @@ data class HistoryWorkspace(
     val activeEconomyState: EconomyState? get() = activeBranch.economyState
     val activeEvolutionState: EvolutionState? get() = activeBranch.evolutionState
     val activeHistoricalMemory: HistoricalMemoryState? get() = activeBranch.historicalMemory
+    val activePendingInterventions: List<PendingInterventionState> get() =
+        PendingInterventionRegistry.snapshot(activeState.worldSeed, activeBranchId)
+            ?: activeBranch.pendingInterventions
 }
 
 class HistoryTimeline {
@@ -55,6 +60,7 @@ class HistoryTimeline {
             people = initialPeopleState,
             economy = initialEconomyState,
         )
+        PendingInterventionRegistry.activate(initialState.worldSeed, ROOT_BRANCH_ID, emptyList())
         return HistoryWorkspace(
             activeBranchId = ROOT_BRANCH_ID,
             branches = listOf(
@@ -79,28 +85,40 @@ class HistoryTimeline {
         peopleState: PeopleState? = workspace.activePeopleState,
         economyState: EconomyState? = workspace.activeEconomyState,
         evolutionState: EvolutionState? = workspace.activeEvolutionState,
-    ): HistoryWorkspace = workspace.copy(
-        branches = workspace.branches.map { branch ->
-            if (branch.id == workspace.activeBranchId) {
-                branch.copy(
-                    state = state,
-                    peopleState = peopleState,
-                    economyState = economyState,
-                    evolutionState = evolutionState,
-                    historicalMemory = HistoricalMemoryEngine.reconcile(
-                        previous = branch.historicalMemory,
-                        world = state,
-                        people = peopleState,
-                        economy = economyState,
-                    ),
-                )
-            } else branch
-        },
-    )
+    ): HistoryWorkspace {
+        val active = workspace.activeBranch
+        val pending = if (PendingInterventionRegistry.isActive(state.worldSeed, workspace.activeBranchId)) {
+            PendingInterventionRegistry.activeSnapshot()
+        } else {
+            active.pendingInterventions.also {
+                PendingInterventionRegistry.activate(state.worldSeed, workspace.activeBranchId, it)
+            }
+        }
+        return workspace.copy(
+            branches = workspace.branches.map { branch ->
+                if (branch.id == workspace.activeBranchId) {
+                    branch.copy(
+                        state = state,
+                        peopleState = peopleState,
+                        economyState = economyState,
+                        evolutionState = evolutionState,
+                        historicalMemory = HistoricalMemoryEngine.reconcile(
+                            previous = branch.historicalMemory,
+                            world = state,
+                            people = peopleState,
+                            economy = economyState,
+                        ),
+                        pendingInterventions = pending,
+                    )
+                } else branch
+            },
+        )
+    }
 
     fun checkpoint(workspace: HistoryWorkspace, label: String? = null): HistoryWorkspace {
-        val branch = workspace.activeBranch
-        val sequence = workspace.checkpoints.count { it.branchId == branch.id } + 1
+        val synced = capturePending(workspace)
+        val branch = synced.activeBranch
+        val sequence = synced.checkpoints.count { it.branchId == branch.id } + 1
         val checkpoint = HistoryCheckpoint(
             id = "${branch.id}-checkpoint-$sequence",
             branchId = branch.id,
@@ -111,13 +129,15 @@ class HistoryTimeline {
             economyState = branch.economyState,
             evolutionState = branch.evolutionState,
             historicalMemory = branch.historicalMemory,
+            pendingInterventions = branch.pendingInterventions,
         )
-        return workspace.copy(checkpoints = workspace.checkpoints + checkpoint)
+        return synced.copy(checkpoints = synced.checkpoints + checkpoint)
     }
 
     fun fork(workspace: HistoryWorkspace, name: String? = null): HistoryWorkspace {
-        val parent = workspace.activeBranch
-        val sequence = workspace.branches.size
+        val synced = capturePending(workspace)
+        val parent = synced.activeBranch
+        val sequence = synced.branches.size
         val id = "branch-$sequence"
         val branch = HistoryBranch(
             id = id,
@@ -129,39 +149,66 @@ class HistoryTimeline {
             economyState = parent.economyState,
             evolutionState = parent.evolutionState,
             historicalMemory = parent.historicalMemory,
+            pendingInterventions = parent.pendingInterventions,
         )
-        return workspace.copy(activeBranchId = id, branches = workspace.branches + branch)
+        PendingInterventionRegistry.activate(branch.state.worldSeed, id, branch.pendingInterventions)
+        return synced.copy(activeBranchId = id, branches = synced.branches + branch)
     }
 
     fun switchTo(workspace: HistoryWorkspace, branchId: String): HistoryWorkspace {
         require(workspace.branches.any { it.id == branchId }) { "Unknown history branch: $branchId" }
-        return workspace.copy(activeBranchId = branchId)
+        val synced = capturePending(workspace)
+        val target = synced.branches.first { it.id == branchId }
+        PendingInterventionRegistry.activate(target.state.worldSeed, target.id, target.pendingInterventions)
+        return synced.copy(activeBranchId = branchId)
     }
 
     fun restoreCheckpoint(workspace: HistoryWorkspace, checkpointId: String): HistoryWorkspace {
-        val checkpoint = workspace.checkpoints.firstOrNull { it.id == checkpointId }
+        val synced = capturePending(workspace)
+        val checkpoint = synced.checkpoints.firstOrNull { it.id == checkpointId }
             ?: error("Unknown history checkpoint: $checkpointId")
-        require(checkpoint.branchId == workspace.activeBranchId) {
-            "Checkpoint $checkpointId belongs to ${checkpoint.branchId}, not active ${workspace.activeBranchId}"
+        require(checkpoint.branchId == synced.activeBranchId) {
+            "Checkpoint $checkpointId belongs to ${checkpoint.branchId}, not active ${synced.activeBranchId}"
         }
-        return workspace.copy(
-            branches = workspace.branches.map { branch ->
-                if (branch.id == workspace.activeBranchId) {
+        val restored = synced.copy(
+            branches = synced.branches.map { branch ->
+                if (branch.id == synced.activeBranchId) {
                     branch.copy(
                         state = checkpoint.state,
                         peopleState = checkpoint.peopleState,
                         economyState = checkpoint.economyState,
                         evolutionState = checkpoint.evolutionState,
                         historicalMemory = checkpoint.historicalMemory,
+                        pendingInterventions = checkpoint.pendingInterventions,
                     )
                 } else branch
             },
         )
+        PendingInterventionRegistry.activate(
+            checkpoint.state.worldSeed,
+            synced.activeBranchId,
+            checkpoint.pendingInterventions,
+        )
+        return restored
     }
 
     fun restoreLatestCheckpoint(workspace: HistoryWorkspace): HistoryWorkspace {
         val checkpoint = workspace.checkpoints.lastOrNull { it.branchId == workspace.activeBranchId } ?: return workspace
         return restoreCheckpoint(workspace, checkpoint.id)
+    }
+
+    private fun capturePending(workspace: HistoryWorkspace): HistoryWorkspace {
+        val branch = workspace.activeBranch
+        val pending = if (PendingInterventionRegistry.isActive(branch.state.worldSeed, branch.id)) {
+            PendingInterventionRegistry.activeSnapshot()
+        } else {
+            branch.pendingInterventions
+        }
+        return if (pending == branch.pendingInterventions) workspace else workspace.copy(
+            branches = workspace.branches.map { current ->
+                if (current.id == branch.id) current.copy(pendingInterventions = pending) else current
+            },
+        )
     }
 
     companion object { const val ROOT_BRANCH_ID = "branch-0" }

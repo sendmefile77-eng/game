@@ -2,6 +2,8 @@ package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.history.PendingInterventionRegistry
+import com.sendmefile77.chronosphere.history.PendingInterventionState
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
@@ -30,38 +32,65 @@ internal data class PendingChronicleDecision(
 )
 
 /**
- * Process-level hand-off between the Chronicle UI and the next simulation slice.
- * A choice is applied at the beginning of the next time advance, so the causal loop is explicit:
- * event -> player choice -> time advances -> world reacts. Applied choices are also written to the
- * normal event log by InterventionEngine and therefore survive save/load without a new schema.
+ * Compatibility facade used by the existing UI. The authoritative pending state now lives in
+ * core:history and is keyed to the active timeline, so fork/checkpoint/save/load cannot leak a
+ * selected command into another branch.
  */
 internal object ChronicleDecisionMailbox {
-    private val pending = linkedMapOf<String, PendingChronicleDecision>()
-
     @Synchronized
     fun enqueue(option: ChronicleDecisionOption) {
-        pending[option.sourceEventId] = PendingChronicleDecision(
-            commandId = "chronicle-${option.sourceEventId}-${option.id}",
-            option = option,
-        )
+        PendingInterventionRegistry.enqueue(option.toHistoryState())
     }
 
     @Synchronized
-    fun contains(sourceEventId: String): Boolean = sourceEventId in pending
+    fun contains(sourceEventId: String): Boolean = PendingInterventionRegistry.contains(sourceEventId)
 
     @Synchronized
-    fun pendingFor(sourceEventId: String): PendingChronicleDecision? = pending[sourceEventId]
+    fun pendingFor(sourceEventId: String): PendingChronicleDecision? =
+        PendingInterventionRegistry.pendingFor(sourceEventId)?.toChronicleDecision()
 
     @Synchronized
-    fun remove(sourceEventId: String): PendingChronicleDecision? = pending.remove(sourceEventId)
+    fun remove(sourceEventId: String): PendingChronicleDecision? =
+        PendingInterventionRegistry.remove(sourceEventId)?.toChronicleDecision()
 
     @Synchronized
-    fun drain(): List<PendingChronicleDecision> = pending.values.toList().also { pending.clear() }
+    fun drain(): List<PendingChronicleDecision> =
+        PendingInterventionRegistry.drain().map(PendingInterventionState::toChronicleDecision)
 
     @Synchronized
     fun restore(decisions: List<PendingChronicleDecision>) {
-        decisions.forEach { pending[it.option.sourceEventId] = it }
+        PendingInterventionRegistry.restore(decisions.map { it.option.toHistoryState(it.commandId) })
     }
+
+    private fun ChronicleDecisionOption.toHistoryState(
+        commandId: String = "chronicle-$sourceEventId-$id",
+    ): PendingInterventionState = PendingInterventionState(
+        commandId = commandId,
+        sourceEventId = sourceEventId,
+        choiceId = id,
+        choiceLabel = titleUk,
+        effectLabel = effectUk,
+        riskLabel = riskUk,
+        kind = kind,
+        civilizationId = targetCivilizationId,
+        strength = strength,
+        targetCivilizationId = counterpartCivilizationId,
+    )
+
+    private fun PendingInterventionState.toChronicleDecision(): PendingChronicleDecision = PendingChronicleDecision(
+        commandId = commandId,
+        option = ChronicleDecisionOption(
+            id = choiceId,
+            sourceEventId = sourceEventId,
+            titleUk = choiceLabel,
+            effectUk = effectLabel,
+            riskUk = riskLabel,
+            kind = kind,
+            targetCivilizationId = civilizationId,
+            strength = strength,
+            counterpartCivilizationId = targetCivilizationId,
+        ),
+    )
 }
 
 internal object ChronicleDecisionCatalog {
@@ -77,12 +106,9 @@ internal object ChronicleDecisionCatalog {
             .maxOrNull() ?: Long.MIN_VALUE
 
         for (event in events.asReversed()) {
-            // Initial SETTLEMENT_FOUNDED events are world setup, not player-facing historical crises.
             if (event.tick == 0L && event.code == "SETTLEMENT_FOUNDED") continue
             if (event.id in resolved || event.tick < latestResolvedTick) continue
             val decision = forEvent(event, people, economy) ?: continue
-            // Once the newest relevant fork has a queued answer, do not resurrect older forks while
-            // that answer is waiting for the next simulation step.
             if (ChronicleDecisionMailbox.contains(event.id)) return null
             return decision
         }

@@ -17,7 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
 /**
- * Offline portrait renderer backed by the actual approved character-board artwork.
+ * Offline portrait renderer backed by the approved character-board artwork.
  * The atlas contains transparent, normalized crops cut from the supplied board itself.
  * No procedural/cartoon fallback is used here.
  */
@@ -26,6 +26,7 @@ internal fun RasterCharacterPortrait(
     characterKey: String,
     ageYears: Int,
     wardrobeState: WardrobeState,
+    visualTags: Set<String> = emptySet(),
     modifier: Modifier,
 ) {
     val context = LocalContext.current.applicationContext
@@ -36,8 +37,8 @@ internal fun RasterCharacterPortrait(
             }
         }.getOrNull()
     }
-    val selection = remember(characterKey, ageYears) {
-        CharacterBoardRuntime.select(characterKey, ageYears)
+    val selection = remember(characterKey, ageYears, visualTags) {
+        CharacterBoardRuntime.select(characterKey, ageYears, visualTags)
     }
 
     Canvas(modifier = modifier) {
@@ -77,17 +78,51 @@ internal object CharacterBoardRuntime {
         val femaleFamily: Boolean,
         val headIndex: Int,
         val garmentIndex: Int,
+        val clothTag: String? = null,
+        val jewelryTag: String? = null,
     )
 
-    fun select(characterKey: String, ageYears: Int): Selection {
+    fun select(characterKey: String, ageYears: Int, visualTags: Set<String> = emptySet()): Selection {
         val hash = stableHash(characterKey)
         val head = if (ageYears >= 60) HEAD_VARIANTS - 1 else (hash ushr 3) % (HEAD_VARIANTS - 1)
+        val cloth = tagValue(visualTags, "cloth:")
+        val jewelry = tagValue(visualTags, "jewel:")
+        val garment = garmentFor(cloth, jewelry, hash)
         return Selection(
             femaleFamily = (hash and 1) == 0,
             headIndex = head,
-            garmentIndex = (hash ushr 11) % GARMENT_VARIANTS,
+            garmentIndex = garment,
+            clothTag = cloth,
+            jewelryTag = jewelry,
         )
     }
+
+    private fun garmentFor(cloth: String?, jewelry: String?, identityHash: Int): Int {
+        if (cloth == null && jewelry == null) return (identityHash ushr 11) % GARMENT_VARIANTS
+        val normalized = cloth.orEmpty().removePrefix("mended-")
+        val base = when {
+            normalized.contains("hide") -> 0
+            normalized.contains("linen") || normalized.contains("plain") -> 1
+            normalized.contains("wool") -> 2
+            normalized.contains("status") || normalized.contains("layered") -> 3
+            normalized.contains("mill") || normalized.contains("tailored") -> 4
+            normalized.contains("sealed") || normalized.contains("duty") -> 5
+            else -> positiveMod(stableHash(normalized.ifBlank { jewelry.orEmpty() }), GARMENT_VARIANTS)
+        }
+        // The current approved atlas has no independent jewellery layer. We never draw fake jewellery;
+        // instead the tag deterministically selects between neighboring compatible board variants.
+        return if (jewelry.isNullOrBlank()) base else {
+            positiveMod(base + positiveMod(stableHash(jewelry), 2), GARMENT_VARIANTS)
+        }
+    }
+
+    private fun tagValue(tags: Set<String>, prefix: String): String? = tags.asSequence()
+        .filter { it.startsWith(prefix) && it.length > prefix.length }
+        .map { it.removePrefix(prefix) }
+        .sorted()
+        .firstOrNull()
+
+    private fun positiveMod(value: Int, modulus: Int): Int = ((value % modulus) + modulus) % modulus
 
     private fun stableHash(value: String): Int {
         var hash = 0x811C9DC5.toInt()
@@ -132,8 +167,6 @@ private fun DrawScope.drawBoardPortrait(
         } else {
             CharacterBoardRuntime.MALE_TORSO_X
         }
-        // Use the upper 70% of the normalized base-body crop. A bust/three-quarter composition
-        // keeps adult proportions natural inside the landscape phone card.
         val torsoSrc = Rect(
             torsoX,
             CharacterBoardRuntime.TORSO_Y,
@@ -160,8 +193,6 @@ private fun DrawScope.drawBoardPortrait(
             else -> 255
         }
 
-        // Garment first, then head. Both are transparent cut-outs from the same approved sheet,
-        // so the neck/collar overlap reads as one portrait rather than as two rectangular crops.
         drawPart(garmentSrc, logicalRect(20f, 180f, 300f, 480f), garmentAlpha)
         drawPart(headSrc, logicalRect(85f, 5f, 235f, 230f))
     }

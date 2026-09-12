@@ -69,6 +69,63 @@ class HistoryTimelineTest {
         assertEquals(84L, workspace.activeState.tick)
     }
 
+    @Test
+    fun queuedInterventionForksWithHistoryButThenDivergesPerBranch() {
+        val initial = sampleState(tick = 24L)
+        var workspace = timeline.create(initial)
+        val pending = PendingInterventionState(
+            commandId = "chronicle-era-1-era-push",
+            sourceEventId = "era-1",
+            choiceId = "era-push",
+            choiceLabel = "Продовжити ривок",
+            effectLabel = "Технологічний імпульс",
+            riskLabel = "Без стабілізації",
+            kind = InterventionKind.TECHNOLOGY_BOOST,
+            civilizationId = "civ-1",
+            strength = 0.68,
+        )
+        PendingInterventionRegistry.enqueue(pending)
+        workspace = timeline.syncActive(workspace, initial)
+        workspace = timeline.fork(workspace, "Alternative")
+
+        assertEquals(listOf(pending), workspace.activePendingInterventions)
+        assertEquals(listOf(pending), workspace.branches.first { it.id == HistoryTimeline.ROOT_BRANCH_ID }.pendingInterventions)
+
+        PendingInterventionRegistry.drain()
+        workspace = timeline.syncActive(workspace, workspace.activeState)
+        assertTrue(workspace.activeBranch.pendingInterventions.isEmpty())
+
+        workspace = timeline.switchTo(workspace, HistoryTimeline.ROOT_BRANCH_ID)
+        assertEquals(listOf(pending), workspace.activePendingInterventions)
+        assertEquals(listOf(pending), PendingInterventionRegistry.activeSnapshot())
+    }
+
+    @Test
+    fun checkpointRestoresQueuedInterventionTogetherWithWorld() {
+        val initial = sampleState(tick = 36L)
+        var workspace = timeline.create(initial)
+        val pending = PendingInterventionState(
+            commandId = "chronicle-shortage-food",
+            sourceEventId = "shortage-1",
+            choiceId = "emergency-food",
+            choiceLabel = "Аварійні запаси",
+            effectLabel = "Поповнити продовольство",
+            riskLabel = "Причина дефіциту лишається",
+            kind = InterventionKind.HARVEST_AID,
+            civilizationId = "civ-1",
+            strength = 0.72,
+        )
+        PendingInterventionRegistry.enqueue(pending)
+        workspace = timeline.checkpoint(workspace, "Before answer is applied")
+        PendingInterventionRegistry.drain()
+        workspace = timeline.syncActive(workspace, initial.copy(tick = 48L))
+        assertTrue(workspace.activePendingInterventions.isEmpty())
+
+        workspace = timeline.restoreLatestCheckpoint(workspace)
+        assertEquals(36L, workspace.activeState.tick)
+        assertEquals(listOf(pending), workspace.activePendingInterventions)
+    }
+
     private fun sampleState(tick: Long): LivingPlanetState {
         val civilization = Civilization(
             id = "civ-1",

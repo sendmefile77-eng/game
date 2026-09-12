@@ -37,6 +37,8 @@ object HordeResolvedScenePromptFactory {
 
         val identity = HordeCharacterVisualProfile.from(characterKey)
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
+        val historicalVisual = HordeHistoricalVisualPrompt.fragment(visualTags)
+        val historicalSignature = HordeHistoricalVisualPrompt.signature(visualTags)
         val agePhrase = when {
             ageYears < 13 -> "child age $ageYears"
             ageYears < 18 -> "teenager age $ageYears"
@@ -76,6 +78,7 @@ object HordeResolvedScenePromptFactory {
             add(morphologyPhrase)
             add(HordeEraVisual.materialCulture(technologyEra))
             add(HordeEraVisual.portraitInterior(technologyEra))
+            if (historicalVisual.isNotBlank()) add(historicalVisual)
             add(wardrobe)
             add(camera)
             add("one anatomically coherent continuous body")
@@ -144,18 +147,20 @@ object HordeResolvedScenePromptFactory {
 
         val eraSignature = technologyEra?.name ?: "UNSPECIFIED"
         val referenceCacheKey = listOf(
-            "horde-character-reference-v4",
+            "horde-character-reference-v5",
             characterKey,
             identity.signature,
             morphology.signature,
             eraSignature,
+            historicalSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v10",
+            "horde-resolved-scene-v11",
             characterKey,
             identity.signature,
             morphology.signature,
             eraSignature,
+            historicalSignature,
             ageYears.toString(),
             scene.sceneKey,
             scene.styleId,
@@ -181,7 +186,7 @@ object HordeResolvedScenePromptFactory {
             height = 1152,
             steps = 22,
             cfgScale = 5.5,
-            seed = "chronosphere:$characterKey:${morphology.signature}:$eraSignature",
+            seed = "chronosphere:$characterKey:${morphology.signature}:$eraSignature:$historicalSignature",
             preferredModels = if (undressed) nsfwModels else sfwModels,
             qualityPriority = true,
             referenceCacheKey = referenceCacheKey,

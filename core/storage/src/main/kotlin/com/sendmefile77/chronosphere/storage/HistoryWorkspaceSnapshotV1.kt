@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere.storage
 import com.sendmefile77.chronosphere.history.HistoryBranch
 import com.sendmefile77.chronosphere.history.HistoryCheckpoint
 import com.sendmefile77.chronosphere.history.HistoryWorkspace
+import com.sendmefile77.chronosphere.history.PendingInterventionRegistry
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -10,11 +11,12 @@ object HistoryWorkspaceSnapshotV1 {
     private const val HEADER = "CHRONOSPHERE_HISTORY_V1"
 
     fun encode(workspace: HistoryWorkspace): String {
-        validateWorkspace(workspace)
+        val effective = captureLivePending(workspace)
+        validateWorkspace(effective)
         return buildString {
             appendLine(HEADER)
-            appendLine("ACTIVE\t${esc(workspace.activeBranchId)}")
-            workspace.branches.forEach { branch ->
+            appendLine("ACTIVE\t${esc(effective.activeBranchId)}")
+            effective.branches.forEach { branch ->
                 appendLine(
                     listOf(
                         "BRANCH", esc(branch.id), esc(branch.name), esc(branch.parentBranchId ?: ""), branch.forkTick,
@@ -23,10 +25,11 @@ object HistoryWorkspaceSnapshotV1 {
                         branch.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                         branch.evolutionState?.let { pack(EvolutionSnapshotV1.encode(it)) }.orEmpty(),
                         branch.historicalMemory?.let { pack(HistoricalMemorySnapshotV1.encode(it)) }.orEmpty(),
+                        pack(PendingInterventionSnapshotV1.encode(branch.pendingInterventions)),
                     ).joinToString("\t"),
                 )
             }
-            workspace.checkpoints.forEach { checkpoint ->
+            effective.checkpoints.forEach { checkpoint ->
                 appendLine(
                     listOf(
                         "CHECKPOINT", esc(checkpoint.id), esc(checkpoint.branchId), esc(checkpoint.label), checkpoint.tick,
@@ -35,6 +38,7 @@ object HistoryWorkspaceSnapshotV1 {
                         checkpoint.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                         checkpoint.evolutionState?.let { pack(EvolutionSnapshotV1.encode(it)) }.orEmpty(),
                         checkpoint.historicalMemory?.let { pack(HistoricalMemorySnapshotV1.encode(it)) }.orEmpty(),
+                        pack(PendingInterventionSnapshotV1.encode(checkpoint.pendingInterventions)),
                     ).joinToString("\t"),
                 )
             }
@@ -56,6 +60,9 @@ object HistoryWorkspaceSnapshotV1 {
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
             val historicalMemory = p.getOrNull(9)?.takeIf { it.isNotBlank() }?.let { HistoricalMemorySnapshotV1.decode(unpack(it)) }
+            val pendingInterventions = p.getOrNull(10)?.takeIf { it.isNotBlank() }
+                ?.let { PendingInterventionSnapshotV1.decode(unpack(it)) }
+                .orEmpty()
             HistoryBranch(
                 id = unesc(p[1]),
                 name = unesc(p[2]),
@@ -66,6 +73,7 @@ object HistoryWorkspaceSnapshotV1 {
                 economyState = economyState,
                 evolutionState = evolutionState,
                 historicalMemory = historicalMemory,
+                pendingInterventions = pendingInterventions,
             )
         }
 
@@ -77,6 +85,9 @@ object HistoryWorkspaceSnapshotV1 {
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
             val historicalMemory = p.getOrNull(9)?.takeIf { it.isNotBlank() }?.let { HistoricalMemorySnapshotV1.decode(unpack(it)) }
+            val pendingInterventions = p.getOrNull(10)?.takeIf { it.isNotBlank() }
+                ?.let { PendingInterventionSnapshotV1.decode(unpack(it)) }
+                .orEmpty()
             HistoryCheckpoint(
                 id = unesc(p[1]),
                 branchId = unesc(p[2]),
@@ -87,11 +98,30 @@ object HistoryWorkspaceSnapshotV1 {
                 economyState = economyState,
                 evolutionState = evolutionState,
                 historicalMemory = historicalMemory,
+                pendingInterventions = pendingInterventions,
             )
         }
 
-        return HistoryWorkspace(activeBranchId = activeBranchId, branches = branches, checkpoints = checkpoints)
-            .also(::validateWorkspace)
+        return HistoryWorkspace(activeBranchId = activeBranchId, branches = branches, checkpoints = checkpoints).also { workspace ->
+            validateWorkspace(workspace)
+            PendingInterventionRegistry.activate(
+                workspace.activeState.worldSeed,
+                workspace.activeBranchId,
+                workspace.activeBranch.pendingInterventions,
+            )
+        }
+    }
+
+    private fun captureLivePending(workspace: HistoryWorkspace): HistoryWorkspace {
+        val branch = workspace.activeBranch
+        val pending = PendingInterventionRegistry.snapshot(branch.state.worldSeed, branch.id)
+            ?: branch.pendingInterventions
+        if (pending == branch.pendingInterventions) return workspace
+        return workspace.copy(
+            branches = workspace.branches.map { current ->
+                if (current.id == branch.id) current.copy(pendingInterventions = pending) else current
+            },
+        )
     }
 
     private fun validateWorkspace(workspace: HistoryWorkspace) {
@@ -108,6 +138,9 @@ object HistoryWorkspaceSnapshotV1 {
         branches.forEach { branch ->
             require(branch.forkTick in 0L..branch.state.tick) { "Branch fork tick is outside branch history" }
             require(branch.parentBranchId == null || branch.parentBranchId in branchById) { "Branch references unknown parent" }
+            require(branch.pendingInterventions.map { it.sourceEventId }.distinct().size == branch.pendingInterventions.size) {
+                "Branch contains duplicate pending intervention sources"
+            }
             validateLayer("Branch people", branch.state.worldSeed, branch.state.tick, branch.peopleState?.worldSeed, branch.peopleState?.tick)
             validateLayer("Branch economy", branch.state.worldSeed, branch.state.tick, branch.economyState?.worldSeed, branch.economyState?.tick)
             validateLayer("Branch evolution", branch.state.worldSeed, branch.state.tick, branch.evolutionState?.worldSeed, branch.evolutionState?.tick)
@@ -122,6 +155,9 @@ object HistoryWorkspaceSnapshotV1 {
             require(checkpoint.tick == checkpoint.state.tick) { "Checkpoint tick/state mismatch" }
             require(checkpoint.state.worldSeed == branch.state.worldSeed) { "Checkpoint/world seed mismatch" }
             require(checkpoint.tick >= branch.forkTick) { "Checkpoint predates its branch" }
+            require(checkpoint.pendingInterventions.map { it.sourceEventId }.distinct().size == checkpoint.pendingInterventions.size) {
+                "Checkpoint contains duplicate pending intervention sources"
+            }
             validateLayer("Checkpoint people", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.peopleState?.worldSeed, checkpoint.peopleState?.tick)
             validateLayer("Checkpoint economy", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.economyState?.worldSeed, checkpoint.economyState?.tick)
             validateLayer("Checkpoint evolution", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.evolutionState?.worldSeed, checkpoint.evolutionState?.tick)

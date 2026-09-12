@@ -30,7 +30,7 @@ internal fun LocalSceneFallbackView(
             resourceLoader = context.classLoader,
         )
     }
-    val layers = remember(scene.sceneKey, repository) {
+    val layers = remember(scene.sceneKey, scene.layerKeys, repository) {
         repository.layersFor(scene).mapNotNull { entry ->
             repository.bitmap(entry)?.let { bitmap -> entry to bitmap }
         }
@@ -47,6 +47,7 @@ internal fun LocalSceneFallbackView(
                     characterKey = characterKey,
                     ageYears = ageYears,
                     wardrobeState = scene.wardrobeState,
+                    visualTags = scene.layerKeys.toSet(),
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {

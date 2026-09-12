@@ -8,6 +8,9 @@ import com.sendmefile77.chronosphere.economy.EconomicGood
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.history.HistoryTimeline
+import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.history.PendingInterventionRegistry
+import com.sendmefile77.chronosphere.history.PendingInterventionState
 import com.sendmefile77.chronosphere.people.PeopleEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -67,6 +70,32 @@ class HistoryWorkspaceSnapshotV1Test {
     }
 
     @Test
+    fun queuedInterventionsSurviveWorkspaceSaveAndCheckpointSave() {
+        val timeline = HistoryTimeline()
+        val initial = sampleState(24L)
+        val people = PeopleEngine().initialize(initial)
+        var workspace = timeline.create(initial, people)
+        val pending = PendingInterventionState(
+            commandId = "chronicle-era-era-push",
+            sourceEventId = "era-1",
+            choiceId = "era-push",
+            choiceLabel = "Продовжити ривок",
+            effectLabel = "Розвиток",
+            riskLabel = "Напруга",
+            kind = InterventionKind.TECHNOLOGY_BOOST,
+            civilizationId = "civ-1",
+            strength = 0.68,
+        )
+        PendingInterventionRegistry.enqueue(pending)
+        workspace = timeline.syncActive(workspace, initial, people)
+        workspace = timeline.checkpoint(workspace, "Queued choice")
+
+        val decoded = HistoryWorkspaceSnapshotV1.decode(HistoryWorkspaceSnapshotV1.encode(workspace))
+        assertEquals(listOf(pending), decoded.activeBranch.pendingInterventions)
+        assertEquals(listOf(pending), decoded.checkpoints.single().pendingInterventions)
+    }
+
+    @Test
     fun stage4HistoryWithoutEconomyStillDecodes() {
         val timeline = HistoryTimeline()
         val initial = sampleState(24L)
@@ -76,7 +105,11 @@ class HistoryWorkspaceSnapshotV1Test {
 
         val stage5Text = HistoryWorkspaceSnapshotV1.encode(workspace)
         val legacyText = stage5Text.lineSequence().joinToString("\n") { line ->
-            if (line.startsWith("BRANCH\t") || line.startsWith("CHECKPOINT\t")) line.trimEnd('\t') else line
+            if (line.startsWith("BRANCH\t") || line.startsWith("CHECKPOINT\t")) {
+                val p = line.split('\t').toMutableList()
+                while (p.size > 10) p.removeAt(p.lastIndex)
+                p.joinToString("\t").trimEnd('\t')
+            } else line
         }
         val decoded = HistoryWorkspaceSnapshotV1.decode(legacyText)
 
@@ -84,6 +117,7 @@ class HistoryWorkspaceSnapshotV1Test {
         assertEquals(people, decoded.activePeopleState)
         assertNull(decoded.activeEconomyState)
         assertNull(decoded.checkpoints.single().economyState)
+        assertEquals(emptyList<PendingInterventionState>(), decoded.activeBranch.pendingInterventions)
     }
 
     private fun sampleState(tick: Long): LivingPlanetState {

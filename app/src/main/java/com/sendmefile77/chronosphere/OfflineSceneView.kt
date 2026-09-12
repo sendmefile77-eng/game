@@ -18,8 +18,8 @@ import com.sendmefile77.chronosphere.scene.WardrobeState
 /**
  * Character-scene image surface.
  *
- * AI Horde is the primary renderer. The previous fully local renderer remains visible while a
- * request is queued and is kept permanently as the failure/offline fallback.
+ * AI Horde is the primary renderer. The fully local renderer remains visible while a request is
+ * queued and is kept permanently as the failure/offline fallback.
  */
 @Composable
 internal fun OfflineSceneView(
@@ -34,6 +34,17 @@ internal fun OfflineSceneView(
     galleryCapture: GalleryCapture? = null,
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
+    val historicalVisualTags = adultVisual?.mediaTags.orEmpty().filterTo(linkedSetOf()) { tag ->
+        HISTORICAL_VISUAL_PREFIXES.any(tag::startsWith)
+    }
+    val mergedVisualTags = remember(visualTags, historicalVisualTags) {
+        (visualTags + historicalVisualTags).toSortedSet()
+    }
+    val fallbackScene = remember(scene, historicalVisualTags) {
+        if (historicalVisualTags.isEmpty()) scene else scene.copy(
+            layerKeys = (scene.layerKeys + historicalVisualTags).distinct(),
+        )
+    }
     val adultFullBody = ageYears >= 18 && (
         actionPlan != null ||
             scene.wardrobeState == WardrobeState.UNDRESSED ||
@@ -43,7 +54,7 @@ internal fun OfflineSceneView(
         scene,
         characterKey,
         ageYears,
-        visualTags,
+        mergedVisualTags,
         visualNumeric,
         technologyEra,
         adultVisual,
@@ -53,7 +64,7 @@ internal fun OfflineSceneView(
             actionPlan != null && ageYears >= 18 -> HordeAdultActionPromptFactory.create(
                 scene = scene,
                 plan = actionPlan,
-                visualTags = visualTags,
+                visualTags = mergedVisualTags,
                 visualNumeric = visualNumeric,
                 technologyEra = technologyEra,
                 adultVisual = adultVisual,
@@ -62,7 +73,7 @@ internal fun OfflineSceneView(
                 scene = scene,
                 characterKey = characterKey,
                 ageYears = ageYears,
-                visualTags = visualTags,
+                visualTags = mergedVisualTags,
                 visualNumeric = visualNumeric,
                 technologyEra = technologyEra,
             )
@@ -71,7 +82,7 @@ internal fun OfflineSceneView(
                 descriptor = adultVisual,
                 characterKey = characterKey,
                 ageYears = ageYears,
-                visualTags = visualTags,
+                visualTags = mergedVisualTags,
                 visualNumeric = visualNumeric,
                 technologyEra = technologyEra,
             )
@@ -79,7 +90,7 @@ internal fun OfflineSceneView(
                 scene = scene,
                 characterKey = characterKey,
                 ageYears = ageYears,
-                visualTags = visualTags,
+                visualTags = mergedVisualTags,
                 visualNumeric = visualNumeric,
                 technologyEra = technologyEra,
             )
@@ -87,7 +98,7 @@ internal fun OfflineSceneView(
     }
     HordeSceneView(
         request = request,
-        fallbackScene = scene,
+        fallbackScene = fallbackScene,
         characterKey = characterKey,
         ageYears = ageYears,
         fitFullBody = adultFullBody,
@@ -95,3 +106,22 @@ internal fun OfflineSceneView(
         modifier = modifier,
     )
 }
+
+private val HISTORICAL_VISUAL_PREFIXES = listOf(
+    "cloth:",
+    "jewel:",
+    "hair:",
+    "body-norm:",
+    "arch:",
+    "set-bias:",
+    "cosmetic:",
+    "publicness:",
+    "hist:",
+    "foundation:",
+    "policy:",
+    "era:",
+    "civ:",
+    "branch:",
+    "role:",
+    "status:",
+)
