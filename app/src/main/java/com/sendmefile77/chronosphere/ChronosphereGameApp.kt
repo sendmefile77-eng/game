@@ -103,7 +103,7 @@ fun ChronosphereGameApp() {
     val initialEvolution = initialStart.evolution
 
     var worldSetup by remember { mutableStateOf(initialSetup) }
-    var showNewWorldDialog by remember { mutableStateOf(false) }
+    var showNewWorldDialog by remember { mutableStateOf(true) }
     var session by remember { mutableStateOf(initialSession) }
     var peopleState by remember { mutableStateOf(initialPeople) }
     var economyState by remember { mutableStateOf(initialEconomy) }
@@ -782,8 +782,7 @@ private fun RowScope.GameTab(
         color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(
             1.dp,
-            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-        ),
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shape = RoundedCornerShape(10.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
