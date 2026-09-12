@@ -3,17 +3,20 @@ package com.sendmefile77.chronosphere
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,9 +26,13 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 internal fun NewWorldSetupDialog(
@@ -85,90 +92,157 @@ internal fun NewWorldSetupDialog(
         error = null
     }
 
-    AlertDialog(
+    fun submit() {
+        val seed = seedText.toLongOrNull()
+        if (seed == null) {
+            error = "Seed має бути цілим числом"
+            return
+        }
+        runCatching {
+            WorldSetup(seed = seed, startSpacing = spacing, tribes = tribes.toList())
+        }.onSuccess(onCreate).onFailure { throwable ->
+            error = throwable.message ?: "Перевірте налаштування племен"
+        }
+    }
+
+    Dialog(
         onDismissRequest = { if (enabled) onDismiss() },
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Новий світ", fontWeight = FontWeight.Bold)
-                Text(
-                    when (step) {
-                        0 -> "1/4 · Світ"
-                        1 -> "2/4 · Племена і біологія"
-                        2 -> "3/4 · Сексуальна культура"
-                        else -> "4/4 · Особливості і запуск"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.94f)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                when (step) {
-                    0 -> WorldStep(
-                        seedText = seedText,
-                        onSeedChange = { seedText = it.filter { c -> c == '-' || c.isDigit() } },
-                        tribeCount = tribes.size,
-                        onTribeCountChange = ::resizeTribes,
-                        spacing = spacing,
-                        onSpacingChange = { spacing = it },
-                    )
-                    1 -> TribeBiologyStep(
-                        tribes = tribes,
-                        selectedTribe = selectedTribe,
-                        onSelectTribe = { selectedTribe = it },
-                        onChange = { replaceTribe(selectedTribe, it) },
-                    )
-                    2 -> TribeSexualityStep(
-                        tribes = tribes,
-                        selectedTribe = selectedTribe,
-                        onSelectTribe = { selectedTribe = it },
-                        onChange = { replaceTribe(selectedTribe, it) },
-                    )
-                    else -> TribeTraitsStep(
-                        tribes = tribes,
-                        selectedTribe = selectedTribe,
-                        onSelectTribe = { selectedTribe = it },
-                        onChange = { replaceTribe(selectedTribe, it) },
-                    )
+                WizardHeader(step = step, tribeCount = tribes.size)
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when (step) {
+                        0 -> WorldStep(
+                            seedText = seedText,
+                            onSeedChange = { seedText = it.filter { c -> c == '-' || c.isDigit() } },
+                            tribeCount = tribes.size,
+                            onTribeCountChange = ::resizeTribes,
+                            spacing = spacing,
+                            onSpacingChange = { spacing = it },
+                        )
+                        1 -> TribeBiologyStep(
+                            tribes = tribes,
+                            selectedTribe = selectedTribe,
+                            onSelectTribe = { selectedTribe = it },
+                            onChange = { replaceTribe(selectedTribe, it) },
+                        )
+                        2 -> TribeSexualityStep(
+                            tribes = tribes,
+                            selectedTribe = selectedTribe,
+                            onSelectTribe = { selectedTribe = it },
+                            onChange = { replaceTribe(selectedTribe, it) },
+                        )
+                        else -> TribeTraitsStep(
+                            tribes = tribes,
+                            selectedTribe = selectedTribe,
+                            onSelectTribe = { selectedTribe = it },
+                            onChange = { replaceTribe(selectedTribe, it) },
+                        )
+                    }
+                    error?.let {
+                        PanelCard(accent = MaterialTheme.colorScheme.error) {
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
-                error?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onDismiss, enabled = enabled) { Text("Скасувати") }
+                    TextButton(onClick = ::randomize, enabled = enabled) { Text("Випадково") }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (step > 0) {
+                        OutlinedButton(
+                            onClick = { step -= 1; error = null },
+                            enabled = enabled,
+                            modifier = Modifier.weight(1f),
+                            shape = ChronosphereSmallShape,
+                        ) { Text("Назад") }
+                    }
+                    Button(
+                        onClick = {
+                            if (step < 3) {
+                                step += 1
+                                error = null
+                            } else {
+                                submit()
+                            }
+                        },
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f),
+                        shape = ChronosphereSmallShape,
+                    ) { Text(if (step < 3) "Далі" else "Створити світ") }
                 }
             }
-        },
-        confirmButton = {
-            if (step < 3) {
-                Button(onClick = { step += 1; error = null }, enabled = enabled) { Text("Далі") }
-            } else {
-                Button(
-                    onClick = {
-                        val seed = seedText.toLongOrNull()
-                        if (seed == null) {
-                            error = "Seed має бути цілим числом"
-                            return@Button
-                        }
-                        runCatching {
-                            WorldSetup(seed = seed, startSpacing = spacing, tribes = tribes.toList())
-                        }.onSuccess(onCreate).onFailure { throwable ->
-                            error = throwable.message ?: "Перевірте налаштування племен"
-                        }
+        }
+    }
+}
+
+@Composable
+private fun WizardHeader(step: Int, tribeCount: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text("Новий світ", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    when (step) {
+                        0 -> "Світ і старт"
+                        1 -> "Племена і біологія"
+                        2 -> "Культура і близькість"
+                        else -> "Риси і запуск"
                     },
-                    enabled = enabled,
-                ) { Text("Створити світ") }
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-        },
-        dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (step > 0) TextButton(onClick = { step -= 1; error = null }, enabled = enabled) { Text("Назад") }
-                TextButton(onClick = ::randomize, enabled = enabled) { Text("Випадково") }
-                TextButton(onClick = onDismiss, enabled = enabled) { Text("Скасувати") }
+            StatusPill("$tribeCount плем.", color = MaterialTheme.colorScheme.secondary)
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(4) { index ->
+                Surface(
+                    modifier = Modifier.weight(1f).height(4.dp),
+                    shape = RoundedCornerShape(100.dp),
+                    color = if (index <= step) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                ) {}
             }
-        },
-    )
+        }
+        Text(
+            "Крок ${step + 1} з 4",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
 }
 
 @Composable
@@ -180,40 +254,71 @@ private fun WorldStep(
     spacing: StartSpacing,
     onSpacingChange: (StartSpacing) -> Unit,
 ) {
-    Text("Світ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    OutlinedTextField(
-        value = seedText,
-        onValueChange = onSeedChange,
-        label = { Text("Seed") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Text("Початкові племена: $tribeCount")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-            onClick = { onTribeCountChange(tribeCount - 1) },
-            enabled = tribeCount > WorldSetup.MIN_TRIBES,
-        ) { Text("−") }
-        OutlinedButton(
-            onClick = { onTribeCountChange(tribeCount + 1) },
-            enabled = tribeCount < WorldSetup.MAX_TRIBES,
-        ) { Text("+") }
-    }
-    Text("Відстань між стартами")
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        StartSpacing.entries.forEach { value ->
-            FilterChip(
-                selected = spacing == value,
-                onClick = { onSpacingChange(value) },
-                label = { Text(value.displayNameUk) },
+    PanelCard(accent = MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Початкові племена", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { onTribeCountChange(tribeCount - 1) },
+                    enabled = tribeCount > WorldSetup.MIN_TRIBES,
+                    shape = ChronosphereSmallShape,
+                ) { Text("−") }
+                Text("$tribeCount", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                OutlinedButton(
+                    onClick = { onTribeCountChange(tribeCount + 1) },
+                    enabled = tribeCount < WorldSetup.MAX_TRIBES,
+                    shape = ChronosphereSmallShape,
+                ) { Text("+") }
+            }
+            Text(
+                "Можна почати навіть з одного племені. Нові держави з’являтимуться вже з історії світу.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
-    Text(
-        "Кількість племен визначає реальну кількість стартових держав. Відстань впливає на те, наскільки рано почнуться контакти, війни й змішування.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Розташування", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ChoiceGrid(StartSpacing.entries.toList()) { value ->
+                FilterChip(
+                    selected = spacing == value,
+                    onClick = { onSpacingChange(value) },
+                    label = { Text(value.displayNameUk) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                "Відстань визначає, наскільки рано почнуться контакти, війни, торгівля та змішування.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Seed світу", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = seedText,
+                onValueChange = onSeedChange,
+                label = { Text("Seed") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = ChronosphereSmallShape,
+            )
+            Text(
+                "Однаковий seed дає однакову базову карту.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
@@ -225,30 +330,35 @@ private fun TribeBiologyStep(
 ) {
     TribeSelector(tribes, selectedTribe, onSelectTribe)
     val tribe = tribes[selectedTribe]
-    OutlinedTextField(
-        value = tribe.name,
-        onValueChange = { value ->
-            val next = value.take(24)
-            if (next.isNotBlank()) onChange(tribe.copy(name = next))
-        },
-        label = { Text("Назва племені") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Text("Стартова раса", style = MaterialTheme.typography.titleSmall)
-    TribeRace.entries.forEach { race ->
-        FilterChip(
-            selected = tribe.race == race,
-            onClick = { onChange(tribe.copy(race = race)) },
-            label = { Text(race.displayNameUk) },
-            modifier = Modifier.padding(end = 4.dp),
-        )
+    PanelCard(accent = MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = tribe.name,
+                onValueChange = { value ->
+                    val next = value.take(24)
+                    if (next.isNotBlank()) onChange(tribe.copy(name = next))
+                },
+                label = { Text("Назва племені") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = ChronosphereSmallShape,
+            )
+            Text("Стартова раса", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ChoiceGrid(TribeRace.entries.toList()) { race ->
+                FilterChip(
+                    selected = tribe.race == race,
+                    onClick = { onChange(tribe.copy(race = race)) },
+                    label = { Text(race.displayNameUk) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                "Раса змінює справжню морфологію і план тіла стартової еволюційної лінії.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
-    Text(
-        "Раса змінює справжній план тіла і морфологію стартової еволюційної лінії. Чотирирукі, хвостаті, хутряні та лускаті — не декоративні теги.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 @Composable
@@ -260,31 +370,38 @@ private fun TribeSexualityStep(
 ) {
     TribeSelector(tribes, selectedTribe, onSelectTribe)
     val tribe = tribes[selectedTribe]
-    Text("Домінуючі сексуальні особливості · ${tribe.sexualFeatures.size}/4", style = MaterialTheme.typography.titleSmall)
-    SexualFeature.entries.forEach { feature ->
-        val selected = feature in tribe.sexualFeatures
-        FilterChip(
-            selected = selected,
-            onClick = {
-                val next = tribe.sexualFeatures.toMutableSet()
-                if (selected) {
-                    if (next.size > 1) next.remove(feature)
-                } else if (next.size < 4) {
-                    if (feature == SexualFeature.MONOGAMY) next.remove(SexualFeature.POLYGAMY)
-                    if (feature == SexualFeature.POLYGAMY) next.remove(SexualFeature.MONOGAMY)
-                    next.add(feature)
-                }
-                onChange(tribe.copy(sexualFeatures = next))
-            },
-            label = { Text(feature.displayNameUk) },
-            modifier = Modifier.padding(end = 4.dp),
-        )
+    PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Культурні особливості", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                StatusPill("${tribe.sexualFeatures.size}/4", color = MaterialTheme.colorScheme.secondary)
+            }
+            ChoiceGrid(SexualFeature.entries.toList()) { feature ->
+                val selected = feature in tribe.sexualFeatures
+                FilterChip(
+                    selected = selected,
+                    onClick = {
+                        val next = tribe.sexualFeatures.toMutableSet()
+                        if (selected) {
+                            if (next.size > 1) next.remove(feature)
+                        } else if (next.size < 4) {
+                            if (feature == SexualFeature.MONOGAMY) next.remove(SexualFeature.POLYGAMY)
+                            if (feature == SexualFeature.POLYGAMY) next.remove(SexualFeature.MONOGAMY)
+                            next.add(feature)
+                        }
+                        onChange(tribe.copy(sexualFeatures = next))
+                    },
+                    label = { Text(feature.displayNameUk) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                "Оберіть від 1 до 4 домінуючих норм. Вони впливають на соціальну модель і події дорослих персонажів.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
-    Text(
-        "Ці параметри змінюють приватність, відкритість тіла, ревнощі, парність, родючість, статус і теги, які отримує adult-модуль при виборі подій та сцен.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 @Composable
@@ -296,39 +413,62 @@ private fun TribeTraitsStep(
 ) {
     TribeSelector(tribes, selectedTribe, onSelectTribe)
     val tribe = tribes[selectedTribe]
-    Text("Сильні риси · ${tribe.traits.size}/2", style = MaterialTheme.typography.titleSmall)
-    TribeTrait.entries.forEach { trait ->
-        val selected = trait in tribe.traits
-        FilterChip(
-            selected = selected,
-            onClick = {
-                val next = tribe.traits.toMutableSet()
-                if (selected) {
-                    if (next.size > 1) next.remove(trait)
-                } else if (next.size < 2) next.add(trait)
-                onChange(tribe.copy(traits = next))
-            },
-            label = { Text(trait.displayNameUk) },
-            modifier = Modifier.padding(end = 4.dp),
-        )
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Сильні риси", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                StatusPill("${tribe.traits.size}/2", color = MaterialTheme.colorScheme.primary)
+            }
+            ChoiceGrid(TribeTrait.entries.toList()) { trait ->
+                val selected = trait in tribe.traits
+                FilterChip(
+                    selected = selected,
+                    onClick = {
+                        val next = tribe.traits.toMutableSet()
+                        if (selected) {
+                            if (next.size > 1) next.remove(trait)
+                        } else if (next.size < 2) next.add(trait)
+                        onChange(tribe.copy(traits = next))
+                    },
+                    label = { Text(trait.displayNameUk) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
-    Text("Слабкість", style = MaterialTheme.typography.titleSmall)
-    TribeWeakness.entries.forEach { weakness ->
-        FilterChip(
-            selected = tribe.weakness == weakness,
-            onClick = { onChange(tribe.copy(weakness = weakness)) },
-            label = { Text(weakness.displayNameUk) },
-            modifier = Modifier.padding(end = 4.dp),
-        )
+    PanelCard(accent = MaterialTheme.colorScheme.error) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Слабкість", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ChoiceGrid(TribeWeakness.entries.toList()) { weakness ->
+                FilterChip(
+                    selected = tribe.weakness == weakness,
+                    onClick = { onChange(tribe.copy(weakness = weakness)) },
+                    label = { Text(weakness.displayNameUk) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
-    Text("Підсумок", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+
+    Text("Підсумок світу", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     tribes.forEachIndexed { index, value ->
-        Text(
-            "${index + 1}. ${value.name} · ${value.race.displayNameUk} · " +
-                value.sexualFeatures.joinToString { it.displayNameUk } + " · " +
-                value.traits.joinToString { it.displayNameUk } + " · слабкість: ${value.weakness.displayNameUk}",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        PanelCard(accent = if (index == selectedTribe) MaterialTheme.colorScheme.primary else null) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(value.name, fontWeight = FontWeight.Bold)
+                    StatusPill(value.race.displayNameUk, color = MaterialTheme.colorScheme.secondary)
+                }
+                Text(
+                    value.sexualFeatures.joinToString(" · ") { it.displayNameUk },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    value.traits.joinToString(" · ") { it.displayNameUk } + " · слабкість: ${value.weakness.displayNameUk}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -338,14 +478,37 @@ private fun TribeSelector(
     selected: Int,
     onSelect: (Int) -> Unit,
 ) {
-    Text("Плем’я ${selected + 1} з ${tribes.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        tribes.forEachIndexed { index, tribe ->
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Оберіть плем’я", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ChoiceGrid(tribes.indices.toList()) { index ->
             FilterChip(
                 selected = selected == index,
                 onClick = { onSelect(index) },
-                label = { Text("${index + 1}. ${tribe.name}") },
+                label = { Text("${index + 1}. ${tribes[index].name}") },
+                modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+@Composable
+private fun <T> ChoiceGrid(
+    items: List<T>,
+    content: @Composable (T) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                pair.forEach { item ->
+                    Column(modifier = Modifier.weight(1f)) { content(item) }
+                }
+                if (pair.size == 1) {
+                    Surface(modifier = Modifier.weight(1f), color = Color.Transparent) {}
+                }
+            }
         }
     }
 }
