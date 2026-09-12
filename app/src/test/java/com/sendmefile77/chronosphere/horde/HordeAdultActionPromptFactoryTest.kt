@@ -18,7 +18,7 @@ class HordeAdultActionPromptFactoryTest {
             plan = plan(AdultActionType.ORAL),
         )
         assertTrue(request.nsfw)
-        assertTrue(request.cacheKey.startsWith("horde-adult-action-v2|"))
+        assertTrue(request.cacheKey.startsWith("horde-adult-action-v3|"))
         assertTrue(request.positivePrompt.contains("blowjob") || request.positivePrompt.contains("cunnilingus"))
         assertTrue(request.positivePrompt.contains("mouth"))
         assertFalse(request.positivePrompt.contains("natural standing or seated pose"))
@@ -38,7 +38,7 @@ class HordeAdultActionPromptFactoryTest {
         assertTrue(request.nsfw)
         assertTrue(request.positivePrompt.contains("completely naked"))
         assertTrue(request.negativePrompt.contains("dress"))
-        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v8|"))
+        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v9|"))
     }
 
     private fun plan(type: AdultActionType): AdultActionPlan = AdultActionPlan(
