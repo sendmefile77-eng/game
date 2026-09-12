@@ -8,30 +8,21 @@ import com.sendmefile77.chronosphere.simulation.SimulationEvent
 /** Builds one bounded chronicle illustration request that also behaves well with Local Dream. */
 object HordeChronicleEventPromptFactory {
     private val preferredModels = listOf(
-        "AlbedoBase XL (SDXL)",
-        "AbsoluteReality",
-        "Realistic Vision",
-        "CyberRealistic Pony",
+        "AlbedoBase XL (SDXL)", "AbsoluteReality", "Realistic Vision", "CyberRealistic Pony",
     )
 
     private val significantCodes = setOf(
-        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "WAR_STARTED", "WAR_CASUALTIES",
-        "CITY_CAPTURED", "PEACE_TREATY", "ALLIANCE_FORMED", "ERA_ADVANCED",
-        "RULER_SUCCEEDED", "DYNASTY_FOUNDED", "ADULT_SOCIAL_EVENT",
-        "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
+        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED",
+        "PEACE_TREATY", "ALLIANCE_FORMED", "ERA_ADVANCED", "RULER_SUCCEEDED", "DYNASTY_FOUNDED",
+        "ADULT_SOCIAL_EVENT", "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION",
         "INTERVENTION_HARVEST_AID", "INTERVENTION_DROUGHT", "INTERVENTION_TECH_BOOST",
         "INTERVENTION_STABILITY_SUPPORT",
     )
 
-    fun latestSignificant(events: List<SimulationEvent>): SimulationEvent? =
-        events.asReversed().firstOrNull { it.code in significantCodes }
+    fun latestSignificant(events: List<SimulationEvent>): SimulationEvent? = events.asReversed().firstOrNull { it.code in significantCodes }
 
-    fun create(
-        event: SimulationEvent,
-        people: PeopleState,
-        economy: EconomyState? = null,
-    ): HordeImageRequest {
+    fun create(event: SimulationEvent, people: PeopleState, economy: EconomyState? = null): HordeImageRequest {
         val participants = event.actorIds.mapNotNull { id -> people.persons.firstOrNull { it.id == id } }
         val hasMinor = participants.any { it.ageYearsAt(event.tick) < 18 }
         val era = resolveEra(event, people, economy)
@@ -43,7 +34,6 @@ object HordeChronicleEventPromptFactory {
             .take(2)
             .joinToString(", ") { (_, value) -> value }
 
-        // Keep the useful part close to the front: Local Dream's CLIP models have a short context.
         val positive = buildList {
             add("masterpiece, best quality, cinematic wide establishing shot")
             add(sceneFragment(event, era))
@@ -53,30 +43,22 @@ object HordeChronicleEventPromptFactory {
             add("single coherent moment, environmental storytelling")
             add("complete connected bodies, readable faces, detailed materials, natural light")
             add("no text, no UI")
-            if (event.code == "ADULT_SOCIAL_EVENT") add("adult private social gathering, mature atmosphere")
+            if (event.code == "ADULT_SOCIAL_EVENT") add("adult private social gathering, mature atmosphere, fully covered, non-explicit")
         }.joinToString(", ")
 
         val negative = buildList {
             add("worst quality, low quality, blurry, bad anatomy, extra limbs, duplicate people")
             add("disconnected limbs, floating head, cropped face, text, watermark, collage, split screen")
             addAll(eraNegativeFragments(era).take(8))
-            if (hasMinor) add("nudity, sexual content")
+            if (hasMinor || event.code == "ADULT_SOCIAL_EVENT") add("nudity, explicit sex, sexualized minor")
         }.joinToString(", ")
 
         val eraSignature = era?.name ?: "UNSPECIFIED"
         return HordeImageRequest(
-            cacheKey = listOf(
-                "horde-chronicle-event-v5",
-                event.id,
-                event.tick.toString(),
-                event.code,
-                eraSignature,
-                event.actorIds.sorted().joinToString(","),
-                event.locationId.orEmpty(),
-            ).joinToString("|"),
+            cacheKey = listOf("horde-chronicle-event-v5", event.id, event.tick.toString(), event.code, eraSignature, event.actorIds.sorted().joinToString(","), event.locationId.orEmpty()).joinToString("|"),
             positivePrompt = positive,
             negativePrompt = negative,
-            nsfw = event.code == "ADULT_SOCIAL_EVENT" && !hasMinor,
+            nsfw = false,
             ageYears = participants.minOfOrNull { it.ageYearsAt(event.tick) }?.coerceAtLeast(0) ?: 18,
             width = 1024,
             height = 576,
@@ -93,9 +75,7 @@ object HordeChronicleEventPromptFactory {
     private fun resolveEra(event: SimulationEvent, people: PeopleState, economy: EconomyState?): TechnologyEra? {
         if (economy == null) return null
         event.actorIds.firstNotNullOfOrNull { id -> economy.economy(id)?.era }?.let { return it }
-        val civilizationId = event.actorIds.firstNotNullOfOrNull { id ->
-            people.persons.firstOrNull { it.id == id }?.civilizationId
-        }
+        val civilizationId = event.actorIds.firstNotNullOfOrNull { id -> people.persons.firstOrNull { it.id == id }?.civilizationId }
         return civilizationId?.let { economy.economy(it)?.era }
     }
 
