@@ -80,6 +80,7 @@ object HordeResolvedScenePromptFactory {
             add("consistent facial identity and appearance across images")
             add("natural proportions appropriate to the specified body plan")
             add("detailed realistic face attached naturally to the body")
+            add("high-frequency skin and hair detail, visible pores and natural texture, crisp eyes and facial features")
             add("realistic skin, hair, fabric and material detail")
             add("natural standing or seated pose with believable weight and posture")
             add("documentary cinematic realism, not a sculpture, mannequin or 3D character render")
@@ -128,14 +129,14 @@ object HordeResolvedScenePromptFactory {
 
         val eraSignature = technologyEra?.name ?: "UNSPECIFIED"
         val referenceCacheKey = listOf(
-            "horde-character-reference-v3",
+            "horde-character-reference-v4",
             characterKey,
             identity.signature,
             morphology.signature,
             eraSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v5",
+            "horde-resolved-scene-v6",
             characterKey,
             identity.signature,
             morphology.signature,
@@ -161,8 +162,13 @@ object HordeResolvedScenePromptFactory {
             negativePrompt = negative,
             nsfw = undressed,
             ageYears = ageYears,
+            width = 768,
+            height = 1152,
+            steps = 32,
+            cfgScale = 6.8,
             seed = "chronosphere:$characterKey:${morphology.signature}:$eraSignature",
             preferredModels = if (undressed) nsfwModels else sfwModels,
+            qualityPriority = true,
             referenceCacheKey = referenceCacheKey,
             saveResultAsReference = canonicalPortrait,
             referenceDenoisingStrength = if (undressed) 0.68 else 0.52,
