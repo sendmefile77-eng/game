@@ -11,10 +11,10 @@ import com.sendmefile77.chronosphere.scene.WardrobeState
 /** Explicit character-card action scenes. Kept separate from idle portrait mapping. */
 object HordeAdultActionPromptFactory {
     private val nsfwModels = listOf(
-        "WAI-NSFW-illustrious-SDXL",
-        "CyberRealistic Pony",
         "AbsoluteReality",
         "Realistic Vision",
+        "CyberRealistic Pony",
+        "WAI-NSFW-illustrious-SDXL",
     )
 
     fun create(
@@ -44,32 +44,41 @@ object HordeAdultActionPromptFactory {
                 "${partnerIdentity?.promptFragment}, complete connected nude body"
         }
         val act = actionPrompt(plan)
+        val actLock = actLock(plan.type)
         val composition = if (plan.solo) {
             "one explicit adult sex act filling the frame, whole nude body from head to feet"
         } else {
             "two confirmed adults having sex in one frame, both whole nude bodies visible, " +
-                "the sex act is the subject of the image, no extra people"
+                "the selected sex act is the only subject of the image, no extra people"
         }
+        val recipeSetting = adultVisual?.settingKey
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "structured scene setting ${it.replace('.', ' ').replace('-', ' ')}" }
 
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-action-v4",
+                "horde-adult-action-v5",
                 plan.cacheToken,
                 identity.signature,
                 morphology.signature,
                 technologyEra?.name ?: "UNSPECIFIED",
                 adultVisual?.recipeId ?: "none",
+                adultVisual?.settingKey ?: "none",
             ).joinToString("|"),
             positivePrompt = listOf(
-                "explicit uncensored photorealistic pornography, adults 18+",
+                "explicit uncensored photorealistic adult sex scene, adults 18+",
+                actLock,
                 act,
                 act,
                 composition,
+                HordeEraVisual.intimateInterior(technologyEra),
+                HordeEraVisual.materialCulture(technologyEra),
+                recipeSetting,
                 "primary adult identity: ${identity.promptFragment}",
                 morphology.promptFragment.takeIf { it.isNotBlank() },
                 partnerLine,
                 "completely nude, no clothing, genitals in view, sexual contact clearly readable",
-                "visible penetration or genital contact, wet skin, sexual tension, explicit porn still",
+                "the environment, furniture, light and materials must match the stated technological era",
                 "full-length bodies, no bust crop, no portrait crop",
                 "keep the primary adult face and hair locked to the reference identity",
                 "no text in image",
@@ -86,10 +95,13 @@ object HordeAdultActionPromptFactory {
                         "no sexual contact", "closed mouth far from genitals",
                         "bust crop", "portrait crop", "missing feet", "cropped head",
                         "wrong person", "identity change",
+                        "wrong sex act", "mismatched sex act",
                         "oversaturated", "overexposed", "burnt colors", "overcooked",
                         "high contrast", "oversharpened",
                     ),
                 )
+                addAll(wrongActNegatives(plan.type))
+                addAll(HordeEraVisual.negatives(technologyEra))
                 if (!plan.solo) {
                     add("single person")
                     add("solo portrait")
@@ -104,12 +116,42 @@ object HordeAdultActionPromptFactory {
             height = if (plan.solo) 1152 else 1216,
             steps = 20,
             cfgScale = 5.2,
-            seed = "${base.seed}:action-v4:${plan.cacheToken}",
+            seed = "${base.seed}:action-v5:${plan.cacheToken}",
             preferredModels = nsfwModels,
             qualityPriority = true,
             referenceCacheKey = base.referenceCacheKey,
             saveResultAsReference = false,
             referenceDenoisingStrength = 0.88,
+        )
+    }
+
+    private fun actLock(type: AdultActionType): String = when (type) {
+        AdultActionType.FOOTJOB ->
+            "the only sex act in this image is a footjob: bare feet and toes wrapped around genitals, " +
+                "not oral sex, not vaginal sex, not anal sex"
+        AdultActionType.ORAL ->
+            "the only sex act in this image is oral sex: a mouth on genitals, " +
+                "not a footjob, not vaginal penetration, not anal sex"
+        AdultActionType.VAGINAL ->
+            "the only sex act in this image is vaginal sex: a shaft visibly inside a vagina, " +
+                "not a footjob, not oral sex, not anal sex"
+        AdultActionType.ANAL ->
+            "the only sex act in this image is anal sex: a shaft visibly inside an anus, " +
+                "not a footjob, not oral sex, not vaginal sex"
+    }
+
+    private fun wrongActNegatives(type: AdultActionType): List<String> = when (type) {
+        AdultActionType.FOOTJOB -> listOf(
+            "blowjob", "cunnilingus", "mouth on penis", "vaginal penetration", "anal penetration", "missionary sex",
+        )
+        AdultActionType.ORAL -> listOf(
+            "footjob", "feet on genitals", "soles on penis", "vaginal penetration", "anal penetration",
+        )
+        AdultActionType.VAGINAL -> listOf(
+            "footjob", "feet on genitals", "blowjob as the main act", "anal penetration as the main act",
+        )
+        AdultActionType.ANAL -> listOf(
+            "footjob", "feet on genitals", "vaginal sex as the main act", "blowjob as the main act",
         )
     }
 
