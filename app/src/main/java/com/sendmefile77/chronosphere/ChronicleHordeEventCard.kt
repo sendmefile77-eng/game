@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.economy.EconomyState
-import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventView
 import com.sendmefile77.chronosphere.horde.HordeGenerationCoordinator
@@ -41,8 +40,17 @@ internal fun ChronicleHordeEventCard(
     textGenerator: ChronicleTextGenerator,
     civilizationNames: Map<String, String> = emptyMap(),
 ) {
-    val story = remember(events, civilizationNames) {
-        ChronicleStoryComposer.compose(events, civilizationNames, textGenerator)
+    val storyEra = remember(events, civilizationNames, economyState) {
+        ChronicleEraVoice.infer(events, economyState)
+    }
+    val story = remember(events, civilizationNames, storyEra, economyState) {
+        ChronicleStoryComposer.compose(
+            events = events,
+            civilizationNames = civilizationNames,
+            textGenerator = textGenerator,
+            era = storyEra,
+            economyState = economyState,
+        )
     }
     if (story != null) {
         PanelCard(accent = MaterialTheme.colorScheme.primary) {
@@ -95,18 +103,12 @@ internal fun ChronicleHordeEventCard(
 
     val event = remember(events) { HordeChronicleEventPromptFactory.latestSignificant(events) } ?: return
     val request = remember(event, peopleState, economyState) {
-        if (event.code == "ADULT_SOCIAL_EVENT") {
-            HordeAdultScenePromptFactory.createEvent(
-                event = event,
-                people = peopleState,
-                economy = economyState,
-            ) ?: HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
-        } else {
-            HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
-        }
+        HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
     }
     val eventTime = remember(event.tick) { clock.at(event.tick) }
-    val baseNarrative = remember(event) { ChroniclePresentation.narrative(event, textGenerator) }
+    val baseNarrative = remember(event, storyEra) {
+        ChroniclePresentation.narrative(event, textGenerator, storyEra)
+    }
     var decisionNonce by remember { mutableIntStateOf(0) }
     val baseDecision = remember(events, peopleState, economyState, decisionNonce) {
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
