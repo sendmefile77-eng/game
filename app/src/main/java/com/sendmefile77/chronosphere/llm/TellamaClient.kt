@@ -1,12 +1,15 @@
 package com.sendmefile77.chronosphere.llm
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 
 internal data class TellamaCompletion(
@@ -67,7 +70,7 @@ internal class TellamaClient(
         }
         if (!force) cachedModel?.let { return@withContext TellamaStatus(true, it) }
         runCatching {
-            val model = discoverModel() ?: return@runCatching TellamaStatus(
+            val model = discoverModelWithRetry() ?: return@runCatching TellamaStatus(
                 available = false,
                 detail = "Tellama працює, але модель не вибрана для сервера",
             )
@@ -76,7 +79,7 @@ internal class TellamaClient(
         }.getOrElse { error ->
             TellamaStatus(
                 available = false,
-                detail = error.message?.take(180) ?: "127.0.0.1:11434 не відповідає",
+                detail = friendlyConnectionError(error),
             )
         }
     }
@@ -112,6 +115,20 @@ internal class TellamaClient(
             if (content.isBlank()) return@withContext null
             TellamaCompletion(model, content, System.currentTimeMillis() - started)
         }
+    }
+
+    private suspend fun discoverModelWithRetry(): String? {
+        var lastError: Throwable? = null
+        repeat(4) { attempt ->
+            try {
+                return discoverModel()
+            } catch (error: Throwable) {
+                lastError = error
+                if (!isConnectionProblem(error) || attempt == 3) throw error
+                delay(250L + attempt * 250L)
+            }
+        }
+        throw lastError ?: IllegalStateException("Tellama connection failed")
     }
 
     private fun discoverModel(): String? {
@@ -185,6 +202,27 @@ internal class TellamaClient(
             error("Tellama runtime зайнятий або модель ще завантажується")
         }
         error("Tellama $path: HTTP $code ${body.take(120)}")
+    }
+
+    private fun friendlyConnectionError(error: Throwable): String {
+        val root = generateSequence(error) { it.cause }.last()
+        val raw = error.message.orEmpty()
+        return when {
+            root is ConnectException || raw.contains("Failed to connect", ignoreCase = true) ||
+                raw.contains("Connection refused", ignoreCase = true) ->
+                "Сервер Tellama не працює на 127.0.0.1:11434. У Tellama → Server має бути кнопка «Stop server». Якщо сервер гасне після перемикання в Хроносферу — дозвольте Tellama фонову роботу та режим батареї «Без обмежень»."
+            root is SocketTimeoutException || raw.contains("timed out", ignoreCase = true) ->
+                "Tellama запущена, але не відповіла вчасно. Дочекайтеся завантаження моделі й натисніть «Перевірити» ще раз."
+            else -> raw.take(240).ifBlank { "127.0.0.1:11434 не відповідає" }
+        }
+    }
+
+    private fun isConnectionProblem(error: Throwable): Boolean {
+        val root = generateSequence(error) { it.cause }.last()
+        val raw = error.message.orEmpty()
+        return root is ConnectException || root is SocketTimeoutException ||
+            raw.contains("Failed to connect", ignoreCase = true) ||
+            raw.contains("Connection refused", ignoreCase = true)
     }
 
     private fun open(path: String, method: String, timeoutMillis: Int): HttpURLConnection =
