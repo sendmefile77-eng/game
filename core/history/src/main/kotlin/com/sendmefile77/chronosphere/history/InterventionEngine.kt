@@ -16,11 +16,17 @@ data class InterventionCommand(
     val kind: InterventionKind,
     val civilizationId: String,
     val strength: Double = 0.5,
+    val sourceEventId: String? = null,
+    val choiceId: String? = null,
+    val choiceLabel: String? = null,
 ) {
     init {
         require(id.isNotBlank())
         require(civilizationId.isNotBlank())
         require(strength.isFinite() && strength in 0.0..1.0)
+        require(sourceEventId == null || sourceEventId.isNotBlank())
+        require(choiceId == null || choiceId.isNotBlank())
+        require(choiceLabel == null || choiceLabel.isNotBlank())
     }
 }
 
@@ -117,12 +123,18 @@ class InterventionEngine {
             InterventionKind.TECHNOLOGY_BOOST -> "INTERVENTION_TECH_BOOST"
             InterventionKind.STABILITY_SUPPORT -> "INTERVENTION_STABILITY_SUPPORT"
         }
+        val facts = buildMap {
+            put("civilization", civilization.name)
+            command.sourceEventId?.let { put("sourceEventId", it) }
+            command.choiceId?.let { put("choiceId", it) }
+            command.choiceLabel?.let { put("choiceLabel", it) }
+        }
         return SimulationEvent(
             id = command.id,
             tick = state.tick,
             code = code,
             actorIds = listOf(command.civilizationId),
-            facts = mapOf("civilization" to civilization.name),
+            facts = facts,
             numbers = mapOf("strength" to command.strength),
         )
     }
