@@ -101,4 +101,36 @@ class ChronicleDecisionCatalogTest {
         )
         assertNull(ChronicleDecisionCatalog.latestUnresolved(listOf(source, applied), people, economy))
     }
+
+    @Test
+    fun resolvingNewestForkDoesNotResurrectAnOlderFork() {
+        ChronicleDecisionMailbox.drain()
+        val old = SimulationEvent(
+            id = "old-shortage",
+            tick = 12L,
+            code = "FOOD_SHORTAGE",
+            actorIds = listOf("civ-a"),
+            facts = mapOf("civilization" to "Нері"),
+        )
+        val newest = SimulationEvent(
+            id = "new-era",
+            tick = 24L,
+            code = "ERA_ADVANCED",
+            actorIds = listOf("civ-a"),
+            facts = mapOf("civilization" to "Нері"),
+        )
+        val newestDecision = ChronicleDecisionCatalog.latestUnresolved(listOf(old, newest), people, economy)!!
+        ChronicleDecisionMailbox.enqueue(newestDecision.options.first())
+        assertNull(ChronicleDecisionCatalog.latestUnresolved(listOf(old, newest), people, economy))
+        ChronicleDecisionMailbox.drain()
+
+        val appliedNewest = SimulationEvent(
+            id = "chronicle-new-era-era-push",
+            tick = 25L,
+            code = "INTERVENTION_TECH_BOOST",
+            actorIds = listOf("civ-a"),
+            facts = mapOf("sourceEventId" to "new-era", "choiceId" to "era-push"),
+        )
+        assertNull(ChronicleDecisionCatalog.latestUnresolved(listOf(old, newest, appliedNewest), people, economy))
+    }
 }
