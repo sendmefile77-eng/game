@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
+import com.sendmefile77.chronosphere.horde.LocalDreamModelPackRuntime
+import com.sendmefile77.chronosphere.horde.LocalDreamModelPackStore
 import com.sendmefile77.chronosphere.llm.TellamaRuntime
 import com.sendmefile77.chronosphere.llm.TellamaSettingsStore
 
@@ -20,6 +22,7 @@ class MainActivity : ComponentActivity() {
             window.navigationBarColor = Color.rgb(8, 13, 18)
         }
         TellamaRuntime.configureApiKey(TellamaSettingsStore.load(this))
+        LocalDreamModelPackRuntime.select(LocalDreamModelPackStore.load(this))
         setContent {
             Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 ChronosphereGameApp()
