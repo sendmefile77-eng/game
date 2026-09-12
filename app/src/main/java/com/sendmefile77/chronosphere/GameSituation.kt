@@ -69,25 +69,26 @@ object GameSituation {
         }
 
         val headline = when {
+            pendingDecisionTitle != null -> "Історія ${civilization.name} дійшла до розвилки"
             wars.isNotEmpty() -> "${civilization.name} у війні з ${wars.joinToString(", ")}"
             hungry -> "${civilization.name} на межі голоду"
             fragile -> "${civilization.name} хитається: низька стабільність"
             else -> "${civilization.name} · $era · ${rank}-а за людністю"
         }
         val pressure = buildList {
-            add("Їжа ${foodBand(foodPer)}")
+            add("їжа ${foodBand(foodPer)}")
             add("порядок ${stabilityBand(civilization.stability)}")
             add("розвиток ${techBand(civilization.technology)}")
             if (economy != null) add("ресурси ${shortageBandLocal(economy.economy(civilization.id)?.shortageIndex)}")
         }.joinToString(" · ")
         val worst = neighbors.minByOrNull { it.relation }
         val hint = when {
-            pendingDecisionTitle != null -> "У вкладці «Хроніка» чекає рішення: $pendingDecisionTitle"
-            hungry -> "Натисни «Врожай», потім «+1 рік», щоб побачити, чи відійшов голод."
-            wars.isNotEmpty() -> "Можна бити суперника «Набігом», укласти «Мир» або тримати тил «Святом»."
-            worst != null && worst.relation < -0.35 -> "Відносини з ${worst.name} погані. «Посольство» пом’якшить, «Війна» розірве."
-            fragile -> "«Свято» або «Порядок» піднімають стабільність. Потім прокрути +1 рік."
-            else -> "Обери сусіда в списку, зроби дію, тоді крути час. Світ змінюється і сам."
+            pendingDecisionTitle != null -> "Час призупинено. Відкрий «Хроніку» і обери відповідь на подію."
+            hungry -> "Заплануй «Резерви» і запусти час. Потім перевір, чи зникла нестача."
+            wars.isNotEmpty() -> "Обери противника: можна виснажити його набігом або спробувати завершити війну миром."
+            worst != null && worst.relation < -0.35 -> "Відносини з ${worst.name} небезпечні: посольство знижує напругу, війна відкриває фронт."
+            fragile -> "Заплануй «Порядок» або «Свято» і дай світові час відреагувати."
+            else -> "На хід є одна команда. Можна діяти всередині держави, через дипломатію або просто пропустити час."
         }
         return GameBriefing(
             headline = headline,
@@ -143,70 +144,70 @@ object GameSituation {
         val leader = state.civilizations.maxByOrNull { it.population }
         val hostile = neighbors.firstOrNull { !it.atWar && it.relation < -0.45 }
         return when {
+            pendingDecisionTitle != null -> GameObjective(
+                title = "Виріши історичну розвилку",
+                detail = pendingDecisionTitle,
+                meter = "час чекає на ваш вибір",
+                complete = false,
+            )
             foodPer < 0.45 -> GameObjective(
                 title = "Відверни голод",
-                detail = "Запаси не покривають населення. Дай врожай і перевір через рік.",
+                detail = "Запасів замало для населення. Поповни резерви або ризикуй втратити людей під час наступного ходу.",
                 meter = "їжа на особу ${String.format("%.2f", foodPer)} / 0.45",
                 complete = false,
             )
             civilization.stability < 0.38 -> GameObjective(
                 title = "Втримай державу",
-                detail = "Низька стабільність веде до занепаду. Підніми порядок святом або підтримкою.",
+                detail = "Низька стабільність робить будь-яку кризу небезпечнішою. Підтримай порядок або проведи свято.",
                 meter = "стабільність ${String.format("%.0f%%", civilization.stability * 100)} / 38%",
                 complete = false,
             )
-            pendingDecisionTitle != null -> GameObjective(
-                title = "Прийми рішення хроніки",
-                detail = pendingDecisionTitle,
-                meter = "відкрий вкладку «Хроніка»",
-                complete = false,
-            )
             wars.isNotEmpty() -> GameObjective(
-                title = "Переживи війну",
-                detail = "Ворог: ${wars.joinToString(", ")}. Набіг б’є запаси, «Мир» зупиняє війну.",
+                title = "Визнач стратегію війни",
+                detail = "Противник: ${wars.joinToString(", ")}. Обери між виснаженням ворога, миром або внутрішньою підготовкою.",
                 meter = "${wars.size} активн. воєн",
                 complete = false,
             )
             hostile != null -> GameObjective(
-                title = "Розряди напругу з ${hostile.name}",
-                detail = "Посольство піднімає відносини. Війна відкриває фронт.",
-                meter = "відносини ${relationPercent(hostile.relation)}",
+                title = "Виріши проблему з ${hostile.name}",
+                detail = "Посольство поступово поліпшує відносини; війна різко змінює правила гри.",
+                meter = "відносини ${relationPercent(hostile.relation)} / +30 для союзу",
                 complete = false,
             )
             rank > 1 && leader != null -> GameObjective(
-                title = "Стань найлюднішою державою",
-                detail = "Зараз попереду ${leader.name}. Врожай і час збільшують міста.",
+                title = "Наздожени ${leader.name}",
+                detail = "Зараз ви не перші за населенням. Резерви допомагають пережити зростання, а розвиток дає довгу перевагу.",
                 meter = "місце $rank з ${state.civilizations.size}",
                 complete = false,
             )
             civilization.technology < 0.45 -> GameObjective(
-                title = "Підніми розвиток",
-                detail = "«Прорив» дає технологію одразу. Час закріплює її в епосі.",
+                title = "Підніми рівень розвитку",
+                detail = "Інвестуй у дослідження або дай державі розвиватися природно, зберігаючи ресурси для криз.",
                 meter = "розвиток ${String.format("%.0f%%", civilization.technology * 100)} / 45%",
                 complete = false,
             )
             else -> GameObjective(
-                title = "Спостерігай свою історію",
-                detail = "Держава тримається. Збережи момент у «Часі» і спробуй іншу гілку.",
-                meter = "немає кризи",
+                title = "Сформуй власну довгу стратегію",
+                detail = "Гострої кризи немає. Можеш будувати союзи, накопичувати казну, прискорювати розвиток або не втручатися.",
+                meter = "стабільний період",
                 complete = true,
             )
         }
     }
 
     private fun eventLabel(code: String): String = when (code) {
-        "INTERVENTION_HARVEST_AID" -> "Врожай"
+        "INTERVENTION_HARVEST_AID" -> "Резерви поповнено"
         "INTERVENTION_DROUGHT" -> "Посуха"
-        "INTERVENTION_TECH_BOOST" -> "Прорив"
-        "INTERVENTION_STABILITY_SUPPORT" -> "Порядок"
+        "INTERVENTION_TECH_BOOST" -> "Інвестиція у розвиток"
+        "INTERVENTION_STABILITY_SUPPORT" -> "Порядок зміцнено"
         "INTERVENTION_WAR_RAID" -> "Набіг"
         "INTERVENTION_FESTIVAL" -> "Свято"
         "INTERVENTION_EMBASSY" -> "Посольство"
         "WAR_STARTED" -> "Оголошено війну"
-        "PEACE_TREATY" -> "Мир"
-        "ALLIANCE_FORMED" -> "Союз"
+        "PEACE_TREATY" -> "Укладено мир"
+        "ALLIANCE_FORMED" -> "Створено союз"
         "ALLIANCE_ENDED" -> "Союз розпався"
-        "FOOD_SHORTAGE" -> "Голод"
+        "FOOD_SHORTAGE" -> "Нестача їжі"
         "SETTLEMENT_GROWTH" -> "Місто зросло"
         "CITY_CAPTURED" -> "Місто взято"
         else -> code.lowercase().replace('_', ' ')
@@ -224,7 +225,7 @@ object GameSituation {
     private fun stabilityBand(value: Double): String = when {
         value < 0.30 -> "розвал"
         value < 0.45 -> "напруга"
-        value < 0.70 -> "тримання"
+        value < 0.70 -> "тримається"
         else -> "міцний"
     }
 
