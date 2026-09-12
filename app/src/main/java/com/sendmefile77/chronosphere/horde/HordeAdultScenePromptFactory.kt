@@ -90,32 +90,32 @@ object HordeAdultScenePromptFactory {
         val era = eraFromDescriptor(descriptor) ?: event.actorIds.firstNotNullOfOrNull { id ->
             economy?.economy(id)?.era
         }
-        val sharedMorphology = HordeMorphologyVisual.from(
-            visualTags = descriptor.mediaTags,
-            visualNumeric = emptyMap(),
-        )
 
-        val participantPrompt = participants.joinToString("; ") { person ->
+        val participantPrompt = participants.mapIndexed { index, person ->
             val age = person.ageYearsAt(event.tick)
             val identity = HordeCharacterVisualProfile.from(person.id)
+            val morphology = participantMorphology(descriptor, index)
             buildString {
-                append("adult participant age $age, ")
+                append("participant ${index + 1}: adult age $age, ")
                 append(identity.promptFragment)
-                if (sharedMorphology.promptFragment.isNotBlank()) {
-                    append(", body plan constrained by event morphology: ${sharedMorphology.promptFragment}")
+                if (morphology.promptFragment.isNotBlank()) {
+                    append(", exact individual body plan: ${morphology.promptFragment}")
+                } else {
+                    append(", baseline coherent humanlike body plan")
                 }
             }
-        }
+        }.joinToString("; ")
 
         val positive = buildList {
             add("high quality photorealistic adult scene from a living historical simulation")
             add("all depicted participants are adults age 18 or older")
-            add("participants: $participantPrompt")
+            add("participants must remain visually distinct and match these descriptions: $participantPrompt")
             add(semanticPrompt(descriptor, era))
             add(eraPrompt(era))
             add("complete anatomically coherent connected bodies")
+            add("each participant keeps their own specified limb count, eye count, covering, posture and tail state")
+            add("do not copy one participant's body plan onto another participant")
             add("clear readable interaction between the specified participants")
-            add("body plan and morphology must follow the preserved event recipe")
             add("environment, clothing remnants, props and architecture strictly match the stated era")
             add("single continuous scene, believable spatial relationship, cinematic realism")
             add("no text in image")
@@ -141,6 +141,8 @@ object HordeAdultScenePromptFactory {
             add("wrong pose")
             add("tangled anatomy")
             add("accidental duplicate limbs")
+            add("swapped participant anatomy")
+            add("identical cloned bodies")
             addAll(eraNegative(era))
         }.joinToString(", ")
 
@@ -151,7 +153,7 @@ object HordeAdultScenePromptFactory {
 
         return HordeImageRequest(
             cacheKey = listOf(
-                "horde-adult-event-v1",
+                "horde-adult-event-v2",
                 event.id,
                 event.tick.toString(),
                 descriptorSignature(descriptor),
@@ -173,6 +175,52 @@ object HordeAdultScenePromptFactory {
             referenceDenoisingStrength = 0.72,
         )
     }
+
+    private fun participantMorphology(
+        descriptor: AdultVisualSceneDescriptor,
+        participantIndex: Int,
+    ): HordeMorphologyVisual {
+        val prefix = "pmorph:$participantIndex:"
+        val encoded = descriptor.mediaTags
+            .asSequence()
+            .filter { it.startsWith(prefix) }
+            .map { it.removePrefix(prefix) }
+            .toList()
+
+        if (encoded.isEmpty()) {
+            // Old saves predate participant-specific morphology. Their scene-level morphology
+            // still describes the primary lineage and remains a safe backwards-compatible fallback.
+            return HordeMorphologyVisual.from(
+                tags = descriptor.mediaTags.filterNot { it.startsWith("pmorph:") }.toSet(),
+                numeric = emptyMap(),
+            )
+        }
+
+        val tags = linkedSetOf<String>()
+        val numeric = linkedMapOf<String, Double>()
+        encoded.forEach { entry ->
+            when {
+                entry.startsWith("arms:") -> entry.substringAfter("arms:").toIntOrNull()?.let { tags += "arms:$it" }
+                entry.startsWith("legs:") -> entry.substringAfter("legs:").toIntOrNull()?.let { tags += "legs:$it" }
+                entry.startsWith("eyes:") -> entry.substringAfter("eyes:").toIntOrNull()?.let { tags += "eyes:$it" }
+                entry.startsWith("posture:") -> entry.substringAfter("posture:").takeIf { it.isNotBlank() }?.let { tags += "posture:$it" }
+                entry.startsWith("covering:") -> entry.substringAfter("covering:").takeIf { it.isNotBlank() }?.let { tags += "covering:$it" }
+                entry == "tail:1" -> tags += "tail"
+                entry.startsWith("height:") -> percent(entry, "height:")?.let { numeric["morph_height"] = it }
+                entry.startsWith("mass:") -> percent(entry, "mass:")?.let { numeric["morph_mass"] = it }
+                entry.startsWith("limbs:") -> percent(entry, "limbs:")?.let { numeric["morph_limbs"] = it }
+                entry.startsWith("cranial:") -> percent(entry, "cranial:")?.let { numeric["morph_cranial"] = it }
+                entry.startsWith("eye_size:") -> percent(entry, "eye_size:")?.let { numeric["morph_eye_size"] = it }
+                entry.startsWith("hair:") -> percent(entry, "hair:")?.let { numeric["morph_hair"] = it }
+                entry.startsWith("pigmentation:") -> percent(entry, "pigmentation:")?.let { numeric["morph_pigmentation"] = it }
+                entry.startsWith("dimorphism:") -> percent(entry, "dimorphism:")?.let { numeric["morph_dimorphism"] = it }
+            }
+        }
+        return HordeMorphologyVisual.from(tags = tags, numeric = numeric)
+    }
+
+    private fun percent(value: String, prefix: String): Double? =
+        value.substringAfter(prefix).toIntOrNull()?.div(100.0)
 
     private fun descriptorFromEvent(
         event: SimulationEvent,
@@ -209,7 +257,7 @@ object HordeAdultScenePromptFactory {
         val structuralPrefixes = listOf(
             "recipe:", "family:", "rig:", "pose:", "wardrobe:", "setting:", "camera:", "light:",
             "event:", "pack-setting:", "explicitness:", "participants_", "rig-plan:", "era:",
-            "lineage:", "ancestry:", "covering:", "posture:", "arms:", "legs:", "eyes:",
+            "lineage:", "ancestry:", "covering:", "posture:", "arms:", "legs:", "eyes:", "pmorph:",
         )
         val effects = tags.filter { tag ->
             structuralPrefixes.none { prefix -> tag.startsWith(prefix) } &&
@@ -427,6 +475,7 @@ object HordeAdultScenePromptFactory {
         descriptor.lightingKey,
         descriptor.explicitness,
         descriptor.effectTags.sorted().joinToString(","),
+        descriptor.mediaTags.filter { it.startsWith("pmorph:") }.sorted().joinToString(","),
         descriptor.participants.joinToString(",") { "${it.entityId}:${it.ageYears}" },
     ).joinToString("|")
 
