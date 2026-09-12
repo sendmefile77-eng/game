@@ -58,7 +58,7 @@ object HordeResolvedScenePromptFactory {
                 "fully covered age-appropriate clothing appropriate to the stated technological era"
             }
             WardrobeState.UNDRESSED ->
-                "adult fully nude complete figure from head to feet, visible adult genitals, uncensored explicit anatomy, anatomically coherent connected body"
+                "completely naked adult, zero clothing, bare breasts or chest, bare hips, visible adult genitals (penis and scrotum or vulva and labia), full figure head-to-feet, uncensored"
             WardrobeState.DAMAGED -> "weathered damaged clothing appropriate to the era, body appropriately covered"
         }
         val camera = if (scene.cameraKey.contains("full", ignoreCase = true) || undressed) {
@@ -113,10 +113,19 @@ object HordeResolvedScenePromptFactory {
             addAll(eraNegativeFragments(technologyEra))
             if (undressed) {
                 add("clothing")
+                add("dress")
+                add("robe")
+                add("shirt")
+                add("pants")
+                add("skirt")
+                add("armor")
                 add("underwear")
+                add("bra")
+                add("loincloth")
                 add("censored")
                 add("mosaic")
                 add("black bars")
+                add("covered genitals")
             }
             if (ageYears < 18) {
                 add("nudity")
@@ -136,7 +145,7 @@ object HordeResolvedScenePromptFactory {
             eraSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v7",
+            "horde-resolved-scene-v8",
             characterKey,
             identity.signature,
             morphology.signature,
@@ -171,7 +180,7 @@ object HordeResolvedScenePromptFactory {
             qualityPriority = true,
             referenceCacheKey = referenceCacheKey,
             saveResultAsReference = canonicalPortrait,
-            referenceDenoisingStrength = if (undressed) 0.68 else 0.52,
+            referenceDenoisingStrength = if (undressed) 0.84 else 0.52,
         )
     }
 
