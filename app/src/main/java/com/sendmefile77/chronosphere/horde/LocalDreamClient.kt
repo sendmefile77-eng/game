@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere.horde
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +101,8 @@ internal class LocalDreamClient(
             .put("show_diffusion_process", false)
 
         if (sourceImageBytes != null) {
-            payload.put("image", Base64.encodeToString(sourceImageBytes, Base64.NO_WRAP))
+            val normalizedReference = normalizeReferenceToPng(sourceImageBytes)
+            payload.put("image", Base64.encodeToString(normalizedReference, Base64.NO_WRAP))
             payload.put("denoise_strength", request.referenceDenoisingStrength.coerceIn(0.05, 1.0))
         }
 
@@ -145,6 +147,23 @@ internal class LocalDreamClient(
             throw LocalDreamGenerationException("Local Dream завершив потік без готового зображення")
         } finally {
             connection.disconnect()
+        }
+    }
+
+    private fun normalizeReferenceToPng(bytes: ByteArray): ByteArray {
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: throw LocalDreamGenerationException("Не вдалося декодувати canonical reference для Local Dream")
+        return try {
+            ByteArrayOutputStream().use { output ->
+                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    throw LocalDreamGenerationException("Не вдалося підготувати PNG reference для Local Dream")
+                }
+                output.toByteArray().also {
+                    if (it.isEmpty()) throw LocalDreamGenerationException("PNG reference для Local Dream порожній")
+                }
+            }
+        } finally {
+            bitmap.recycle()
         }
     }
 
