@@ -109,49 +109,60 @@ object AdultActionPlanner {
             .filter { it != person.id }
             .toSet()
 
-        val ranked = linkedMapOf<String, NotablePerson>()
+        fun eligible(candidate: NotablePerson?): Boolean =
+            candidate != null &&
+                candidate.id != person.id &&
+                candidate.id !in forbiddenIds &&
+                candidate.isAlive &&
+                candidate.ageYearsAt(tick) >= 18
 
-        fun consider(candidate: NotablePerson?, prioritySalt: String) {
-            if (candidate == null) return
-            if (candidate.id == person.id) return
-            if (candidate.id in forbiddenIds) return
-            if (!candidate.isAlive) return
-            if (candidate.ageYearsAt(tick) < 18) return
-            ranked.putIfAbsent("${prioritySalt}:${candidate.id}", candidate)
+        fun choose(candidates: List<NotablePerson>, tier: String): NotablePerson? {
+            val valid = candidates
+                .filter(::eligible)
+                .distinctBy { it.id }
+            if (valid.isEmpty()) return null
+            val index = (stableHash("${person.id}:$tick:$sequence:partner:$tier") % valid.size.toLong()).toInt()
+            return valid[index]
         }
 
         val related = people.relationships
             .filter { it.involves(person.id) }
             .sortedByDescending { kotlin.math.abs(it.strength) }
 
-        related.filter { it.kind == RelationshipKind.LOVER }.forEach { relationship ->
-            consider(people.persons.firstOrNull { it.id == relationship.otherId(person.id) }, "01-lover")
-        }
-        related.filter { it.kind == RelationshipKind.PARTNER }.forEach { relationship ->
-            consider(people.persons.firstOrNull { it.id == relationship.otherId(person.id) }, "02-partner")
-        }
-        related.filter { it.kind == RelationshipKind.ALLY }.forEach { relationship ->
-            consider(people.persons.firstOrNull { it.id == relationship.otherId(person.id) }, "03-ally")
-        }
+        fun relatedPeople(kind: RelationshipKind): List<NotablePerson> = related
+            .asSequence()
+            .filter { it.kind == kind }
+            .mapNotNull { relationship ->
+                people.persons.firstOrNull { it.id == relationship.otherId(person.id) }
+            }
+            .toList()
 
-        people.featuredPeople(person.civilizationId, tick)
-            .sortedByDescending { it.prestige }
-            .forEach { consider(it, "04-featured") }
+        // Preserve relationship intent first. Randomness is only used inside one priority tier,
+        // so a real adult lover cannot be displaced by a generic notable or a foreign fallback.
+        choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
+        choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
+        choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
 
-        people.allLivingPeople(person.civilizationId)
-            .filter { it.ageYearsAt(tick) >= 18 }
-            .sortedByDescending { it.prestige }
-            .forEach { consider(it, "05-living") }
+        choose(
+            people.featuredPeople(person.civilizationId, tick)
+                .filter { it.civilizationId == person.civilizationId }
+                .sortedByDescending { it.prestige },
+            "featured-local",
+        )?.let { return it }
 
-        people.persons
-            .filter { it.isAlive && it.ageYearsAt(tick) >= 18 && it.civilizationId != person.civilizationId }
-            .sortedByDescending { it.prestige }
-            .forEach { consider(it, "06-foreign-adult") }
+        choose(
+            people.allLivingPeople(person.civilizationId)
+                .filter { it.civilizationId == person.civilizationId }
+                .sortedByDescending { it.prestige },
+            "living-local",
+        )?.let { return it }
 
-        val candidates = ranked.values.distinctBy { it.id }
-        if (candidates.isEmpty()) return null
-        val index = (stableHash("${person.id}:$tick:$sequence:partner") % candidates.size.toLong()).toInt()
-        return candidates[index]
+        return choose(
+            people.persons
+                .filter { it.civilizationId != person.civilizationId }
+                .sortedByDescending { it.prestige },
+            "foreign-fallback",
+        )
     }
 
     internal fun normalizeType(
