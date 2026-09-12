@@ -60,6 +60,7 @@ internal fun HordeChronicleEventView(
                 provider = prepared.provider,
                 width = prepared.actualWidth ?: request.width,
                 height = prepared.actualHeight ?: request.height,
+                fallbackNote = prepared.fallbackNote,
             )
         } catch (cancelled: CancellationException) {
             // Changing tabs only detaches this observer; the process-level coordinator keeps the
@@ -149,6 +150,15 @@ internal fun HordeChronicleEventView(
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
+                    if (current.provider == ImageGenerationProvider.AI_HORDE && current.fallbackNote != null) {
+                        Text(
+                            text = "Local Dream → Horde: ${current.fallbackNote}",
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (showFullscreen) {
                         HordeFullscreenImageDialog(
                             bitmap = bitmap,
@@ -212,6 +222,7 @@ private sealed interface ChronicleHordeUiState {
         val provider: ImageGenerationProvider,
         val width: Int,
         val height: Int,
+        val fallbackNote: String?,
     ) : ChronicleHordeUiState
     data class Failed(val message: String) : ChronicleHordeUiState
 }
