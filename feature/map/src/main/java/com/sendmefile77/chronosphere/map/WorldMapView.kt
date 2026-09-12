@@ -35,11 +35,23 @@ fun WorldMapView(
     onCivilizationSelected: ((Int) -> Unit)? = null,
 ) {
     val interactiveModifier = if (onCivilizationSelected == null) modifier else {
-        modifier.pointerInput(world.width, world.height, settlements) {
+        modifier.pointerInput(world.width, world.height, settlements, territoryOwners) {
             detectTapGestures { tap ->
-                if (settlements.isEmpty() || size.width <= 0 || size.height <= 0) return@detectTapGestures
+                if (size.width <= 0 || size.height <= 0) return@detectTapGestures
                 val cellW = size.width.toFloat() / world.width.toFloat()
                 val cellH = size.height.toFloat() / world.height.toFloat()
+
+                if (territoryOwners != null && territoryOwners.size == world.tiles.size) {
+                    val tileX = (tap.x / cellW).toInt().coerceIn(0, world.width - 1)
+                    val tileY = (tap.y / cellH).toInt().coerceIn(0, world.height - 1)
+                    val owner = territoryOwners[tileY * world.width + tileX]
+                    if (owner >= 0) {
+                        onCivilizationSelected(owner)
+                        return@detectTapGestures
+                    }
+                }
+
+                if (settlements.isEmpty()) return@detectTapGestures
                 val nearest = settlements.minByOrNull { settlement ->
                     val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
                     val dx = tap.x - center.x
