@@ -5,6 +5,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventView
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -17,12 +19,22 @@ internal fun ChronicleHordeEventCard(
     events: List<SimulationEvent>,
     peopleState: PeopleState,
     economyState: EconomyState,
+    evolutionState: EvolutionState,
     clock: SimulationClock,
     textGenerator: ChronicleTextGenerator,
 ) {
     val event = remember(events) { HordeChronicleEventPromptFactory.latestSignificant(events) } ?: return
-    val request = remember(event, peopleState, economyState) {
-        HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
+    val request = remember(event, peopleState, economyState, evolutionState) {
+        if (event.code == "ADULT_SOCIAL_EVENT") {
+            HordeAdultScenePromptFactory.createEvent(
+                event = event,
+                people = peopleState,
+                evolution = evolutionState,
+                economy = economyState,
+            ) ?: HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
+        } else {
+            HordeChronicleEventPromptFactory.create(event, peopleState, economyState)
+        }
     }
     val eventTime = remember(event.tick) { clock.at(event.tick) }
 
