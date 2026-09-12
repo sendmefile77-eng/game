@@ -36,7 +36,6 @@ import com.sendmefile77.chronosphere.GalleryCapture
 import com.sendmefile77.chronosphere.GeneratedImageGalleryStore
 import com.sendmefile77.chronosphere.StatusPill
 import kotlinx.coroutines.CancellationException
-import java.io.File
 
 @Composable
 internal fun HordeChronicleEventView(
@@ -45,16 +44,25 @@ internal fun HordeChronicleEventView(
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
 ) {
     val context = LocalContext.current.applicationContext
-    val cache = remember(context) { HordeImageCache(File(context.filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)) }
-    var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
+    var retryNonce by remember(request.cacheKey) {
+        mutableStateOf(HordeGenerationCoordinator.retryNonce(request.cacheKey))
+    }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
-    var state by remember(request.cacheKey) { mutableStateOf<ChronicleHordeUiState>(ChronicleHordeUiState.Loading) }
+    var state by remember(request.cacheKey) {
+        mutableStateOf(
+            HordeGenerationCoordinator.peekPrepared(request.cacheKey)
+                ?.toChronicleUiState(request)
+                ?: ChronicleHordeUiState.Loading,
+        )
+    }
     val jobProgress by remember(request.cacheKey) {
         HordeGenerationCoordinator.observeProgress(request.cacheKey)
     }.collectAsState()
 
     LaunchedEffect(request.cacheKey, retryNonce, galleryCapture) {
-        state = ChronicleHordeUiState.Loading
+        if (HordeGenerationCoordinator.peekPrepared(request.cacheKey) == null) {
+            state = ChronicleHordeUiState.Loading
+        }
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
         val localDreamAttempt = attempt.copy(
             steps = LOCAL_DREAM_DMD2_STEPS,
@@ -81,14 +89,7 @@ internal fun HordeChronicleEventView(
                 width = width,
                 height = height,
             )
-            state = ChronicleHordeUiState.Ready(
-                bytes = prepared.bytes,
-                model = prepared.model,
-                provider = prepared.provider,
-                width = width,
-                height = height,
-                fallbackNote = prepared.fallbackNote,
-            )
+            state = prepared.toChronicleUiState(request)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -125,8 +126,8 @@ internal fun HordeChronicleEventView(
                         modifier = modifier,
                         message = "отримано пошкоджене зображення",
                         onRetry = {
-                            cache.remove(request.cacheKey)
-                            retryNonce += 1
+                            HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                            retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                         },
                     )
                 } else {
@@ -184,8 +185,8 @@ internal fun HordeChronicleEventView(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    cache.remove(request.cacheKey)
-                                    retryNonce += 1
+                                    HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                                    retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = ChronosphereSmallShape,
@@ -215,13 +216,23 @@ internal fun HordeChronicleEventView(
                 modifier = modifier,
                 message = current.message,
                 onRetry = {
-                    cache.remove(request.cacheKey)
-                    retryNonce += 1
+                    HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                    retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                 },
             )
         }
     }
 }
+
+private fun HordePreparedImage.toChronicleUiState(request: HordeImageRequest): ChronicleHordeUiState.Ready =
+    ChronicleHordeUiState.Ready(
+        bytes = bytes,
+        model = model,
+        provider = provider,
+        width = actualWidth ?: request.width,
+        height = actualHeight ?: request.height,
+        fallbackNote = fallbackNote,
+    )
 
 @Composable
 private fun ChronicleFailure(
