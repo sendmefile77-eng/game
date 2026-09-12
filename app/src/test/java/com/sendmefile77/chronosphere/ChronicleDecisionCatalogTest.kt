@@ -31,11 +31,25 @@ class ChronicleDecisionCatalogTest {
     )
 
     @Test
-    fun settlementFoundingProducesThreeRealChoices() {
+    fun setupFoundingDoesNotBlockTheFirstTurn() {
+        ChronicleDecisionMailbox.drain()
+        val event = SimulationEvent(
+            id = "founding-setup",
+            tick = 0L,
+            code = "SETTLEMENT_FOUNDED",
+            actorIds = listOf("civ-a"),
+            facts = mapOf("civilization" to "Нері", "settlement" to "Erenreach"),
+        )
+
+        assertNull(ChronicleDecisionCatalog.latestUnresolved(listOf(event), people, economy))
+    }
+
+    @Test
+    fun laterSettlementFoundingProducesThreeRealChoices() {
         ChronicleDecisionMailbox.drain()
         val event = SimulationEvent(
             id = "founding-1",
-            tick = 0L,
+            tick = 12L,
             code = "SETTLEMENT_FOUNDED",
             actorIds = listOf("civ-a"),
             facts = mapOf("civilization" to "Нері", "settlement" to "Erenreach"),
