@@ -46,14 +46,16 @@ class PeopleEngineTest {
         val result = engine.advance(initial, sampleWorld(3_600L)).state
 
         result.civilizationsOrIdsFromTest().forEach { civilizationId ->
-            result.featuredPeople(civilizationId, result.tick).forEach { person ->
+            val featured = result.featuredPeople(civilizationId, result.tick)
+            assertTrue(featured.isNotEmpty())
+            featured.forEach { person ->
                 assertTrue(person.ageYearsAt(result.tick) in 18..40)
             }
         }
     }
 
     @Test
-    fun longAdvanceKeepsAValidLivingRulerAndBoundedRoster() {
+    fun longAdvanceKeepsAYoungLivingRulerAndBoundedRoster() {
         val initialWorld = sampleWorld(0L)
         val initial = engine.initialize(initialWorld)
         val futureWorld = sampleWorld(3_600L)
@@ -63,6 +65,8 @@ class PeopleEngineTest {
             val ruler = result.state.ruler(civilization.id)
             assertNotNull(ruler)
             assertTrue(ruler!!.isAlive)
+            assertTrue(ruler.ageYearsAt(futureWorld.tick) in 18..40)
+            assertTrue(result.state.livingPeople(civilization.id).all { it.ageYearsAt(futureWorld.tick) in 18..40 })
         }
         assertTrue(result.state.persons.size <= futureWorld.civilizations.size * 80)
         assertTrue(result.state.relationships.all { relation ->
