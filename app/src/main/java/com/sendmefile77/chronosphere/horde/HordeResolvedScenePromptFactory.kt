@@ -58,7 +58,7 @@ object HordeResolvedScenePromptFactory {
                 "fully covered age-appropriate clothing appropriate to the stated technological era"
             }
             WardrobeState.UNDRESSED ->
-                "adult nude complete figure, neutral nonsexual pose, anatomically coherent connected body, uncensored"
+                "adult fully nude complete figure from head to feet, visible adult genitals, uncensored explicit anatomy, anatomically coherent connected body"
             WardrobeState.DAMAGED -> "weathered damaged clothing appropriate to the era, body appropriately covered"
         }
         val camera = if (scene.cameraKey.contains("full", ignoreCase = true) || undressed) {
@@ -136,7 +136,7 @@ object HordeResolvedScenePromptFactory {
             eraSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v6",
+            "horde-resolved-scene-v7",
             characterKey,
             identity.signature,
             morphology.signature,
