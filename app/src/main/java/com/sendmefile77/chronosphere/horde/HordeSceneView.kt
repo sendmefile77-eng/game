@@ -32,8 +32,6 @@ import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.LocalSceneFallbackView
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
@@ -47,7 +45,6 @@ internal fun HordeSceneView(
     val context = LocalContext.current.applicationContext
     val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
     val references = remember(context) { HordeCharacterReferenceStore(File(context.filesDir, "horde-character-references")) }
-    val client = remember { HordeClient() }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<HordeUiState>(HordeUiState.Loading) }
@@ -55,68 +52,23 @@ internal fun HordeSceneView(
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = HordeUiState.Loading
         val attemptRequest = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
-        val primaryTimeout = if (request.qualityPriority) 120_000L else 60_000L
-        val fallbackTimeout = if (request.qualityPriority) 135_000L else 75_000L
-
-        val cached = withContext(Dispatchers.IO) { cache.read(request.cacheKey) }
-        if (cached != null) {
-            if (request.saveResultAsReference) {
-                request.referenceCacheKey?.let { key ->
-                    withContext(Dispatchers.IO) { references.writeIfAbsent(key, cached, null) }
-                }
-            }
-            state = HordeUiState.Ready(cached, null, usedReference = false)
-            return@LaunchedEffect
-        }
+        val timeout = if (request.qualityPriority) 135_000L else 75_000L
 
         try {
-            val reference = request.referenceCacheKey?.let { key ->
-                withContext(Dispatchers.IO) { references.read(key) }
-            }
-            val effectiveRequest = reference?.model?.let { canonicalModel ->
-                attemptRequest.copy(
-                    preferredModels = (listOf(canonicalModel) + attemptRequest.preferredModels)
-                        .distinctBy { it.lowercase() },
-                )
-            } ?: attemptRequest
-
-            val result = if (reference != null) {
-                try {
-                    client.generate(
-                        request = effectiveRequest,
-                        sourceImageBytes = reference.imageBytes,
-                        timeoutMillis = primaryTimeout,
-                        pollIntervalMillis = 3_000L,
-                    )
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Throwable) {
-                    client.generate(
-                        request = attemptRequest,
-                        sourceImageBytes = null,
-                        timeoutMillis = fallbackTimeout,
-                        pollIntervalMillis = 3_000L,
-                    )
-                }
-            } else {
-                client.generate(
-                    request = attemptRequest,
-                    sourceImageBytes = null,
-                    timeoutMillis = fallbackTimeout,
-                    pollIntervalMillis = 3_000L,
-                )
-            }
-
-            withContext(Dispatchers.IO) {
-                cache.write(request.cacheKey, result.imageBytes)
-                if (request.saveResultAsReference) {
-                    request.referenceCacheKey?.let { key ->
-                        references.writeIfAbsent(key, result.imageBytes, result.model)
-                    }
-                }
-            }
-            state = HordeUiState.Ready(result.imageBytes, result.model, usedReference = reference != null)
+            val prepared = HordeGenerationCoordinator.load(
+                filesDir = context.filesDir,
+                request = attemptRequest,
+                timeoutMillis = timeout,
+                pollIntervalMillis = 3_000L,
+            )
+            state = HordeUiState.Ready(
+                bytes = prepared.bytes,
+                model = prepared.model,
+                usedReference = prepared.usedReference,
+            )
         } catch (cancelled: CancellationException) {
+            // The screen observer may be cancelled when the user changes tabs. The generation itself
+            // is owned by HordeGenerationCoordinator and intentionally keeps running in background.
             throw cancelled
         } catch (error: Throwable) {
             state = HordeUiState.Failed(error.message ?: "невідома помилка")
@@ -137,7 +89,11 @@ internal fun HordeSceneView(
                         modifier = modifier,
                     )
                     Text(
-                        text = if (request.qualityPriority) "AI Horde · якісний кадр генерується…" else "AI Horde · генерується…",
+                        text = if (request.qualityPriority) {
+                            "AI Horde · якісний кадр генерується у фоні…"
+                        } else {
+                            "AI Horde · генерується у фоні…"
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .background(
