@@ -10,12 +10,15 @@ import kotlinx.coroutines.async
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+internal const val GENERATED_IMAGE_CACHE_DIRECTORY = "generated-images-v2"
+
 /**
  * Process-level owner for generated image jobs.
  *
  * Compose screens are only observers: leaving a tab must not cancel an already submitted request.
  * Local Dream is preferred when its on-device backend is reachable; AI Horde remains the automatic
- * network fallback. Completed images share the existing disk cache and canonical reference store.
+ * network fallback. Completed images share a provider-neutral disk cache and canonical reference
+ * store. The v2 cache intentionally does not reuse pre-Local-Dream Horde frames.
  */
 internal object HordeGenerationCoordinator {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -29,7 +32,7 @@ internal object HordeGenerationCoordinator {
         timeoutMillis: Long,
         pollIntervalMillis: Long = 3_000L,
     ): HordePreparedImage {
-        val cache = HordeImageCache(File(filesDir, "horde-images"))
+        val cache = HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY))
         cache.read(request.cacheKey)?.let { cached ->
             if (request.saveResultAsReference) {
                 val referenceKey = request.referenceCacheKey
@@ -89,7 +92,7 @@ internal object HordeGenerationCoordinator {
         timeoutMillis: Long,
         pollIntervalMillis: Long,
     ): HordePreparedImage {
-        val cache = HordeImageCache(File(filesDir, "horde-images"))
+        val cache = HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY))
         cache.read(request.cacheKey)?.let { cached ->
             return HordePreparedImage(
                 bytes = cached,
