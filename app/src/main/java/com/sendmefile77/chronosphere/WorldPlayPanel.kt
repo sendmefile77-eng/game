@@ -27,6 +27,8 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.evolution.PlayerEvolutionInterventionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.llm.LocalLlmDiplomacyVoiceCard
+import com.sendmefile77.chronosphere.llm.LocalLlmTurnNarrativeCard
 import com.sendmefile77.chronosphere.llm.LocalLlmWorldAdvisorCard
 import com.sendmefile77.chronosphere.people.PeopleState
 
@@ -143,8 +145,17 @@ internal fun WorldPlayPanel(
         onOpenChronicle = onOpenChronicle,
     )
 
+    LocalLlmWorldAdvisorCard(
+        state = session.state,
+        civilization = civilization,
+        economyState = economyState,
+        briefing = briefing,
+        enabled = !isAdvancing,
+    )
+
     if (turnReport != null) {
         TurnReportCard(turnReport)
+        LocalLlmTurnNarrativeCard(turnReport, enabled = !isAdvancing)
     }
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
@@ -279,6 +290,13 @@ internal fun WorldPlayPanel(
                         )
                     }
 
+                    LocalLlmDiplomacyVoiceCard(
+                        tick = session.state.tick,
+                        ownName = civilization.name,
+                        target = target,
+                        enabled = !isAdvancing,
+                    )
+
                     DiplomacyActions(
                         session = session,
                         civilization = civilization,
@@ -382,14 +400,6 @@ internal fun WorldPlayPanel(
             }
         }
     }
-
-    LocalLlmWorldAdvisorCard(
-        state = session.state,
-        civilization = civilization,
-        economyState = economyState,
-        briefing = briefing,
-        enabled = !isAdvancing,
-    )
 }
 
 @Composable
