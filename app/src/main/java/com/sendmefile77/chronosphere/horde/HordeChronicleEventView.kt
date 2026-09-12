@@ -38,7 +38,7 @@ internal fun HordeChronicleEventView(
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(12f / 7f),
 ) {
     val context = LocalContext.current.applicationContext
-    val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
+    val cache = remember(context) { HordeImageCache(File(context.filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)) }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<ChronicleHordeUiState>(ChronicleHordeUiState.Loading) }
