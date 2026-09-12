@@ -2,10 +2,9 @@ package com.sendmefile77.chronosphere
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -16,9 +15,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
@@ -45,28 +44,48 @@ internal fun ChronicleHordeEventCard(
         ChronicleStoryComposer.compose(events, civilizationNames, textGenerator)
     }
     if (story != null) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.055f)),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
-            ) {
-                Text("ІСТОРІЯ, А НЕ ЖУРНАЛ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Text(story.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        PanelCard(accent = MaterialTheme.colorScheme.primary) {
+            Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(8f)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusPill("ГОЛОВНА ЛІНІЯ", color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "${story.beats.size} поворотів",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(story.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(story.lead, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 story.paragraphs.forEach { paragraph ->
                     Text(paragraph, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (story.beats.isNotEmpty()) {
-                    Text("Ключові повороти", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        "Ключові повороти",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     story.beats.forEach { beat ->
-                        Text(
-                            "${clock.at(beat.tick).year} · ${beat.title} — ${beat.summary}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(8f)),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            StatusPill(clock.at(beat.tick).year.toString(), color = MaterialTheme.colorScheme.secondary)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(beat.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    beat.summary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -116,10 +135,6 @@ internal fun ChronicleHordeEventCard(
         llmEnrichment = null
         llmWorking = true
         llmAttempted = false
-
-        // Give the image composable one frame to register its job, then let Local Dream/Horde finish
-        // before starting LLM inference. Both services may stay resident, but heavy work is serialized
-        // so a phone does not run SDXL and the GGUF model against the same RAM/thermal budget at once.
         delay(350L)
         while (HordeGenerationCoordinator.isLoading(request)) delay(500L)
 
@@ -142,15 +157,10 @@ internal fun ChronicleHordeEventCard(
         baseDecision
     }
 
-    Text(
-        "Останній важливий кадр · ${eventTime.year}",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-    )
-    Text(
-        narrative.title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
+    SectionHeader(
+        title = narrative.title,
+        eyebrow = "Останній важливий кадр",
+        trailing = eventTime.year.toString(),
     )
     Text(
         narrative.hook,
@@ -159,32 +169,18 @@ internal fun ChronicleHordeEventCard(
     )
 
     when {
-        llmEnrichment != null -> Text(
+        llmEnrichment != null -> StatusPill(
             "Tellama · ${llmEnrichment!!.model} · ${String.format("%.1f", llmEnrichment!!.elapsedMs / 1000.0)} с",
-            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.secondary,
         )
-        llmWorking -> Text(
-            "Локальна LLM · чекає завершення генерації зображення…",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        llmAttempted -> Text(
-            "Вбудований текст · Tellama неактивна",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        llmWorking -> StatusPill("Локальна LLM готує текст…", color = MaterialTheme.colorScheme.secondary)
+        llmAttempted -> StatusPill("Вбудований текст", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     HordeChronicleEventView(request = request, galleryCapture = galleryCapture)
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
             Text(narrative.body, style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Чому це важливо",
@@ -212,50 +208,56 @@ internal fun ChronicleHordeEventCard(
     }
 
     if (decision != null) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp),
-            ) {
-                Text(
-                    "Рішення",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(decision.titleUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        PanelCard(accent = MaterialTheme.colorScheme.primary) {
+            Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Рішення", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    StatusPill("потрібна дія", color = MaterialTheme.colorScheme.primary)
+                }
+                Text(decision.titleUk, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
                     decision.promptUk,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                decision.options.forEach { option ->
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                ChronicleDecisionMailbox.enqueue(option)
-                                decisionNonce += 1
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(option.titleUk)
+                decision.options.forEachIndexed { index, option ->
+                    PanelCard(accent = if (index == 0) MaterialTheme.colorScheme.secondary else null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(5f))) {
+                            Text(option.titleUk, fontWeight = FontWeight.SemiBold)
+                            Text("Наслідок · ${option.effectUk}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Ризик · ${option.riskUk}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (index == 0) {
+                                Button(
+                                    onClick = {
+                                        ChronicleDecisionMailbox.enqueue(option)
+                                        decisionNonce += 1
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = ChronosphereSmallShape,
+                                ) { Text("Обрати") }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        ChronicleDecisionMailbox.enqueue(option)
+                                        decisionNonce += 1
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = ChronosphereSmallShape,
+                                ) { Text("Обрати") }
+                            }
                         }
-                        Text(
-                            "Наслідок: ${option.effectUk}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            "Ризик: ${option.riskUk}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 }
                 Text(
-                    "Після вибору рішення буде застосовано на наступному кроці часу.",
+                    "Вибір буде застосовано на наступному кроці часу.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.secondary,
                 )
