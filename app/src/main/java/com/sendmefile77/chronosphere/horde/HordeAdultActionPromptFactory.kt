@@ -53,7 +53,7 @@ object HordeAdultActionPromptFactory {
 
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-action-v2",
+                "horde-adult-action-v3",
                 plan.cacheToken,
                 identity.signature,
                 morphology.signature,
@@ -69,6 +69,7 @@ object HordeAdultActionPromptFactory {
                 morphology.promptFragment.takeIf { it.isNotBlank() },
                 partnerLine,
                 "completely nude, no clothing, genitals in view, sexual contact clearly readable",
+                "visible penetration or genital contact, wet skin, sexual tension, explicit porn still",
                 "full-length bodies, no bust crop, no portrait crop",
                 "keep the primary adult face and hair locked to the reference identity",
                 "no text in image",
@@ -101,7 +102,7 @@ object HordeAdultActionPromptFactory {
             height = if (plan.solo) 1152 else 1216,
             steps = 36,
             cfgScale = 7.2,
-            seed = "${base.seed}:action-v2:${plan.cacheToken}",
+            seed = "${base.seed}:action-v3:${plan.cacheToken}",
             preferredModels = nsfwModels,
             qualityPriority = true,
             referenceCacheKey = base.referenceCacheKey,
