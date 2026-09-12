@@ -43,6 +43,7 @@ internal fun HordeChronicleEventView(
     val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
     val client = remember { HordeClient() }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
+    var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<ChronicleHordeUiState>(ChronicleHordeUiState.Loading) }
 
     LaunchedEffect(request.cacheKey, retryNonce) {
@@ -106,7 +107,7 @@ internal fun HordeChronicleEventView(
                     )
                 } else {
                     Surface(
-                        modifier = modifier,
+                        modifier = modifier.clickable { showFullscreen = true },
                         shape = RoundedCornerShape(14.dp),
                         tonalElevation = 2.dp,
                     ) {
@@ -123,7 +124,10 @@ internal fun HordeChronicleEventView(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = current.model?.let { "AI Horde · $it" } ?: "AI Horde",
+                            text = buildString {
+                                append(current.model?.let { "AI Horde · $it" } ?: "AI Horde")
+                                append(" · торкніться для перегляду")
+                            },
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -138,6 +142,13 @@ internal fun HordeChronicleEventView(
                             }.padding(vertical = 5.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    if (showFullscreen) {
+                        HordeFullscreenImageDialog(
+                            bitmap = bitmap,
+                            contentDescription = "Ілюстрація події хроніки",
+                            onDismiss = { showFullscreen = false },
                         )
                     }
                 }
