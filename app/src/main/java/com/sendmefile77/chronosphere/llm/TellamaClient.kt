@@ -24,14 +24,18 @@ internal data class TellamaStatus(
 /** One process-wide client keeps local text inference serialized across Chronicle and World UI. */
 internal object TellamaRuntime {
     val client = TellamaClient()
+
+    fun configureApiKey(value: String?) {
+        client.setApiKey(value)
+    }
 }
 
 /**
- * Tiny same-device client for Tellama's Local Only server.
+ * Same-device client for Tellama's authenticated Ollama-compatible server.
  *
- * Tellama binds Local Only mode to 127.0.0.1:11434 and exposes Ollama-compatible routes.
- * No cloud URL, account or API key is used here. The model id is discovered dynamically so the
- * game works with Qwen2.5 1.5B now and a larger GGUF later without code changes.
+ * Chronosphere only talks to 127.0.0.1:11434. Tellama requires an API key even in same-phone mode;
+ * every request therefore carries Authorization: Bearer <key>. The key is injected at runtime from
+ * Chronosphere's private preferences and is never stored in game saves or source code.
  */
 internal class TellamaClient(
     private val baseUrl: String = "http://127.0.0.1:11434",
@@ -41,19 +45,38 @@ internal class TellamaClient(
     @Volatile
     private var cachedModel: String? = null
 
+    @Volatile
+    private var apiKey: String? = null
+
+    fun setApiKey(value: String?) {
+        val normalized = value?.trim()?.takeIf { it.isNotBlank() }
+        if (normalized != apiKey) {
+            apiKey = normalized
+            cachedModel = null
+        }
+    }
+
+    fun hasApiKey(): Boolean = !apiKey.isNullOrBlank()
+
     suspend fun status(force: Boolean = false): TellamaStatus = withContext(Dispatchers.IO) {
+        if (!hasApiKey()) {
+            return@withContext TellamaStatus(
+                available = false,
+                detail = "Вкажіть API-ключ Tellama у вкладці «Світ»",
+            )
+        }
         if (!force) cachedModel?.let { return@withContext TellamaStatus(true, it) }
         runCatching {
             val model = discoverModel() ?: return@runCatching TellamaStatus(
                 available = false,
-                detail = "Tellama працює, але модель не вибрана",
+                detail = "Tellama працює, але модель не вибрана для сервера",
             )
             cachedModel = model
             TellamaStatus(true, model)
         }.getOrElse { error ->
             TellamaStatus(
                 available = false,
-                detail = error.message?.take(160) ?: "127.0.0.1:11434 не відповідає",
+                detail = error.message?.take(180) ?: "127.0.0.1:11434 не відповідає",
             )
         }
     }
@@ -97,11 +120,15 @@ internal class TellamaClient(
     }
 
     private fun discoverModel(): String? {
-        val connection = open("/api/tags", "GET", 2_000)
+        val connection = open("/api/tags", "GET", 2_500)
         return try {
             val code = connection.responseCode
-            if (code !in 200..299) error("Tellama /api/tags: HTTP $code")
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val body = if (code in 200..299) {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            }
+            if (code !in 200..299) throwHttpError("/api/tags", code, body)
             val models = JSONObject(body).optJSONArray("models") ?: return null
             (0 until models.length())
                 .asSequence()
@@ -125,14 +152,18 @@ internal class TellamaClient(
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) {
-                if (code == 401 || code == 403) error("Tellama Local Only очікується без API-ключа; перевірте режим сервера")
-                error("Tellama /api/chat: HTTP $code ${text.take(100)}")
-            }
+            if (code !in 200..299) throwHttpError(path, code, text)
             if (text.isBlank()) null else JSONObject(text)
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun throwHttpError(path: String, code: Int, body: String): Nothing {
+        if (code == 401 || code == 403) {
+            error("Tellama відхилила API-ключ. Створіть новий ключ у Tellama → Server і збережіть його в Хроносфері")
+        }
+        error("Tellama $path: HTTP $code ${body.take(120)}")
     }
 
     private fun open(path: String, method: String, timeoutMillis: Int): HttpURLConnection =
@@ -142,5 +173,6 @@ internal class TellamaClient(
             readTimeout = timeoutMillis
             useCaches = false
             setRequestProperty("Accept", "application/json")
+            apiKey?.let { key -> setRequestProperty("Authorization", "Bearer $key") }
         }
 }
