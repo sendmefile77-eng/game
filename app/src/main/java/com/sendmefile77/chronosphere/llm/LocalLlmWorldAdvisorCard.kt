@@ -72,6 +72,7 @@ internal fun LocalLlmWorldAdvisorCard(
     }
 
     val currentStatus = status
+    val statusDetail = currentStatus?.detail
     val accent = if (currentStatus?.available == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
 
     Card(
@@ -93,7 +94,7 @@ internal fun LocalLlmWorldAdvisorCard(
                     Text(
                         when {
                             checking -> "Перевіряю Tellama…"
-                            currentStatus?.available == true -> currentStatus?.model ?: "Tellama підключена"
+                            currentStatus?.available == true -> currentStatus.model ?: "Tellama підключена"
                             currentStatus != null -> "Tellama недоступна"
                             client.hasApiKey() -> "Готова до перевірки"
                             else -> "Потрібен API-ключ Tellama"
@@ -112,9 +113,9 @@ internal fun LocalLlmWorldAdvisorCard(
                 )
             }
 
-            if (currentStatus?.available == false && !currentStatus.detail.isNullOrBlank()) {
+            if (currentStatus?.available == false && !statusDetail.isNullOrBlank()) {
                 Text(
-                    currentStatus.detail.orEmpty(),
+                    statusDetail,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
