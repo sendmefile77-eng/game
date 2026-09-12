@@ -74,8 +74,8 @@ class HordeResolvedScenePromptFactoryTest {
         assertTrue(request.positivePrompt.contains(sexWord))
         assertTrue(request.positivePrompt.contains(identity.hairColor))
         assertTrue(request.positivePrompt.contains(identity.eyeColor))
-        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v4|"))
-        assertTrue(request.referenceCacheKey?.startsWith("horde-character-reference-v2|") == true)
+        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v5|"))
+        assertTrue(request.referenceCacheKey?.startsWith("horde-character-reference-v3|") == true)
         assertTrue(request.saveResultAsReference)
         assertFalse(request.nsfw)
     }
