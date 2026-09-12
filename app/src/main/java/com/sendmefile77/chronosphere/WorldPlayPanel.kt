@@ -1,18 +1,19 @@
 package com.sendmefile77.chronosphere
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -61,29 +62,203 @@ internal fun WorldPlayPanel(
         economy = economyState,
         pendingDecisionTitle = pendingDecisionTitle,
     )
+    var showEvolution by remember(civilization.id) { mutableStateOf(false) }
 
-    Text("Як грати", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Text(
-        "1. Натисни державу на карті. 2. Зроби втручання нижче. 3. Прокрути +1 / +10 / +100 років і дивись, що змінилось. У «Хроніці» інколи з’являються рішення.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Зараз", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Text(briefing.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(briefing.pressure, style = MaterialTheme.typography.bodySmall)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "ОБРАНА ДЕРЖАВА",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(civilization.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                economy?.era?.displayNameUk ?: "Епоха формується",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+        if (civilizationCount > 1) {
+            OutlinedButton(onClick = onNextCivilization, enabled = !isAdvancing, shape = ChronosphereSmallShape) {
+                Text("Наступна")
+            }
+        }
+    }
+
+    PanelCard(accent = MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Що відбувається", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                if (briefing.wars.isNotEmpty()) StatusPill("війна", color = MaterialTheme.colorScheme.error)
+            }
+            Text(briefing.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(briefing.pressure, style = MaterialTheme.typography.bodyMedium)
             Text(briefing.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (briefing.wars.isNotEmpty()) {
-                Text("Війни: ${briefing.wars.joinToString(", ")}", color = MaterialTheme.colorScheme.error)
+                Text("Війни · ${briefing.wars.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             if (briefing.allies.isNotEmpty()) {
-                Text("Союзники: ${briefing.allies.joinToString(", ")}")
+                Text("Союзники · ${briefing.allies.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+
+    PanelCard(accent = if (pendingDecisionTitle != null) MaterialTheme.colorScheme.secondary else null) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("ПОТОЧНА МЕТА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+            Text(briefing.objective.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(briefing.objective.detail, style = MaterialTheme.typography.bodySmall)
+            StatusPill(briefing.objective.meter, color = MaterialTheme.colorScheme.secondary)
+            if (pendingDecisionTitle != null) {
+                Text(
+                    pendingDecisionTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
+                    Text("Прийняти рішення у хроніці")
+                }
+            }
+        }
+    }
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MetricTile("Населення", compactNumber(civilization.population), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+        MetricTile("Стабільність", qualityBand(civilization.stability), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+        MetricTile("Розвиток", qualityBand(civilization.technology), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+    }
+    if (economy != null) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricTile("Казна", compactNumber(civilization.treasury), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+            MetricTile("Ресурси", shortageBand(economy.shortageIndex), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+            MetricTile("Торгівля", tradeBand(economy.tradeBalance), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+        }
+    }
+
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Text("Портрет держави", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (ruler != null) {
+                val dynasty = ruler.dynastyId?.let { dynastyId -> peopleState.dynasties.firstOrNull { it.id == dynastyId }?.name }
+                InfoLine(
+                    "Правитель",
+                    "${ruler.name}, ${ruler.ageYearsAt(session.state.tick)} р.${dynasty?.let { " · $it" } ?: ""}",
+                )
+            }
+            if (representativeLineage != null && representativePopulation != null) {
+                InfoLine(
+                    "Походження",
+                    "${representativeLineage.label} · ${rankDisplayName(representativeLineage.rank.name)} · домішка ${String.format("%.0f%%", representativePopulation.admixture * 100.0)}",
+                )
+            }
+            if (profile != null) {
+                val culture = profile.tags.sorted().take(7).joinToString(separator = " · ", transform = ::humanizeTag)
+                InfoLine("Культура", culture.ifBlank { "Без виразної домінантної традиції" })
+                InfoLine("Суспільство", tensionBand(profile.socialTension))
+            }
+        }
+    }
+
+    SectionHeader(title = "Втручання", eyebrow = "Ваші дії")
+    PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Оберіть дію для ${civilization.name}. Наслідки проявляться після руху часу.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile("Врожай", "їжа ↑ · запас міцності", !isAdvancing, { onIntervene(InterventionKind.HARVEST_AID) }, MaterialTheme.colorScheme.secondary)
+                ActionTile("Посуха", "їжа ↓ · населення під тиском", !isAdvancing, { onIntervene(InterventionKind.DROUGHT) }, MaterialTheme.colorScheme.error)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile("Прорив", "технологічний розвиток ↑", !isAdvancing, { onIntervene(InterventionKind.TECHNOLOGY_BOOST) }, MaterialTheme.colorScheme.primary)
+                ActionTile("Порядок", "стабільність ↑", !isAdvancing, { onIntervene(InterventionKind.STABILITY_SUPPORT) }, MaterialTheme.colorScheme.secondary)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile("Набіг", "удар по сусіду або ворогу", !isAdvancing, { onIntervene(InterventionKind.WAR_RAID) }, MaterialTheme.colorScheme.error)
+                ActionTile("Свято", "стабільність ↑ · казна ↓", !isAdvancing, { onIntervene(InterventionKind.FESTIVAL) }, MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+
+    if (representativeSettlement != null && representativePopulation != null && representativeLineage != null) {
+        PanelCard {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Еволюція", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Розширене керування біологічною лінією",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { showEvolution = !showEvolution }) {
+                        Text(if (showEvolution) "Згорнути" else "Відкрити")
+                    }
+                }
+                if (showEvolution) {
+                    val bodyPlan = representativeLineage.bodyPlan
+                    InfoLine(
+                        "Активна лінія",
+                        "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · мутації ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
+                    )
+                    InfoLine(
+                        "План тіла",
+                        "рук ${bodyPlan.armPairs * 2} · ніг ${bodyPlan.legPairs * 2} · очей ${bodyPlan.eyeCount}" + if (bodyPlan.hasTail) " · хвіст" else "",
+                    )
+                    InfoLine(
+                        "Гібридизація",
+                        if (hybridCandidate != null) {
+                            "${hybridCandidate.lineageLabel}${hybridSettlementName?.let { " ($it)" } ?: ""} · відмінність ${String.format("%.0f%%", hybridCandidate.difference * 100.0)}"
+                        } else {
+                            "Поки немає достатньо відмінної другої лінії"
+                        },
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionTile(
+                            "Розходження",
+                            "відокремити нову лінію",
+                            !isAdvancing,
+                            { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.DIVERGE, representativeSettlement.id) },
+                            MaterialTheme.colorScheme.secondary,
+                        )
+                        ActionTile(
+                            "Мутація",
+                            "змінити план тіла",
+                            !isAdvancing,
+                            { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.MUTATE, representativeSettlement.id) },
+                            MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    ActionTileFullWidth(
+                        title = "Гібридизація",
+                        subtitle = hybridCandidate?.let { "поєднати з ${it.lineageLabel}" } ?: "потрібна відмінна друга лінія",
+                        enabled = !isAdvancing && hybridCandidate != null,
+                        onClick = { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE, representativeSettlement.id) },
+                    )
+                    if (hybridCandidate == null) {
+                        Text(
+                            "Спочатку розведіть різні лінії окремими втручаннями, а потім поверніться до гібридизації.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
@@ -95,158 +270,24 @@ internal fun WorldPlayPanel(
         briefing = briefing,
         enabled = !isAdvancing,
     )
+}
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-    ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Завдання", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-            Text(briefing.objective.title, fontWeight = FontWeight.SemiBold)
-            Text(briefing.objective.detail, style = MaterialTheme.typography.bodySmall)
-            Text(briefing.objective.meter, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (pendingDecisionTitle != null) {
-                OutlinedButton(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth()) {
-                    Text("Відкрити хроніку")
-                }
-            }
-        }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(civilization.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                economy?.era?.displayNameUk ?: "Епоха формується",
-                color = MaterialTheme.colorScheme.secondary,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        if (civilizationCount > 1) {
-            OutlinedButton(onClick = onNextCivilization, enabled = !isAdvancing) { Text("Наступна") }
-        }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        MetricCard("Населення", compactNumber(civilization.population), Modifier.weight(1f))
-        MetricCard("Стабільність", qualityBand(civilization.stability), Modifier.weight(1f))
-        MetricCard("Розвиток", qualityBand(civilization.technology), Modifier.weight(1f))
-    }
-
-    if (economy != null) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MetricCard("Казна", compactNumber(civilization.treasury), Modifier.weight(1f))
-            MetricCard("Ресурси", shortageBand(economy.shortageIndex), Modifier.weight(1f))
-            MetricCard("Торгівля", tradeBand(economy.tradeBalance), Modifier.weight(1f))
-        }
-    }
-
-    if (representativeLineage != null && representativePopulation != null) {
-        InfoLine(
-            "Походження",
-            "${representativeLineage.label} · ${rankDisplayName(representativeLineage.rank.name)} · домішка ${String.format("%.0f%%", representativePopulation.admixture * 100.0)}",
+@Composable
+private fun ActionTileFullWidth(
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        ActionTile(
+            title = title,
+            subtitle = subtitle,
+            enabled = enabled,
+            onClick = onClick,
+            accent = MaterialTheme.colorScheme.secondary,
         )
     }
-    if (ruler != null) {
-        val dynasty = ruler.dynastyId?.let { dynastyId -> peopleState.dynasties.firstOrNull { it.id == dynastyId }?.name }
-        InfoLine(
-            "Правитель",
-            "${ruler.name}, ${ruler.ageYearsAt(session.state.tick)} р.${dynasty?.let { " · $it" } ?: ""}",
-        )
-    }
-    if (profile != null) {
-        val culture = profile.tags.sorted().take(8).joinToString(separator = " · ", transform = ::humanizeTag)
-        InfoLine("Культура", culture.ifBlank { "Без виразної домінантної традиції" })
-        InfoLine("Суспільство", tensionBand(profile.socialTension))
-    }
-
-    if (representativeSettlement != null && representativePopulation != null && representativeLineage != null) {
-        val bodyPlan = representativeLineage.bodyPlan
-        Text("Керування еволюцією", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        InfoLine(
-            "Активна лінія",
-            "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · тиск мутацій ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
-        )
-        InfoLine(
-            "План тіла",
-            "рук ${bodyPlan.armPairs * 2} · ніг ${bodyPlan.legPairs * 2} · очей ${bodyPlan.eyeCount}" +
-                if (bodyPlan.hasTail) " · хвіст" else "",
-        )
-        InfoLine(
-            "Гібридизація",
-            if (hybridCandidate != null) {
-                "${hybridCandidate.lineageLabel}${hybridSettlementName?.let { " ($it)" } ?: ""} · відмінність ${String.format("%.0f%%", hybridCandidate.difference * 100.0)}"
-            } else {
-                "Поки немає достатньо відмінної другої лінії"
-            },
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            InterventionButton("Розходження", Modifier.weight(1f), !isAdvancing) {
-                onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.DIVERGE, representativeSettlement.id)
-            }
-            InterventionButton("Мутація", Modifier.weight(1f), !isAdvancing) {
-                onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.MUTATE, representativeSettlement.id)
-            }
-        }
-        OutlinedButton(
-            onClick = { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE, representativeSettlement.id) },
-            enabled = !isAdvancing && hybridCandidate != null,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Гібридизувати з найвідміннішою доступною лінією")
-        }
-        if (hybridCandidate == null) {
-            Text(
-                "Спочатку розведіть лінії: змінюйте різні держави окремо, а потім поверніться до гібридизації.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-
-    Text("Втручання", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Text(
-        "Кожна кнопка б’є тільки по вибраній державі. Ефект видно після прокрутки часу.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        InterventionButton("Врожай", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.HARVEST_AID) }
-        InterventionButton("Посуха", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.DROUGHT) }
-    }
-    Text("Врожай — їжа ↑. Посуха — їжа і люди ↓.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        InterventionButton("Прорив", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.TECHNOLOGY_BOOST) }
-        InterventionButton("Порядок", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.STABILITY_SUPPORT) }
-    }
-    Text("Прорив — розвиток ↑. Порядок — стабільність ↑.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        InterventionButton("Набіг", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.WAR_RAID) }
-        InterventionButton("Свято", Modifier.weight(1f), !isAdvancing) { onIntervene(InterventionKind.FESTIVAL) }
-    }
-    Text("Набіг палить запаси ворога або сусіда. Свято піднімає порядок ціною казни.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 private fun humanizeTag(tag: String): String = when (tag.lowercase()) {
