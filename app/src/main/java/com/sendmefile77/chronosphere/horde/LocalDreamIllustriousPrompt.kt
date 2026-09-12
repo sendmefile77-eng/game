@@ -2,8 +2,8 @@ package com.sendmefile77.chronosphere.horde
 
 /**
  * Local Dream is running WAI Illustrious (or a DMD2 merge of it), not a Horde worker.
- * Long documentary prompts collapse to standing anime nudes. This rewrite keeps the
- * act and drops era/identity soup. Horde still receives the original request.
+ * Long documentary prompts collapse; this rewrite keeps the act AND the era/setting
+ * tags, and drops only identity/pose soup. Horde still receives the original request.
  */
 internal object LocalDreamIllustriousPrompt {
     private const val QUALITY =
@@ -21,15 +21,17 @@ internal object LocalDreamIllustriousPrompt {
         val men = countMen(source)
         val people = peopleTag(girls, men, action, request.nsfw)
         val act = actTags(source)
+        val era = eraTags(source)
+        val eraSuffix = if (era.isBlank()) "" else ", $era"
         val positive = if (action && act.isNotBlank()) {
-            "$QUALITY, $people, $act"
+            "$QUALITY, $people, $act$eraSuffix"
         } else if (request.nsfw) {
-            "$QUALITY, $people, standing, nipples, pussy, navel"
+            "$QUALITY, $people, standing, nipples, pussy, navel$eraSuffix"
         } else {
-            "masterpiece, best quality, $people, fully clothed"
+            "masterpiece, best quality, $people, fully clothed$eraSuffix"
         }
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v1",
+            cacheKey = "${request.cacheKey}|ld-illust-v2",
             positivePrompt = positive,
             negativePrompt = NEGATIVE,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
@@ -92,4 +94,28 @@ internal object LocalDreamIllustriousPrompt {
             "sex, vaginal, penis, pussy, missionary"
         else -> ""
     }
+
+    private fun eraTags(source: String): String {
+        val found = ERA_PHRASES.filter { source.contains(it) }.distinct().toMutableList()
+        if (found.contains("hide tents")) found.remove("hide tent")
+        if (found.contains("hearth fire")) found.remove("hearth")
+        if (found.contains("animal hides")) found.remove("animal hide")
+        if (found.contains("stone-age")) found.remove("stone age")
+        return found.joinToString(", ")
+    }
+
+    private val ERA_PHRASES = listOf(
+        "prehistoric", "tribal", "stone-age", "stone age",
+        "hide tents", "hide tent", "reed hut", "hearth fire", "hearth",
+        "packed earth", "animal hides", "animal hide", "furs", "ochre",
+        "bone charms", "woven fiber", "mammoth",
+        "agrarian", "thatch", "clay", "cottage", "grain",
+        "early urban", "mudbrick", "masonry", "market",
+        "bronze", "iron tools", "furnace", "metalworking",
+        "medieval", "timber-framed", "candle", "rope bed",
+        "early industrial", "industrial", "soot", "brick", "gaslight", "tenement",
+        "electric lighting", "bakelite", "information-age", "contemporary apartment",
+        "spacefaring", "spacecraft", "viewport",
+        "galenhaven",
+    )
 }

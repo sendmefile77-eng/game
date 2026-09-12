@@ -1,14 +1,26 @@
 package com.sendmefile77.chronosphere.horde
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class LocalDreamIllustriousPromptTest {
+    @Before
+    fun useIllustriousPack() {
+        LocalDreamModelPackRuntime.select(LocalDreamModelPacks.illustrious)
+    }
+
+    @After
+    fun restoreDefault() {
+        LocalDreamModelPackRuntime.select(LocalDreamModelPacks.illustrious)
+    }
+
     @Test
-    fun footjobBecomesShortDanbooruAndDropsThePortraitReference() {
+    fun footjobKeepsEraAndDropsPortraitReference() {
         val horde = HordeImageRequest(
             cacheKey = "horde-adult-action-v8|FOOTJOB:1:adult-a:adult-c",
             positivePrompt = "FOOTJOB: two nude adult women, one lying back, hide tent, ochre, exact face match, natural standing or seated pose",
@@ -23,18 +35,20 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.positivePrompt.contains("footjob"))
         assertTrue(local.positivePrompt.contains("2girls"))
         assertTrue(local.positivePrompt.contains("soles"))
-        assertFalse(local.positivePrompt.contains("hide tent"))
+        assertTrue(local.positivePrompt.contains("hide tent"))
+        assertTrue(local.positivePrompt.contains("ochre"))
         assertFalse(local.positivePrompt.contains("exact face match"))
         assertFalse(local.positivePrompt.contains("natural standing"))
         assertNull(local.referenceCacheKey)
-        assertEquals(8, local.steps)
-        assertEquals(1.4, local.cfgScale, 0.0001)
+        assertEquals(24, local.steps)
+        assertEquals(5.5, local.cfgScale, 0.0001)
         assertEquals(24, horde.steps)
-        assertTrue(local.cacheKey.endsWith("|ld-illust-v1"))
+        assertTrue(local.cacheKey.contains("|ld-illust-v2"))
+        assertTrue(local.cacheKey.contains("ld-pack-illustrious"))
     }
 
     @Test
-    fun analDoesNotAskForAKiss() {
+    fun analDoesNotAskForAKissAndKeepsEra() {
         val local = LocalDreamIllustriousPrompt.apply(
             HordeImageRequest(
                 cacheKey = "horde-adult-action-v8|ANAL:1:a:c",
@@ -46,6 +60,6 @@ class LocalDreamIllustriousPromptTest {
         )
         assertTrue(local.positivePrompt.contains("anal"))
         assertTrue(local.negativePrompt.contains("kiss"))
-        assertFalse(local.positivePrompt.contains("hide tent"))
+        assertTrue(local.positivePrompt.contains("hide tent"))
     }
 }
