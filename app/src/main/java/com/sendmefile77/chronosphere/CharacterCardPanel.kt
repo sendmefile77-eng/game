@@ -1,11 +1,14 @@
 package com.sendmefile77.chronosphere
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -46,87 +49,39 @@ fun CharacterCardPanel(
 ) {
     val age = person.ageYearsAt(tick)
     var localActionSequence by remember(person.id) { mutableStateOf(0) }
+    var chosenActionType by remember(person.id) { mutableStateOf<AdultActionType?>(null) }
+    var actionMenuOpen by remember(person.id) { mutableStateOf(false) }
     val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
-    val displayScene = if (age >= 18) {
-        scene.copy(wardrobeState = WardrobeState.UNDRESSED)
-    } else {
-        scene
-    }
-    val dynasty = person.dynastyId?.let { dynastyId ->
-        people.dynasties.firstOrNull { it.id == dynastyId }?.name
-    }
+    val displayScene = if (age >= 18) scene.copy(wardrobeState = WardrobeState.UNDRESSED) else scene
+    val dynasty = person.dynastyId?.let { dynastyId -> people.dynasties.firstOrNull { it.id == dynastyId }?.name }
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
     val effectiveAdultVisual = remember(
-        adultVisual,
-        person.id,
-        tick,
-        people,
-        evolution,
-        displayScene.wardrobeState,
-        adultSceneRuntime.hasStructuredVisuals,
+        adultVisual, person.id, tick, people, evolution, displayScene.wardrobeState, adultSceneRuntime.hasStructuredVisuals,
     ) {
-        adultVisual ?: if (
-            displayScene.wardrobeState == WardrobeState.UNDRESSED &&
-            age >= 18 &&
-            adultSceneRuntime.hasStructuredVisuals
-        ) {
-            CharacterSceneFactory.adultRequest(
-                person = person,
-                tick = tick,
-                people = people,
-                evolution = evolution,
-            )?.let { request ->
-                adultSceneRuntime.resolveCharacterVisual(request, undressed = true)
-            }
-        } else {
-            null
-        }
+        adultVisual ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED && age >= 18 && adultSceneRuntime.hasStructuredVisuals) {
+            CharacterSceneFactory.adultRequest(person = person, tick = tick, people = people, evolution = evolution)
+                ?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
+        } else null
     }
-    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age) {
+    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType) {
         if (age >= 18 && resolvedActionSequence > 0) {
-            AdultActionPlanner.plan(
-                person = person,
-                tick = tick,
-                people = people,
-                sequence = resolvedActionSequence,
-            )
-        } else {
-            null
-        }
+            AdultActionPlanner.plan(person = person, tick = tick, people = people, sequence = resolvedActionSequence, preferredType = chosenActionType)
+        } else null
     }
-    val relationships = people.relationships
-        .filter { it.involves(person.id) }
-        .sortedByDescending { kotlin.math.abs(it.strength) }
-        .take(6)
-        .mapNotNull { relationship ->
-            val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
-            val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
-            "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
-        }
+    val relationships = people.relationships.filter { it.involves(person.id) }.sortedByDescending { kotlin.math.abs(it.strength) }.take(6).mapNotNull { relationship ->
+        val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
+        val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
+        "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
+    }
     val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, tick, actionPlan?.cacheToken) {
-        GalleryCapture(
-            worldSeed = people.worldSeed,
-            civilizationIds = listOf(person.civilizationId),
-            kind = GalleryImageKind.PERSON,
-            subject = person.name,
-            tick = tick,
-        )
+        GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                "ВИЗНАЧНА ОСОБА",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Text("ВИЗНАЧНА ОСОБА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
             Text(person.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 StatusPill(roleLabel(person.role), color = MaterialTheme.colorScheme.primary)
@@ -134,9 +89,7 @@ fun CharacterCardPanel(
             }
         }
         if (hasPreviousOrNext) {
-            OutlinedButton(onClick = onNext, enabled = controlsEnabled, shape = ChronosphereSmallShape) {
-                Text("Інша")
-            }
+            OutlinedButton(onClick = onNext, enabled = controlsEnabled, shape = ChronosphereSmallShape) { Text("Інша") }
         }
     }
 
@@ -168,13 +121,10 @@ fun CharacterCardPanel(
     }
 
     if (lineage != null && descriptor != null) {
-        val ancestry = descriptor.ancestry.entries
-            .sortedByDescending { it.value }
-            .take(4)
-            .joinToString(" · ") { (lineageId, share) ->
-                val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
-                "$label ${String.format("%.0f%%", share * 100.0)}"
-            }
+        val ancestry = descriptor.ancestry.entries.sortedByDescending { it.value }.take(4).joinToString(" · ") { (lineageId, share) ->
+            val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
+            "$label ${String.format("%.0f%%", share * 100.0)}"
+        }
         val covering = descriptor.bodyPlan.covering.name.lowercase()
         val morphology = buildString {
             append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
@@ -184,10 +134,7 @@ fun CharacterCardPanel(
         PanelCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Біологія", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                InfoLine(
-                    "Походження",
-                    "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "",
-                )
+                InfoLine("Походження", "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "")
                 InfoLine("Морфологія", morphology)
             }
         }
@@ -198,11 +145,7 @@ fun CharacterCardPanel(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Зв’язки", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 relationships.forEach { relationship ->
-                    Text(
-                        relationship,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text(relationship, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -213,20 +156,27 @@ fun CharacterCardPanel(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Згенерувати інший сюжетний кадр для цієї дорослої особи.",
+                    "Оберіть дію — кадр згенерується для цієї дорослої особи. Канонічний портрет не змінюється.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
-                    onClick = {
-                        localActionSequence += 1
-                        onAdultAction()
-                    },
-                    enabled = controlsEnabled,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = ChronosphereSmallShape,
-                ) {
-                    Text("Нова сцена")
+                Box {
+                    Button(onClick = { actionMenuOpen = true }, enabled = controlsEnabled, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
+                        Text("Дія")
+                    }
+                    DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
+                        adultActionMenuItems().forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item.label) },
+                                onClick = {
+                                    chosenActionType = item.type
+                                    localActionSequence += 1
+                                    onAdultAction()
+                                    actionMenuOpen = false
+                                },
+                            )
+                        }
+                    }
                 }
                 if (actionPlan != null) {
                     StatusPill(actionCaption(actionPlan), color = MaterialTheme.colorScheme.secondary)
@@ -235,6 +185,15 @@ fun CharacterCardPanel(
         }
     }
 }
+
+private data class AdultActionMenuItem(val type: AdultActionType, val label: String)
+
+private fun adultActionMenuItems(): List<AdultActionMenuItem> = listOf(
+    AdultActionMenuItem(AdultActionType.FOOTJOB, "Футджоб"),
+    AdultActionMenuItem(AdultActionType.ORAL, "Мінет"),
+    AdultActionMenuItem(AdultActionType.VAGINAL, "Вагінал"),
+    AdultActionMenuItem(AdultActionType.ANAL, "Анал"),
+)
 
 private fun roleLabel(role: PersonRole): String = when (role) {
     PersonRole.RULER -> "Правитель"
@@ -311,13 +270,9 @@ private fun coveringLabel(covering: String): String = when (covering.lowercase()
 private fun actionCaption(plan: AdultActionPlan): String {
     val act = when (plan.type) {
         AdultActionType.FOOTJOB -> "футджоб"
-        AdultActionType.ORAL -> "мінет / орал"
+        AdultActionType.ORAL -> "мінет"
         AdultActionType.VAGINAL -> "вагінальний секс"
         AdultActionType.ANAL -> "анал"
     }
-    return if (plan.partner == null) {
-        act
-    } else {
-        "$act · з ${plan.partner.name}"
-    }
+    return if (plan.partner == null) act else "$act · з ${plan.partner.name}"
 }
