@@ -307,21 +307,40 @@ internal fun ChroniclePanel(
             Text("${names[war.civilizationA] ?: "Невідома держава"} — ${names[war.civilizationB] ?: "Невідома держава"}")
         }
     }
+
+    GeneratedImageGalleryPanel(
+        worldSeed = session.state.worldSeed,
+        civilizations = session.state.civilizations,
+        clock = clock,
+    )
+
     ChronicleHordeEventCard(
         events = session.state.recentEvents,
         peopleState = peopleState,
         economyState = economyState,
         clock = clock,
         textGenerator = textGenerator,
+        civilizationNames = names,
     )
-    Text("Останні події", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
-    val events = session.state.recentEvents.takeLast(12).reversed()
+
+    Text("Літопис фактів", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
+    Text(
+        "Короткий журнал лишається як довідка. Основна історія тепер зібрана вище у зв’язний сюжет.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val events = session.state.recentEvents.takeLast(8).reversed()
     if (events.isEmpty()) {
         Text("Світ ще не накопичив значущих подій", color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else {
         events.forEach { event ->
             val eventTime = clock.at(event.tick)
-            Text("${eventTime.year}: ${textGenerator.describe(event)}", style = MaterialTheme.typography.bodyMedium)
+            val narrative = textGenerator.narrative(event)
+            Text(
+                "${eventTime.year} · ${narrative.title} — ${narrative.hook}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
