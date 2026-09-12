@@ -11,6 +11,10 @@ enum class AdultActionType {
     ORAL,
     VAGINAL,
     ANAL,
+    BUKKAKE,
+    MASTURBATION,
+    BDSM,
+    FUTANARI_ORGASM,
 }
 
 data class AdultActionParticipant(
@@ -65,7 +69,10 @@ object AdultActionPlanner {
         if (age < 18 || sequence <= 0) return null
 
         val rawType = preferredType ?: pickType(person.id, tick, sequence)
-        val partner = pickPartner(person, tick, people, sequence)
+        val partner = when (rawType) {
+            AdultActionType.MASTURBATION -> null
+            else -> pickPartner(person, tick, people, sequence)
+        }
         val type = normalizeType(rawType, person.biologicalSex, partner?.biologicalSex)
 
         return AdultActionPlan(
