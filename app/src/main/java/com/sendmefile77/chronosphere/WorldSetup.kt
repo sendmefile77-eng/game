@@ -21,7 +21,7 @@ data class WorldSetup(
     }
 
     companion object {
-        const val MIN_TRIBES = 2
+        const val MIN_TRIBES = 1
         const val MAX_TRIBES = 6
 
         fun default(seed: Long = 424242L, tribeCount: Int = 3): WorldSetup =
