@@ -13,6 +13,7 @@ data class HordeImageRequest(
     val samplerName: String = "k_dpmpp_2m",
     val seed: String,
     val preferredModels: List<String> = emptyList(),
+    val qualityPriority: Boolean = false,
     val referenceCacheKey: String? = null,
     val saveResultAsReference: Boolean = false,
     val referenceDenoisingStrength: Double = 0.55,
@@ -42,7 +43,8 @@ data class HordeImageRequest(
 
     companion object {
         const val DEFAULT_NEGATIVE_PROMPT =
-            "low quality, worst quality, blurry, deformed, disfigured, bad anatomy, bad proportions, " +
+            "low quality, worst quality, blurry, lowres, pixelated, jpeg artifacts, compression artifacts, " +
+                "muddy details, oversmoothed skin, deformed, disfigured, bad anatomy, bad proportions, " +
                 "extra limbs, extra fingers, fused fingers, duplicate body parts, poorly drawn hands, " +
                 "poorly drawn face, text, watermark, logo, collage"
     }
