@@ -9,6 +9,8 @@ enum class InterventionKind {
     DROUGHT,
     TECHNOLOGY_BOOST,
     STABILITY_SUPPORT,
+    WAR_RAID,
+    FESTIVAL,
 }
 
 data class InterventionCommand(
@@ -41,6 +43,8 @@ class InterventionEngine {
             InterventionKind.DROUGHT -> applyDrought(state, command, event)
             InterventionKind.TECHNOLOGY_BOOST -> applyTechnologyBoost(state, command, event)
             InterventionKind.STABILITY_SUPPORT -> applyStabilitySupport(state, command, event)
+            InterventionKind.WAR_RAID -> applyWarRaid(state, command, event)
+            InterventionKind.FESTIVAL -> applyFestival(state, command, event)
         }
     }
 
@@ -104,6 +108,70 @@ class InterventionEngine {
         return state.copy(civilizations = civilizations, recentEvents = appendEvent(state, event))
     }
 
+    private fun applyWarRaid(
+        state: LivingPlanetState,
+        command: InterventionCommand,
+        event: SimulationEvent,
+    ): LivingPlanetState {
+        val targetId = raidTargetId(state, command.civilizationId) ?: command.civilizationId
+        val hittingSelf = targetId == command.civilizationId
+        val settlements = state.settlements.map { settlement ->
+            if (settlement.civilizationId != targetId) return@map settlement
+            val factor = (1.0 - (0.18 + command.strength * 0.32)).coerceIn(0.40, 0.90)
+            settlement.copy(foodStock = (settlement.foodStock * factor).coerceAtLeast(0.0))
+        }
+        val civilizations = state.civilizations.map { civilization ->
+            when {
+                civilization.id == command.civilizationId && hittingSelf ->
+                    civilization.copy(stability = (civilization.stability - 0.03).coerceAtLeast(0.12))
+                civilization.id == command.civilizationId ->
+                    civilization.copy(treasury = (civilization.treasury - 8.0 - command.strength * 14.0).coerceAtLeast(0.0))
+                else -> civilization
+            }
+        }
+        return state.copy(
+            settlements = settlements,
+            civilizations = civilizations,
+            recentEvents = appendEvent(state, event),
+        )
+    }
+
+    private fun applyFestival(
+        state: LivingPlanetState,
+        command: InterventionCommand,
+        event: SimulationEvent,
+    ): LivingPlanetState {
+        val civilizations = state.civilizations.map { civilization ->
+            if (civilization.id != command.civilizationId) return@map civilization
+            civilization.copy(
+                stability = (civilization.stability + 0.05 + command.strength * 0.12).coerceAtMost(0.98),
+                treasury = (civilization.treasury - 6.0 - command.strength * 10.0).coerceAtLeast(0.0),
+            )
+        }
+        val settlements = state.settlements.map { settlement ->
+            if (settlement.civilizationId != command.civilizationId) return@map settlement
+            settlement.copy(foodStock = settlement.foodStock + settlement.population * (0.04 + command.strength * 0.08))
+        }
+        return state.copy(
+            civilizations = civilizations,
+            settlements = settlements,
+            recentEvents = appendEvent(state, event),
+        )
+    }
+
+    private fun raidTargetId(state: LivingPlanetState, actorId: String): String? {
+        state.wars.firstOrNull { it.civilizationA == actorId || it.civilizationB == actorId }?.let { war ->
+            return if (war.civilizationA == actorId) war.civilizationB else war.civilizationA
+        }
+        val rival = state.relations
+            .filter { it.involves(actorId) }
+            .minByOrNull { it.value }
+        if (rival != null) {
+            return if (rival.civilizationA == actorId) rival.civilizationB else rival.civilizationA
+        }
+        return state.civilizations.firstOrNull { it.id != actorId }?.id
+    }
+
     private fun withPopulationTotals(state: LivingPlanetState): LivingPlanetState {
         val totals = state.settlements.groupBy { it.civilizationId }.mapValues { (_, settlements) ->
             settlements.sumOf { it.population }
@@ -122,6 +190,8 @@ class InterventionEngine {
             InterventionKind.DROUGHT -> "INTERVENTION_DROUGHT"
             InterventionKind.TECHNOLOGY_BOOST -> "INTERVENTION_TECH_BOOST"
             InterventionKind.STABILITY_SUPPORT -> "INTERVENTION_STABILITY_SUPPORT"
+            InterventionKind.WAR_RAID -> "INTERVENTION_WAR_RAID"
+            InterventionKind.FESTIVAL -> "INTERVENTION_FESTIVAL"
         }
         val facts = buildMap {
             put("civilization", civilization.name)
