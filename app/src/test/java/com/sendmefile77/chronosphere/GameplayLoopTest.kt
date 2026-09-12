@@ -4,7 +4,11 @@ import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
+import com.sendmefile77.chronosphere.economy.CivilizationEconomy
+import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.people.PeopleState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -111,6 +115,49 @@ class GameplayLoopTest {
         assertEquals(-10.0, report.treasuryDelta, 0.0001)
         assertEquals(200.0, report.foodDelta, 0.0001)
     }
+
+    @Test
+    fun centuryDecisionAlwaysOffersThreeDomesticPaths() {
+        ChronicleDecisionMailbox.drain()
+        val decision = GameplayLoop.centuryDecision(state(relation = 0.0), "civ-a")
+        assertEquals(3, decision.options.size)
+        assertTrue(decision.options.any { it.kind == InterventionKind.HARVEST_AID })
+        assertTrue(decision.options.any { it.kind == InterventionKind.STABILITY_SUPPORT })
+        assertTrue(decision.options.any { it.kind == InterventionKind.TECHNOLOGY_BOOST })
+        assertTrue(decision.options.all { it.sourceEventId == GameplayLoop.centurySourceId(24L, "civ-a") })
+    }
+
+    @Test
+    fun playDecisionFallsBackToCenturyWhenChronicleIsQuiet() {
+        ChronicleDecisionMailbox.drain()
+        val decision = GameplayLoop.playDecision(
+            state = state(relation = 0.0),
+            people = emptyPeople(),
+            economy = emptyEconomy(),
+            civilizationId = "civ-a",
+        )
+        assertTrue(decision.eventId.startsWith("player-century-"))
+        assertEquals(3, decision.options.size)
+    }
+
+    private fun emptyPeople(): PeopleState = PeopleState(
+        worldSeed = 7L,
+        tick = 24L,
+        persons = emptyList(),
+        dynasties = emptyList(),
+        relationships = emptyList(),
+        rulerByCivilization = emptyMap(),
+        socialProfiles = emptyList(),
+    )
+
+    private fun emptyEconomy(): EconomyState = EconomyState(
+        worldSeed = 7L,
+        tick = 24L,
+        civilizations = listOf(
+            CivilizationEconomy("civ-a", TechnologyEra.TRIBAL, emptyMap(), emptyMap(), emptyMap(), 0.0, 0.0, 0.0),
+            CivilizationEconomy("civ-b", TechnologyEra.TRIBAL, emptyMap(), emptyMap(), emptyMap(), 0.0, 0.0, 0.0),
+        ),
+    )
 
     private fun state(relation: Double): LivingPlanetState {
         val a = Civilization("civ-a", "Ardan", 1_000L, 0.62, 0.20, 80.0)

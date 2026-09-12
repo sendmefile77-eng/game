@@ -10,7 +10,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -20,13 +19,16 @@ import androidx.compose.ui.unit.dp
 internal fun TurnDecisionDialog(
     decision: ChronicleDecision,
     onSelect: (ChronicleDecisionOption) -> Unit,
-    onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {},
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Рішення перед ходом", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Рішення кінця століття",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Text(decision.titleUk, fontWeight = FontWeight.Bold)
             }
         },
@@ -36,6 +38,11 @@ internal fun TurnDecisionDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(decision.promptUk, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Треба обрати один напрям — без цього хід не завершується.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 decision.options.forEachIndexed { index, option ->
                     if (index == 0) {
                         Button(
@@ -64,9 +71,7 @@ internal fun TurnDecisionDialog(
             }
         },
         confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Пізніше") }
-        },
+        dismissButton = {},
     )
 }
 
@@ -111,7 +116,7 @@ internal fun TurnConsequenceDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss, shape = ChronosphereSmallShape) { Text("Далі") }
+            Button(onClick = onDismiss, shape = ChronosphereSmallShape) { Text("Почати наступне століття") }
         },
     )
 }
