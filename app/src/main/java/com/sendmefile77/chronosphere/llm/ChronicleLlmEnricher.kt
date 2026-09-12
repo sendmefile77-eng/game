@@ -47,6 +47,8 @@ internal object ChronicleLlmEnricher {
             client.completeJson(
                 systemPrompt = SYSTEM_PROMPT,
                 userPrompt = buildPrompt(event, recentEvents, people, economy, baseNarrative, baseDecision),
+                maxTokens = 620,
+                temperature = 0.68,
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -92,13 +94,20 @@ internal object ChronicleLlmEnricher {
         val numbers = event.numbers.entries.take(10).joinToString("; ") { (key, value) -> "$key=${"%.3f".format(value)}" }
         val previous = recentEvents.asReversed()
             .filter { it.id != event.id }
-            .take(4)
+            .take(8)
             .reversed()
-            .joinToString("\n") { old -> "- ${old.code}: ${old.facts.values.take(2).joinToString(", ")}" }
+            .joinToString("\n") { old ->
+                val facts = old.facts
+                    .filterKeys { key -> key !in HIDDEN_FACT_KEYS && !key.startsWith("pmorph:") }
+                    .values
+                    .take(3)
+                    .joinToString(", ")
+                "- tick=${old.tick}; ${old.code}: $facts"
+            }
             .ifBlank { "- немає" }
 
         return buildString {
-            appendLine("ПОДІЯ (це єдине джерело фактів):")
+            appendLine("ПОДІЯ (це єдине джерело нових фактів):")
             appendLine("code=${event.code}; tick=${event.tick}; facts={$safeFacts}; numbers={$numbers}")
             if (civilizationId != null) appendLine("civilizationId=$civilizationId")
             if (civEconomy != null) {
@@ -106,15 +115,18 @@ internal object ChronicleLlmEnricher {
             }
             if (ruler != null) appendLine("ruler=${ruler.name}; age=${ruler.ageYearsAt(event.tick)}")
             if (profile != null) appendLine("culture=${profile.tags.sorted().take(8).joinToString(",")}; tension=${"%.2f".format(profile.socialTension)}")
-            appendLine("Попередні події лише для контексту:")
+            appendLine("ПОПЕРЕДНІ ПОДІЇ. Використовуй їх, щоб показати передумови й продовження, але не вигадуй причин, яких тут немає:")
             appendLine(previous)
             appendLine()
-            appendLine("ДЕТЕРМІНОВАНИЙ ЧЕРНЕТКОВИЙ ТЕКСТ:")
+            appendLine("ДЕТЕРМІНОВАНИЙ ЧЕРНЕТКОВИЙ ТЕКСТ — фактична опора, а не стильовий зразок:")
             appendLine("title=${baseNarrative.title}")
             appendLine("hook=${baseNarrative.hook}")
             appendLine("body=${baseNarrative.body}")
             appendLine("significance=${baseNarrative.significance}")
             appendLine("changes=${baseNarrative.changes.joinToString(" | ")}")
+            appendLine()
+            appendLine("ВИМОГА ДО ІСТОРІЇ:")
+            appendLine("body має бути зв’язним міні-епізодом на 4–6 речень: що було до цього, що сталося зараз, хто опинився в центрі події і до чого це підводить далі. Не повторюй hook іншими словами. Не пиши як звіт або список.")
             if (baseDecision != null) {
                 appendLine()
                 appendLine("РІШЕННЯ. Механіку НЕ змінювати, лише зробити формулювання живішими:")
@@ -152,7 +164,7 @@ internal object ChronicleLlmEnricher {
         val narrative = ChronicleNarrative(
             title = text("title", baseNarrative.title, 110),
             hook = text("hook", baseNarrative.hook, 240),
-            body = text("body", baseNarrative.body, 900),
+            body = text("body", baseNarrative.body, 1_350),
             significance = text("significance", baseNarrative.significance, 520),
             changes = changes,
         )
@@ -195,13 +207,15 @@ internal object ChronicleLlmEnricher {
         )
     }
 
-    private const val MAX_PROMPT_CHARS = 7_500
+    private const val MAX_PROMPT_CHARS = 8_500
     private val HIDDEN_FACT_KEYS = setOf("mediaKey", "mediaTags")
 
     private val SYSTEM_PROMPT = """
-        Ти локальний сценарист гри «Хроносфера». Пиши природною українською, стисло й атмосферно.
-        Ти НЕ керуєш симуляцією. Не вигадуй нові факти, числа, осіб, міста, війни чи наслідки.
-        Можна лише переформулювати надані факти та пояснити їх значення.
+        Ти локальний літописець і сценарист гри «Хроносфера». Пиши природною українською як цікаву історію, а не як технічний звіт.
+        Головне — причинно-наслідкова нитка: минулі надані події створюють контекст, поточна подія змінює ситуацію, фінал абзацу підводить до можливого наступного кроку без вигадування майбутнього.
+        Ти НЕ керуєш симуляцією. Не вигадуй нові факти, числа, осіб, міста, війни, мотиви чи наслідки, яких немає у вхідних даних.
+        Не виводь внутрішні eventCode, snake_case, службові теги або англомовні коди як текст для гравця.
+        Можна лише переформулювати надані факти, пов’язувати їх у часі та пояснювати їх значення.
         Якщо дано варіанти рішення: збережи КОЖЕН id, не додавай і не видаляй варіанти, не змінюй їхню механічну суть.
         Відповідай тільки валідним JSON без markdown і без тексту поза JSON.
     """.trimIndent()
