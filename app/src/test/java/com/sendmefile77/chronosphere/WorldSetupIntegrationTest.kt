@@ -46,6 +46,19 @@ class WorldSetupIntegrationTest {
     }
 
     @Test
+    fun oneTribeWorldStartsWithExactlyOneCivilization() {
+        val setup = WorldSetup.default(seed = 424242L, tribeCount = 1)
+        assertEquals(1, setup.tribes.size)
+
+        val start = createConfiguredWorldStart(setup, generator, hydrology, resources, peopleEngine)
+
+        assertEquals(1, start.session.state.civilizations.size)
+        assertEquals(1, start.session.state.settlements.map { it.civilizationId }.distinct().size)
+        assertEquals(1, start.people.socialProfiles.size)
+        assertEquals(setup.tribes.single().name, start.session.state.civilizations.single().name)
+    }
+
+    @Test
     fun farStartSpacingReallyPlacesTribesFartherApart() {
         val close = createConfiguredWorldStart(sampleSetup(StartSpacing.CLOSE), generator, hydrology, resources, peopleEngine)
         val far = createConfiguredWorldStart(sampleSetup(StartSpacing.FAR), generator, hydrology, resources, peopleEngine)
