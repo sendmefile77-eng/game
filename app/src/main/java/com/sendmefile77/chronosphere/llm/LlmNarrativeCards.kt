@@ -132,7 +132,7 @@ internal object LlmNarrativeWriter {
             """.trimIndent(),
             user = buildString {
                 appendLine("ім'я=${person.name}; вік=${person.ageYearsAt(tick)}; роль=${person.role.name}")
-                appendLine("риси=${person.traits.joinToString(",") { it.name }.ifBlank { "немає" }}")
+                appendLine("риси=${person.traits.joinToString(",").ifBlank { "немає" }}")
                 appendLine("вплив=${"%.2f".format(person.prestige)}; здібності=${"%.2f".format(person.aptitude)}")
                 appendLine("епоха=${era?.displayNameUk ?: "невизначена"}; відомих зв'язків=$relationships")
             },
@@ -145,7 +145,7 @@ internal object LlmNarrativeWriter {
     }
 
     private suspend fun complete(system: String, user: String, maxTokens: Int): TellamaCompletion? = try {
-        if (!client.hasApiKey() || client.status().available.not()) return null
+        if (!client.hasApiKey() || !client.status().available) return null
         client.completeJson(
             systemPrompt = system,
             userPrompt = user,
