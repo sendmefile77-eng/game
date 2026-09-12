@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.adultcontracts.AdultVisualSceneDescriptor
 import com.sendmefile77.chronosphere.economy.TechnologyEra
+import com.sendmefile77.chronosphere.horde.HordeAdultActionPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeResolvedScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeSceneView
@@ -48,7 +49,7 @@ internal fun OfflineSceneView(
         actionPlan,
     ) {
         when {
-            actionPlan != null && ageYears >= 18 -> HordeAdultScenePromptFactory.createAction(
+            actionPlan != null && ageYears >= 18 -> HordeAdultActionPromptFactory.create(
                 scene = scene,
                 plan = actionPlan,
                 visualTags = visualTags,
