@@ -1,7 +1,8 @@
 package com.sendmefile77.chronosphere
 
-import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
 internal data class ChronicleDecisionOption(
@@ -22,35 +23,69 @@ internal data class ChronicleDecision(
     val options: List<ChronicleDecisionOption>,
 )
 
+internal data class PendingChronicleDecision(
+    val commandId: String,
+    val option: ChronicleDecisionOption,
+)
+
 /**
- * Converts a small set of genuinely important simulation events into player decisions.
- *
- * The effects deliberately reuse InterventionEngine, so every button changes the same world state
- * that the simulation advances afterwards. A resolved sourceEventId is written into the resulting
- * intervention event, which makes decisions persistent across save/load without a new save schema.
+ * Process-level hand-off between the Chronicle UI and the next simulation slice.
+ * A choice is applied at the beginning of the next time advance, so the causal loop is explicit:
+ * event -> player choice -> time advances -> world reacts. Applied choices are also written to the
+ * normal event log by InterventionEngine and therefore survive save/load without a new schema.
  */
+internal object ChronicleDecisionMailbox {
+    private val pending = linkedMapOf<String, PendingChronicleDecision>()
+
+    @Synchronized
+    fun enqueue(option: ChronicleDecisionOption) {
+        pending[option.sourceEventId] = PendingChronicleDecision(
+            commandId = "chronicle-${option.sourceEventId}-${option.id}",
+            option = option,
+        )
+    }
+
+    @Synchronized
+    fun contains(sourceEventId: String): Boolean = sourceEventId in pending
+
+    @Synchronized
+    fun drain(): List<PendingChronicleDecision> = pending.values.toList().also { pending.clear() }
+
+    @Synchronized
+    fun restore(decisions: List<PendingChronicleDecision>) {
+        decisions.forEach { pending[it.option.sourceEventId] = it }
+    }
+}
+
 internal object ChronicleDecisionCatalog {
     fun latestUnresolved(
         events: List<SimulationEvent>,
-        state: LivingPlanetState,
+        people: PeopleState,
+        economy: EconomyState,
     ): ChronicleDecision? {
-        val resolved = events.asSequence()
-            .mapNotNull { it.facts["sourceEventId"] }
-            .toSet()
+        val resolved = events.asSequence().mapNotNull { it.facts["sourceEventId"] }.toSet()
         return events.asReversed().firstNotNullOfOrNull { event ->
-            if (event.id in resolved) null else forEvent(event, state)
+            if (event.id in resolved || ChronicleDecisionMailbox.contains(event.id)) null
+            else forEvent(event, people, economy)
         }
     }
 
-    fun forEvent(event: SimulationEvent, state: LivingPlanetState): ChronicleDecision? {
-        val civilizationIds = state.civilizations.mapTo(hashSetOf()) { it.id }
-        val actorCivilizations = event.actorIds.filter { it in civilizationIds }
-        val primary = actorCivilizations.firstOrNull()
-            ?: civilizationByName(state, event.facts["civilization"])
-            ?: civilizationByName(state, event.facts["a"])
-            ?: return null
+    fun forEvent(
+        event: SimulationEvent,
+        people: PeopleState,
+        economy: EconomyState,
+    ): ChronicleDecision? {
+        val civilizationIds = economy.civilizations.mapTo(hashSetOf()) { it.civilizationId }
+        val actorCivilizations = event.actorIds.mapNotNull { actorId ->
+            when {
+                actorId in civilizationIds -> actorId
+                else -> people.persons.firstOrNull { it.id == actorId }?.civilizationId?.takeIf { it in civilizationIds }
+            }
+        }.distinct()
+        val primary = actorCivilizations.firstOrNull() ?: return null
         val secondary = actorCivilizations.drop(1).firstOrNull()
-            ?: civilizationByName(state, event.facts["b"])
+        val primaryName = event.facts["civilization"] ?: event.facts["a"] ?: primary
+        val secondaryName = event.facts["b"] ?: secondary ?: "супротивника"
 
         fun option(
             id: String,
@@ -71,214 +106,95 @@ internal object ChronicleDecisionCatalog {
             strength = strength,
         )
 
-        val primaryName = state.civilizations.firstOrNull { it.id == primary }?.name ?: "держава"
         return when (event.code) {
             "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Новий центр потребує напрямку",
-                promptUk = "Перші роки визначать, чи стане нове поселення опорою $primaryName, чи залишиться слабким форпостом.",
-                options = listOf(
-                    option(
-                        id = "feed-growth",
-                        title = "Підтримати запаси",
-                        effect = "Різко збільшити продовольчий резерв держави.",
-                        risk = "Швидке зростання може пізніше посилити навантаження на ресурси.",
-                        kind = InterventionKind.HARVEST_AID,
-                        strength = 0.58,
-                    ),
-                    option(
-                        id = "secure-order",
-                        title = "Закріпити порядок",
-                        effect = "Підняти стабільність і зробити новий центр політично надійнішим.",
-                        risk = "Менше уваги отримає матеріальне зростання.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.52,
-                    ),
-                    option(
-                        id = "fund-craft",
-                        title = "Ставка на ремесла",
-                        effect = "Прискорити технологічний розвиток держави.",
-                        risk = "Продовольча база не отримає прямої підтримки.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.38,
-                    ),
+                event.id,
+                "Новий центр потребує напрямку",
+                "Перші роки визначать, чи стане поселення опорою $primaryName.",
+                listOf(
+                    option("feed-growth", "Підтримати запаси", "Поповнити продовольчий резерв.", "Швидке зростання підвищить майбутній попит на ресурси.", InterventionKind.HARVEST_AID, strength = 0.58),
+                    option("secure-order", "Закріпити порядок", "Підняти стабільність держави.", "Матеріальне зростання не отримає прямої підтримки.", InterventionKind.STABILITY_SUPPORT, strength = 0.52),
+                    option("fund-craft", "Ставка на ремесла", "Прискорити технологічний розвиток.", "Запаси їжі не збільшаться.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.38),
                 ),
             )
 
             "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Дефіцит вимагає відповіді",
-                promptUk = "$primaryName входить у небезпечну фазу нестачі. Втручання зараз змінить траєкторію найближчих років.",
-                options = listOf(
-                    option(
-                        id = "emergency-food",
-                        title = "Аварійні запаси",
-                        effect = "Негайно поповнити продовольство поселень.",
-                        risk = "Причина дефіциту сама по собі не зникне.",
-                        kind = InterventionKind.HARVEST_AID,
-                        strength = 0.72,
-                    ),
-                    option(
-                        id = "hold-society",
-                        title = "Утримати суспільство",
-                        effect = "Підняти стабільність і знизити ризик політичного зриву.",
-                        risk = "Матеріальний дефіцит залишиться гострим.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.64,
-                    ),
-                    option(
-                        id = "solve-tech",
-                        title = "Шукати технологічне рішення",
-                        effect = "Прискорити технології, що можуть дати довгостроковий вихід.",
-                        risk = "Ефект не компенсує нестачу їжі просто зараз.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.46,
-                    ),
+                event.id,
+                "Дефіцит вимагає відповіді",
+                "$primaryName входить у небезпечну фазу нестачі.",
+                listOf(
+                    option("emergency-food", "Аварійні запаси", "Негайно поповнити продовольство.", "Причина дефіциту сама не зникне.", InterventionKind.HARVEST_AID, strength = 0.72),
+                    option("hold-society", "Утримати суспільство", "Підняти стабільність і знизити ризик зриву.", "Матеріальний дефіцит залишиться.", InterventionKind.STABILITY_SUPPORT, strength = 0.64),
+                    option("solve-tech", "Технологічна відповідь", "Інвестувати у довгостроковий технологічний вихід.", "Не компенсує нестачу просто зараз.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.46),
                 ),
             )
 
             "WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED" -> {
-                val options = mutableListOf(
-                    option(
-                        id = "war-homefront",
-                        title = "Зміцнити тил",
-                        effect = "Підвищити стабільність $primaryName під тиском війни.",
-                        risk = "Не дає прямої військової переваги.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.66,
-                    ),
-                    option(
-                        id = "war-technology",
-                        title = "Прискорити військові технології",
-                        effect = "Дати державі відчутний технологічний імпульс.",
-                        risk = "Результат проявиться через подальшу симуляцію, а не миттєво на фронті.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.60,
-                    ),
+                val choices = mutableListOf(
+                    option("war-homefront", "Зміцнити тил", "Підвищити стабільність під тиском війни.", "Не дає прямого удару по противнику.", InterventionKind.STABILITY_SUPPORT, strength = 0.66),
+                    option("war-technology", "Прискорити військові технології", "Дати державі технологічний імпульс.", "Перевага проявиться через подальшу симуляцію.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.60),
                 )
                 if (secondary != null) {
-                    val enemyName = state.civilizations.firstOrNull { it.id == secondary }?.name ?: "супротивника"
-                    options += option(
-                        id = "war-scorch-enemy",
-                        title = "Виснажити $enemyName",
-                        effect = "Спричинити сильний удар по продовольству й частині населення супротивника.",
-                        risk = "Це жорстке втручання, яке може радикально змінити баланс світу.",
-                        kind = InterventionKind.DROUGHT,
+                    choices += option(
+                        "war-scorch-enemy",
+                        "Виснажити $secondaryName",
+                        "Ударити по продовольству та частині населення противника.",
+                        "Жорстке втручання може радикально змінити баланс світу.",
+                        InterventionKind.DROUGHT,
                         target = secondary,
                         strength = 0.62,
                     )
                 }
                 ChronicleDecision(
-                    eventId = event.id,
-                    titleUk = "Війна відкрила вікно для втручання",
-                    promptUk = "Вибір зараз визначить, чи переживе $primaryName конфлікт через стійкість, технологічну перевагу або виснаження ворога.",
-                    options = options,
+                    event.id,
+                    "Війна відкрила вікно для втручання",
+                    "Вибір визначить, через що $primaryName спробує переламати конфлікт.",
+                    choices,
                 )
             }
 
             "PEACE_TREATY", "ALLIANCE_FORMED" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Мир можна перетворити на перевагу",
-                promptUk = "Дипломатичне вікно дає $primaryName шанс закріпити внутрішній порядок або швидко накопичити ресурси.",
-                options = listOf(
-                    option(
-                        id = "peace-stability",
-                        title = "Закріпити мир усередині",
-                        effect = "Помітно підвищити стабільність держави.",
-                        risk = "Економічний ефект буде непрямим.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.58,
-                    ),
-                    option(
-                        id = "peace-reserves",
-                        title = "Накопичити резерви",
-                        effect = "Поповнити продовольчі запаси поселень.",
-                        risk = "Політичні суперечності залишаться без прямої відповіді.",
-                        kind = InterventionKind.HARVEST_AID,
-                        strength = 0.50,
-                    ),
+                event.id,
+                "Мир можна перетворити на перевагу",
+                "Дипломатичне вікно дає шанс закріпити порядок або накопичити ресурси.",
+                listOf(
+                    option("peace-stability", "Закріпити мир", "Помітно підвищити стабільність.", "Економічний ефект буде непрямим.", InterventionKind.STABILITY_SUPPORT, strength = 0.58),
+                    option("peace-reserves", "Накопичити резерви", "Поповнити продовольчі запаси.", "Політичні суперечності не отримають прямої відповіді.", InterventionKind.HARVEST_AID, strength = 0.50),
                 ),
             )
 
             "ERA_ADVANCED" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Нова епоха — куди спрямувати імпульс?",
-                promptUk = "$primaryName перейшла технологічний рубіж. Перші пріоритети нової епохи вплинуть на її подальшу перевагу.",
-                options = listOf(
-                    option(
-                        id = "era-push",
-                        title = "Продовжити технологічний ривок",
-                        effect = "Ще сильніше прискорити технологічний показник.",
-                        risk = "Суспільна стабільність не отримає підтримки.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.68,
-                    ),
-                    option(
-                        id = "era-consolidate",
-                        title = "Дати суспільству адаптуватися",
-                        effect = "Підсилити стабільність після швидких змін.",
-                        risk = "Темп технологічного відриву буде нижчим.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.60,
-                    ),
+                event.id,
+                "Нова епоха — куди спрямувати імпульс?",
+                "$primaryName перейшла технологічний рубіж.",
+                listOf(
+                    option("era-push", "Продовжити ривок", "Ще сильніше прискорити технології.", "Стабільність не отримає підтримки.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.68),
+                    option("era-consolidate", "Дати суспільству адаптуватися", "Підсилити стабільність після змін.", "Темп технологічного відриву буде нижчим.", InterventionKind.STABILITY_SUPPORT, strength = 0.60),
                 ),
             )
 
             "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Нова влада ще не закріпилася",
-                promptUk = "Перехід влади у $primaryName створює коротке вікно, коли можна визначити характер нового правління.",
-                options = listOf(
-                    option(
-                        id = "rule-legitimacy",
-                        title = "Підсилити легітимність",
-                        effect = "Суттєво підняти стабільність режиму.",
-                        risk = "Не прискорює матеріальний розвиток.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.70,
-                    ),
-                    option(
-                        id = "rule-reform",
-                        title = "Підштовхнути реформи",
-                        effect = "Дати новій владі технологічний імпульс.",
-                        risk = "Швидкі зміни проходять без прямої стабілізації.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.52,
-                    ),
+                event.id,
+                "Нова влада ще не закріпилася",
+                "Перехід влади створює коротке вікно для визначення характеру правління.",
+                listOf(
+                    option("rule-legitimacy", "Підсилити легітимність", "Суттєво підняти стабільність режиму.", "Матеріальний розвиток не прискорюється.", InterventionKind.STABILITY_SUPPORT, strength = 0.70),
+                    option("rule-reform", "Підштовхнути реформи", "Дати новій владі технологічний імпульс.", "Швидкі зміни йдуть без прямої стабілізації.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.52),
                 ),
             )
 
             "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
             "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> ChronicleDecision(
-                eventId = event.id,
-                titleUk = "Нова лінія змінює суспільство",
-                promptUk = "Біологічна зміна вже стала фактом. Тепер можна допомогти $primaryName адаптувати інституції або використати нові можливості для розвитку.",
-                options = listOf(
-                    option(
-                        id = "evo-integrate",
-                        title = "Захистити інтеграцію",
-                        effect = "Підвищити стабільність у період біологічних змін.",
-                        risk = "Не прискорює подальший розвиток технологій.",
-                        kind = InterventionKind.STABILITY_SUPPORT,
-                        strength = 0.56,
-                    ),
-                    option(
-                        id = "evo-study",
-                        title = "Досліджувати нову лінію",
-                        effect = "Перетворити зміни на технологічний імпульс.",
-                        risk = "Соціальна напруга не отримає прямої компенсації.",
-                        kind = InterventionKind.TECHNOLOGY_BOOST,
-                        strength = 0.46,
-                    ),
+                event.id,
+                "Нова лінія змінює суспільство",
+                "Біологічна зміна вже стала фактом; тепер суспільству треба на неї відповісти.",
+                listOf(
+                    option("evo-integrate", "Захистити інтеграцію", "Підвищити стабільність у період змін.", "Не прискорює технологічний розвиток.", InterventionKind.STABILITY_SUPPORT, strength = 0.56),
+                    option("evo-study", "Досліджувати нову лінію", "Перетворити зміни на технологічний імпульс.", "Соціальна напруга не отримає прямої компенсації.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.46),
                 ),
             )
 
             else -> null
         }
-    }
-
-    private fun civilizationByName(state: LivingPlanetState, value: String?): String? {
-        val name = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        return state.civilizations.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id
     }
 }
