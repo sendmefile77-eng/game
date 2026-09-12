@@ -113,7 +113,7 @@ fun ChronosphereGameApp() {
     var selectedPanel by remember { mutableStateOf(GamePanel.WORLD) }
     var isAdvancing by remember { mutableStateOf(false) }
     var saveStatus by remember {
-        mutableStateOf(if (adultModuleActive) "Локальний режим · розширений модуль активний" else "Локальний режим")
+        mutableStateOf(if (adultModuleActive) "Гібридний режим · AI Horde · розширений модуль активний" else "Гібридний режим · AI Horde")
     }
 
     fun resetCharacterSelection(civilizationId: String, people: PeopleState) {
