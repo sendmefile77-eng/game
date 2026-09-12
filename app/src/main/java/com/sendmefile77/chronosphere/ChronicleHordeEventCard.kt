@@ -23,7 +23,6 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.HistoricalChronicleNarrator
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventView
-import com.sendmefile77.chronosphere.horde.HordeGenerationCoordinator
 import com.sendmefile77.chronosphere.llm.ChronicleLlmEnricher
 import com.sendmefile77.chronosphere.llm.LlmChronicleEnrichment
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -170,9 +169,7 @@ internal fun ChronicleHordeEventCard(
         llmEnrichment = null
         llmWorking = true
         llmAttempted = false
-        delay(350L)
-        while (HordeGenerationCoordinator.isLoading(request)) delay(500L)
-
+        delay(180L)
         llmEnrichment = ChronicleLlmEnricher.enrich(
             event = event,
             recentEvents = events,
@@ -205,11 +202,11 @@ internal fun ChronicleHordeEventCard(
 
     when {
         llmEnrichment != null -> StatusPill(
-            "Tellama · ${llmEnrichment!!.model} · ${String.format("%.1f", llmEnrichment!!.elapsedMs / 1000.0)} с",
+            "Qwen · ${llmEnrichment!!.model} · ${String.format("%.1f", llmEnrichment!!.elapsedMs / 1000.0)} с",
             color = MaterialTheme.colorScheme.secondary,
         )
-        llmWorking -> StatusPill("Локальна LLM готує текст…", color = MaterialTheme.colorScheme.secondary)
-        llmAttempted -> StatusPill("Вбудований текст", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        llmWorking -> StatusPill("Qwen пише історію…", color = MaterialTheme.colorScheme.secondary)
+        llmAttempted -> StatusPill("Вбудований текст · Tellama не відповіла", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     HordeChronicleEventView(request = request, galleryCapture = galleryCapture)
