@@ -1,15 +1,11 @@
 package com.sendmefile77.chronosphere
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -18,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -118,116 +115,121 @@ fun CharacterCardPanel(
         )
     }
 
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(person.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                "ВИЗНАЧНА ОСОБА",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(person.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusPill(roleLabel(person.role), color = MaterialTheme.colorScheme.primary)
+                StatusPill("$age р.", color = MaterialTheme.colorScheme.secondary)
+            }
+        }
+        if (hasPreviousOrNext) {
+            OutlinedButton(onClick = onNext, enabled = controlsEnabled, shape = ChronosphereSmallShape) {
+                Text("Інша")
+            }
+        }
+    }
+
+    OfflineSceneView(
+        scene = displayScene,
+        characterKey = person.id,
+        ageYears = age,
+        visualTags = descriptor?.tags ?: emptySet(),
+        visualNumeric = descriptor?.numeric ?: emptyMap(),
+        technologyEra = technologyEra,
+        adultVisual = effectiveAdultVisual,
+        actionPlan = actionPlan,
+        galleryCapture = galleryCapture,
+        modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp),
+    )
+
+    PanelCard(accent = MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Профіль", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricTile("Вплив", prestigeLabel(person.prestige), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                MetricTile("Здібності", aptitudeLabel(person.aptitude), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+            }
+            dynasty?.let { InfoLine("Династія", it) }
+            if (person.traits.isNotEmpty()) {
+                InfoLine("Характер", person.traits.sorted().joinToString(" · ") { traitLabel(it) })
+            }
+        }
+    }
+
+    if (lineage != null && descriptor != null) {
+        val ancestry = descriptor.ancestry.entries
+            .sortedByDescending { it.value }
+            .take(4)
+            .joinToString(" · ") { (lineageId, share) ->
+                val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
+                "$label ${String.format("%.0f%%", share * 100.0)}"
+            }
+        val covering = descriptor.bodyPlan.covering.name.lowercase()
+        val morphology = buildString {
+            append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
+            if (descriptor.bodyPlan.hasTail) append(" · хвіст")
+            if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
+        }
+        PanelCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Біологія", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                InfoLine(
+                    "Походження",
+                    "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "",
+                )
+                InfoLine("Морфологія", morphology)
+            }
+        }
+    }
+
+    if (relationships.isNotEmpty()) {
+        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Зв’язки", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                relationships.forEach { relationship ->
                     Text(
-                        "${roleLabel(person.role)} · $age р.",
+                        relationship,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        "${prestigeLabel(person.prestige)} · ${aptitudeLabel(person.aptitude)}",
-                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (hasPreviousOrNext) {
-                    OutlinedButton(onClick = onNext, enabled = controlsEnabled) { Text("Інша особа") }
-                }
             }
+        }
+    }
 
-            OfflineSceneView(
-                scene = displayScene,
-                characterKey = person.id,
-                ageYears = age,
-                visualTags = descriptor?.tags ?: emptySet(),
-                visualNumeric = descriptor?.numeric ?: emptyMap(),
-                technologyEra = technologyEra,
-                adultVisual = effectiveAdultVisual,
-                actionPlan = actionPlan,
-                galleryCapture = galleryCapture,
-                modifier = Modifier.fillMaxWidth().height(if (age >= 18) 420.dp else 220.dp),
-            )
-
-            if (dynasty != null) {
+    if (age >= 18) {
+        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Династія · $dynasty",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (person.traits.isNotEmpty()) {
-                Text("Характер", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    person.traits.sorted().joinToString(" · ") { traitLabel(it) },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-
-            if (lineage != null && descriptor != null) {
-                val ancestry = descriptor.ancestry.entries
-                    .sortedByDescending { it.value }
-                    .take(4)
-                    .joinToString(" · ") { (lineageId, share) ->
-                        val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
-                        "$label ${String.format("%.0f%%", share * 100.0)}"
-                    }
-                Text("Походження", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    "${lineage.label} · ${rankLabel(lineage.rank.name)}" +
-                        if (ancestry.isNotBlank()) " · $ancestry" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                val covering = descriptor.bodyPlan.covering.name.lowercase()
-                val morphology = buildString {
-                    append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
-                    if (descriptor.bodyPlan.hasTail) append(" · хвіст")
-                    if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
-                }
-                Text(
-                    "Морфологія · $morphology",
+                    "Згенерувати інший сюжетний кадр для цієї дорослої особи.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-
-            if (relationships.isNotEmpty()) {
-                Text("Зв’язки", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
-                relationships.forEach { relationship ->
-                    Text("• $relationship", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
-            if (age >= 18) {
                 Button(
                     onClick = {
                         localActionSequence += 1
                         onAdultAction()
                     },
                     enabled = controlsEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ChronosphereSmallShape,
                 ) {
-                    Text("Дія")
+                    Text("Нова сцена")
                 }
                 if (actionPlan != null) {
-                    Text(
-                        actionCaption(actionPlan),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
+                    StatusPill(actionCaption(actionPlan), color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }
@@ -246,13 +248,13 @@ private fun roleLabel(role: PersonRole): String = when (role) {
 }
 
 private fun relationshipLabel(kind: RelationshipKind): String = when (kind) {
-    RelationshipKind.PARTNER -> "партнерство"
-    RelationshipKind.LOVER -> "близькі стосунки"
-    RelationshipKind.PARENT_CHILD -> "родина"
-    RelationshipKind.SIBLING -> "брат/сестра"
-    RelationshipKind.RIVAL -> "суперництво"
-    RelationshipKind.ALLY -> "союз"
-    RelationshipKind.MENTOR -> "наставництво"
+    RelationshipKind.PARTNER -> "Партнерство"
+    RelationshipKind.LOVER -> "Близькі стосунки"
+    RelationshipKind.PARENT_CHILD -> "Родина"
+    RelationshipKind.SIBLING -> "Брат/сестра"
+    RelationshipKind.RIVAL -> "Суперництво"
+    RelationshipKind.ALLY -> "Союз"
+    RelationshipKind.MENTOR -> "Наставництво"
 }
 
 private fun relationshipStrengthLabel(strength: Double): String = when {
@@ -264,17 +266,17 @@ private fun relationshipStrengthLabel(strength: Double): String = when {
 }
 
 private fun prestigeLabel(value: Double): String = when {
-    value >= 0.80 -> "винятковий вплив"
-    value >= 0.60 -> "великий вплив"
-    value >= 0.40 -> "помітний вплив"
-    else -> "обмежений вплив"
+    value >= 0.80 -> "винятковий"
+    value >= 0.60 -> "великий"
+    value >= 0.40 -> "помітний"
+    else -> "обмежений"
 }
 
 private fun aptitudeLabel(value: Double): String = when {
-    value >= 0.80 -> "видатні здібності"
-    value >= 0.60 -> "сильні здібності"
-    value >= 0.40 -> "добрі здібності"
-    else -> "звичайні здібності"
+    value >= 0.80 -> "видатні"
+    value >= 0.60 -> "сильні"
+    value >= 0.40 -> "добрі"
+    else -> "звичайні"
 }
 
 private fun traitLabel(trait: String): String = when (trait.lowercase()) {
@@ -314,8 +316,8 @@ private fun actionCaption(plan: AdultActionPlan): String {
         AdultActionType.ANAL -> "анал"
     }
     return if (plan.partner == null) {
-        "Сцена · $act"
+        act
     } else {
-        "Сцена · $act · з ${plan.partner.name}"
+        "$act · з ${plan.partner.name}"
     }
 }
