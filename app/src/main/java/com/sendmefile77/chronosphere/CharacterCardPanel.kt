@@ -58,12 +58,9 @@ fun CharacterCardPanel(
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
-    val effectiveAdultVisual = remember(
-        adultVisual, person.id, tick, people, evolution, displayScene.wardrobeState, adultSceneRuntime.hasStructuredVisuals,
-    ) {
+    val effectiveAdultVisual = remember(adultVisual, person.id, tick, people, evolution, displayScene.wardrobeState, adultSceneRuntime.hasStructuredVisuals) {
         adultVisual ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED && age >= 18 && adultSceneRuntime.hasStructuredVisuals) {
-            CharacterSceneFactory.adultRequest(person = person, tick = tick, people = people, evolution = evolution)
-                ?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
+            CharacterSceneFactory.adultRequest(person = person, tick = tick, people = people, evolution = evolution)?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
         } else null
     }
     val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType) {
@@ -94,18 +91,7 @@ fun CharacterCardPanel(
         }
     }
 
-    OfflineSceneView(
-        scene = displayScene,
-        characterKey = person.id,
-        ageYears = age,
-        visualTags = descriptor?.tags ?: emptySet(),
-        visualNumeric = descriptor?.numeric ?: emptyMap(),
-        technologyEra = technologyEra,
-        adultVisual = effectiveAdultVisual,
-        actionPlan = actionPlan,
-        galleryCapture = galleryCapture,
-        modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp),
-    )
+    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = descriptor?.tags ?: emptySet(), visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = actionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -156,27 +142,18 @@ fun CharacterCardPanel(
         PanelCard(accent = MaterialTheme.colorScheme.secondary) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    "Оберіть дію — кадр зберегається для цієї епохи, поки не натиснете інший варіант. Канонічний портрет не змінюється.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text("Оберіть дію — кадр зберегається для цієї епохи, поки не натиснете інший варіант. Канонічний портрет не змінюється.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
-                    Button(onClick = { actionMenuOpen = true }, enabled = controlsEnabled, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
-                        Text("Дія")
-                    }
+                    Button(onClick = { actionMenuOpen = true }, enabled = controlsEnabled, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) { Text("Дія") }
                     DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
                         adultActionMenuItems().forEach { item ->
-                            DropdownMenuItem(
-                                text = { Text(item.label) },
-                                onClick = {
-                                    val stored = AdultActionSelectionStore.remember(person.id, item.type)
-                                    chosenActionType = stored.type
-                                    localActionSequence = stored.sequence
-                                    onAdultAction()
-                                    actionMenuOpen = false
-                                },
-                            )
+                            DropdownMenuItem(text = { Text(item.label) }, onClick = {
+                                val stored = AdultActionSelectionStore.remember(person.id, item.type)
+                                chosenActionType = stored.type
+                                localActionSequence = stored.sequence
+                                onAdultAction()
+                                actionMenuOpen = false
+                            })
                         }
                     }
                 }
@@ -195,6 +172,10 @@ private fun adultActionMenuItems(): List<AdultActionMenuItem> = listOf(
     AdultActionMenuItem(AdultActionType.ORAL, "Мінет"),
     AdultActionMenuItem(AdultActionType.VAGINAL, "Вагінал"),
     AdultActionMenuItem(AdultActionType.ANAL, "Анал"),
+    AdultActionMenuItem(AdultActionType.BUKKAKE, "Буккаке"),
+    AdultActionMenuItem(AdultActionType.MASTURBATION, "Мастурбація"),
+    AdultActionMenuItem(AdultActionType.BDSM, "BDSM"),
+    AdultActionMenuItem(AdultActionType.FUTANARI_ORGASM, "Футанарі оргазм"),
 )
 
 private fun roleLabel(role: PersonRole): String = when (role) {
@@ -275,6 +256,10 @@ private fun actionCaption(plan: AdultActionPlan): String {
         AdultActionType.ORAL -> "мінет"
         AdultActionType.VAGINAL -> "вагінальний секс"
         AdultActionType.ANAL -> "анал"
+        AdultActionType.BUKKAKE -> "буккаке"
+        AdultActionType.MASTURBATION -> "мастурбація"
+        AdultActionType.BDSM -> "BDSM"
+        AdultActionType.FUTANARI_ORGASM -> "футанарі оргазм"
     }
     return if (plan.partner == null) act else "$act · з ${plan.partner.name}"
 }
