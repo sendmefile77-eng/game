@@ -26,13 +26,21 @@ class HordeAdultScenePromptFactoryTest {
         requireNotNull(request)
         assertTrue(request.nsfw)
         assertTrue(request.width > request.height)
+        assertTrue(request.cacheKey.startsWith("horde-adult-event-v2|"))
         assertTrue(request.positivePrompt.contains("missionary"))
         assertTrue(request.positivePrompt.contains("private sleeping chamber"))
         assertTrue(request.positivePrompt.contains("intimate medium-close"))
         assertTrue(request.positivePrompt.contains("medieval"))
         assertTrue(request.positivePrompt.contains("two complete adult bodies"))
         assertTrue(request.positivePrompt.contains("penetration"))
+        assertTrue(request.positivePrompt.contains("participant 1"))
+        assertTrue(request.positivePrompt.contains("exactly 4 arms"))
+        assertTrue(request.positivePrompt.contains("exactly 4 eyes"))
+        assertTrue(request.positivePrompt.contains("clearly visible anatomical tail"))
+        assertTrue(request.positivePrompt.contains("participant 2"))
+        assertTrue(request.positivePrompt.contains("do not copy one participant's body plan"))
         assertTrue(request.negativePrompt.contains("child"))
+        assertTrue(request.negativePrompt.contains("swapped participant anatomy"))
         assertNull(request.referenceCacheKey)
         assertFalse(request.saveResultAsReference)
     }
@@ -124,15 +132,34 @@ class HordeAdultScenePromptFactoryTest {
                 "pack-setting:chamber",
                 "explicitness:explicit",
                 "participants_2",
-                "rig-plan:baseline",
+                "rig-plan:divergent",
                 "penetration",
                 "sex",
                 "era:era_medieval",
+                // Scene-level morphology remains for backwards compatibility.
                 "posture:upright",
                 "covering:bare_skin",
-                "arms:2",
+                "arms:4",
                 "legs:2",
-                "eyes:2",
+                "eyes:4",
+                "tail",
+                // Participant 1 is a divergent four-armed, four-eyed tailed adult.
+                "pmorph:0:arms:4",
+                "pmorph:0:legs:2",
+                "pmorph:0:eyes:4",
+                "pmorph:0:posture:upright",
+                "pmorph:0:covering:bare_skin",
+                "pmorph:0:tail:1",
+                "pmorph:0:height:125",
+                "pmorph:0:cranial:120",
+                // Participant 2 remains baseline and must not inherit participant 1 anatomy.
+                "pmorph:1:arms:2",
+                "pmorph:1:legs:2",
+                "pmorph:1:eyes:2",
+                "pmorph:1:posture:upright",
+                "pmorph:1:covering:bare_skin",
+                "pmorph:1:height:100",
+                "pmorph:1:cranial:100",
             ).joinToString("|"),
         ),
     )
