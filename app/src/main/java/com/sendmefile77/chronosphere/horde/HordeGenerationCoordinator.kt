@@ -78,8 +78,11 @@ internal object HordeGenerationCoordinator {
         return chosen.await()
     }
 
+    suspend fun localDreamStatus(force: Boolean = false): LocalDreamStatus =
+        localDreamClient.status(force)
+
     suspend fun isLocalDreamAvailable(force: Boolean = false): Boolean =
-        localDreamClient.isAvailable(force)
+        localDreamStatus(force).available
 
     fun isLoading(request: HordeImageRequest): Boolean {
         val prefix = "${request.cacheKey}|"
@@ -107,7 +110,9 @@ internal object HordeGenerationCoordinator {
         val references = HordeCharacterReferenceStore(File(filesDir, "horde-character-references"))
         val reference = request.referenceCacheKey?.let(references::read)
 
-        val localResult = if (localDreamClient.isAvailable()) {
+        var localDreamFallbackNote: String? = null
+        val localStatus = localDreamClient.status()
+        val localResult = if (localStatus.available) {
             try {
                 localDreamClient.generate(
                     request = request,
@@ -116,10 +121,14 @@ internal object HordeGenerationCoordinator {
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
+            } catch (error: Throwable) {
+                localDreamFallbackNote = "генерація Local Dream: ${compactReason(error)}"
                 null
             }
         } else {
+            localDreamFallbackNote = localStatus.detail
+                ?.let { "Local Dream недоступний: ${it.take(180)}" }
+                ?: "Local Dream недоступний: запустіть модель у Local Dream"
             null
         }
 
@@ -191,7 +200,13 @@ internal object HordeGenerationCoordinator {
             provider = ImageGenerationProvider.AI_HORDE,
             actualWidth = request.width,
             actualHeight = request.height,
+            fallbackNote = localDreamFallbackNote,
         )
+    }
+
+    private fun compactReason(error: Throwable): String {
+        val message = error.message?.trim().orEmpty()
+        return (message.takeIf { it.isNotBlank() } ?: error::class.java.simpleName).take(180)
     }
 
     private const val LOCAL_DREAM_REFERENCE_MODEL = "local-dream"
@@ -210,4 +225,5 @@ internal data class HordePreparedImage(
     val provider: ImageGenerationProvider = ImageGenerationProvider.AI_HORDE,
     val actualWidth: Int? = null,
     val actualHeight: Int? = null,
+    val fallbackNote: String? = null,
 )
