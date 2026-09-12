@@ -14,7 +14,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +48,13 @@ fun CharacterCardPanel(
     controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
+    var localActionSequence by remember(person.id) { mutableStateOf(0) }
+    val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
+    val displayScene = if (age >= 18) {
+        scene.copy(wardrobeState = WardrobeState.UNDRESSED)
+    } else {
+        scene
+    }
     val dynasty = person.dynastyId?.let { dynastyId ->
         people.dynasties.firstOrNull { it.id == dynastyId }?.name
     }
@@ -57,11 +67,11 @@ fun CharacterCardPanel(
         tick,
         people,
         evolution,
-        scene.wardrobeState,
+        displayScene.wardrobeState,
         adultSceneRuntime.hasStructuredVisuals,
     ) {
         adultVisual ?: if (
-            scene.wardrobeState == WardrobeState.UNDRESSED &&
+            displayScene.wardrobeState == WardrobeState.UNDRESSED &&
             age >= 18 &&
             adultSceneRuntime.hasStructuredVisuals
         ) {
@@ -77,13 +87,13 @@ fun CharacterCardPanel(
             null
         }
     }
-    val actionPlan = remember(person.id, tick, people, adultActionSequence, age) {
-        if (age >= 18 && adultActionSequence > 0) {
+    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age) {
+        if (age >= 18 && resolvedActionSequence > 0) {
             AdultActionPlanner.plan(
                 person = person,
                 tick = tick,
                 people = people,
-                sequence = adultActionSequence,
+                sequence = resolvedActionSequence,
             )
         } else {
             null
@@ -131,7 +141,7 @@ fun CharacterCardPanel(
             }
 
             OfflineSceneView(
-                scene = scene,
+                scene = displayScene,
                 characterKey = person.id,
                 ageYears = age,
                 visualTags = descriptor?.tags ?: emptySet(),
@@ -193,7 +203,13 @@ fun CharacterCardPanel(
             }
 
             if (age >= 18) {
-                Button(onClick = onAdultAction, enabled = controlsEnabled) {
+                Button(
+                    onClick = {
+                        localActionSequence += 1
+                        onAdultAction()
+                    },
+                    enabled = controlsEnabled,
+                ) {
                     Text("Дія")
                 }
                 if (actionPlan != null) {
