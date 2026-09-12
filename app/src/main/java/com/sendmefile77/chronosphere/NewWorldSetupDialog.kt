@@ -227,7 +227,10 @@ private fun TribeBiologyStep(
     val tribe = tribes[selectedTribe]
     OutlinedTextField(
         value = tribe.name,
-        onValueChange = { onChange(tribe.copy(name = it.take(24))) },
+        onValueChange = { value ->
+            val next = value.take(24)
+            if (next.isNotBlank()) onChange(tribe.copy(name = next))
+        },
         label = { Text("Назва племені") },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
