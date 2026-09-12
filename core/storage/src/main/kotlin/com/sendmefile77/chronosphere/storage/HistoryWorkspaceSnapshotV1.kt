@@ -22,6 +22,7 @@ object HistoryWorkspaceSnapshotV1 {
                         branch.peopleState?.let { pack(PeopleSnapshotV1.encode(it)) }.orEmpty(),
                         branch.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                         branch.evolutionState?.let { pack(EvolutionSnapshotV1.encode(it)) }.orEmpty(),
+                        branch.historicalMemory?.let { pack(HistoricalMemorySnapshotV1.encode(it)) }.orEmpty(),
                     ).joinToString("\t"),
                 )
             }
@@ -33,6 +34,7 @@ object HistoryWorkspaceSnapshotV1 {
                         checkpoint.peopleState?.let { pack(PeopleSnapshotV1.encode(it)) }.orEmpty(),
                         checkpoint.economyState?.let { pack(EconomySnapshotV1.encode(it)) }.orEmpty(),
                         checkpoint.evolutionState?.let { pack(EvolutionSnapshotV1.encode(it)) }.orEmpty(),
+                        checkpoint.historicalMemory?.let { pack(HistoricalMemorySnapshotV1.encode(it)) }.orEmpty(),
                     ).joinToString("\t"),
                 )
             }
@@ -53,6 +55,7 @@ object HistoryWorkspaceSnapshotV1 {
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
+            val historicalMemory = p.getOrNull(9)?.takeIf { it.isNotBlank() }?.let { HistoricalMemorySnapshotV1.decode(unpack(it)) }
             HistoryBranch(
                 id = unesc(p[1]),
                 name = unesc(p[2]),
@@ -62,6 +65,7 @@ object HistoryWorkspaceSnapshotV1 {
                 peopleState = peopleState,
                 economyState = economyState,
                 evolutionState = evolutionState,
+                historicalMemory = historicalMemory,
             )
         }
 
@@ -72,6 +76,7 @@ object HistoryWorkspaceSnapshotV1 {
             val peopleState = p.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { PeopleSnapshotV1.decode(unpack(it)) }
             val economyState = p.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { EconomySnapshotV1.decode(unpack(it)) }
             val evolutionState = p.getOrNull(8)?.takeIf { it.isNotBlank() }?.let { EvolutionSnapshotV1.decode(unpack(it)) }
+            val historicalMemory = p.getOrNull(9)?.takeIf { it.isNotBlank() }?.let { HistoricalMemorySnapshotV1.decode(unpack(it)) }
             HistoryCheckpoint(
                 id = unesc(p[1]),
                 branchId = unesc(p[2]),
@@ -81,6 +86,7 @@ object HistoryWorkspaceSnapshotV1 {
                 peopleState = peopleState,
                 economyState = economyState,
                 evolutionState = evolutionState,
+                historicalMemory = historicalMemory,
             )
         }
 
@@ -105,6 +111,7 @@ object HistoryWorkspaceSnapshotV1 {
             validateLayer("Branch people", branch.state.worldSeed, branch.state.tick, branch.peopleState?.worldSeed, branch.peopleState?.tick)
             validateLayer("Branch economy", branch.state.worldSeed, branch.state.tick, branch.economyState?.worldSeed, branch.economyState?.tick)
             validateLayer("Branch evolution", branch.state.worldSeed, branch.state.tick, branch.evolutionState?.worldSeed, branch.evolutionState?.tick)
+            validateLayer("Branch historical memory", branch.state.worldSeed, branch.state.tick, branch.historicalMemory?.worldSeed, branch.historicalMemory?.tick)
         }
 
         val checkpoints = workspace.checkpoints
@@ -118,6 +125,7 @@ object HistoryWorkspaceSnapshotV1 {
             validateLayer("Checkpoint people", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.peopleState?.worldSeed, checkpoint.peopleState?.tick)
             validateLayer("Checkpoint economy", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.economyState?.worldSeed, checkpoint.economyState?.tick)
             validateLayer("Checkpoint evolution", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.evolutionState?.worldSeed, checkpoint.evolutionState?.tick)
+            validateLayer("Checkpoint historical memory", checkpoint.state.worldSeed, checkpoint.state.tick, checkpoint.historicalMemory?.worldSeed, checkpoint.historicalMemory?.tick)
         }
     }
 

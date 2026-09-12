@@ -9,6 +9,7 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.AdmixtureEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.history.HistoricalCommitmentEngine
 import com.sendmefile77.chronosphere.history.InterventionCommand
 import com.sendmefile77.chronosphere.history.InterventionEngine
 import com.sendmefile77.chronosphere.people.PeopleEngine
@@ -83,7 +84,7 @@ internal class PlayableSimulationRunner(
                     } else {
                         state
                     }
-                    interventionEngine.apply(
+                    val applied = interventionEngine.apply(
                         paidState,
                         InterventionCommand(
                             id = pending.commandId,
@@ -96,6 +97,12 @@ internal class PlayableSimulationRunner(
                             targetCivilizationId = option.counterpartCivilizationId,
                         ),
                     )
+                    HistoricalCommitmentEngine.activate(
+                        state = applied,
+                        civilizationId = option.targetCivilizationId,
+                        choiceId = option.id,
+                        originTick = applied.tick,
+                    )
                 }
             }
             var people = currentPeople
@@ -107,8 +114,11 @@ internal class PlayableSimulationRunner(
                 val step = minOf(12, remaining)
                 val fromTick = worldState.tick
 
-                val civilizationNext = applyConfiguredCultureDynamics(
-                    consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
+                val civilizationNext = HistoricalCommitmentEngine.applyRecurring(
+                    applyConfiguredCultureDynamics(
+                        consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
+                        months = step,
+                    ),
                     months = step,
                 )
                 val economyResult = economyEngine.advance(economy, civilizationNext)

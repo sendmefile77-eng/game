@@ -14,6 +14,7 @@ data class HistoryBranch(
     val peopleState: PeopleState? = null,
     val economyState: EconomyState? = null,
     val evolutionState: EvolutionState? = null,
+    val historicalMemory: HistoricalMemoryState? = null,
 )
 
 data class HistoryCheckpoint(
@@ -25,6 +26,7 @@ data class HistoryCheckpoint(
     val peopleState: PeopleState? = null,
     val economyState: EconomyState? = null,
     val evolutionState: EvolutionState? = null,
+    val historicalMemory: HistoricalMemoryState? = null,
 )
 
 data class HistoryWorkspace(
@@ -37,6 +39,7 @@ data class HistoryWorkspace(
     val activePeopleState: PeopleState? get() = activeBranch.peopleState
     val activeEconomyState: EconomyState? get() = activeBranch.economyState
     val activeEvolutionState: EvolutionState? get() = activeBranch.evolutionState
+    val activeHistoricalMemory: HistoricalMemoryState? get() = activeBranch.historicalMemory
 }
 
 class HistoryTimeline {
@@ -45,21 +48,30 @@ class HistoryTimeline {
         initialPeopleState: PeopleState? = null,
         initialEconomyState: EconomyState? = null,
         initialEvolutionState: EvolutionState? = null,
-    ): HistoryWorkspace = HistoryWorkspace(
-        activeBranchId = ROOT_BRANCH_ID,
-        branches = listOf(
-            HistoryBranch(
-                id = ROOT_BRANCH_ID,
-                name = "Original timeline",
-                parentBranchId = null,
-                forkTick = initialState.tick,
-                state = initialState,
-                peopleState = initialPeopleState,
-                economyState = initialEconomyState,
-                evolutionState = initialEvolutionState,
+    ): HistoryWorkspace {
+        val initialMemory = HistoricalMemoryEngine.reconcile(
+            previous = null,
+            world = initialState,
+            people = initialPeopleState,
+            economy = initialEconomyState,
+        )
+        return HistoryWorkspace(
+            activeBranchId = ROOT_BRANCH_ID,
+            branches = listOf(
+                HistoryBranch(
+                    id = ROOT_BRANCH_ID,
+                    name = "Original timeline",
+                    parentBranchId = null,
+                    forkTick = initialState.tick,
+                    state = initialState,
+                    peopleState = initialPeopleState,
+                    economyState = initialEconomyState,
+                    evolutionState = initialEvolutionState,
+                    historicalMemory = initialMemory,
+                ),
             ),
-        ),
-    )
+        )
+    }
 
     fun syncActive(
         workspace: HistoryWorkspace,
@@ -75,6 +87,12 @@ class HistoryTimeline {
                     peopleState = peopleState,
                     economyState = economyState,
                     evolutionState = evolutionState,
+                    historicalMemory = HistoricalMemoryEngine.reconcile(
+                        previous = branch.historicalMemory,
+                        world = state,
+                        people = peopleState,
+                        economy = economyState,
+                    ),
                 )
             } else branch
         },
@@ -92,6 +110,7 @@ class HistoryTimeline {
             peopleState = branch.peopleState,
             economyState = branch.economyState,
             evolutionState = branch.evolutionState,
+            historicalMemory = branch.historicalMemory,
         )
         return workspace.copy(checkpoints = workspace.checkpoints + checkpoint)
     }
@@ -109,6 +128,7 @@ class HistoryTimeline {
             peopleState = parent.peopleState,
             economyState = parent.economyState,
             evolutionState = parent.evolutionState,
+            historicalMemory = parent.historicalMemory,
         )
         return workspace.copy(activeBranchId = id, branches = workspace.branches + branch)
     }
@@ -132,6 +152,7 @@ class HistoryTimeline {
                         peopleState = checkpoint.peopleState,
                         economyState = checkpoint.economyState,
                         evolutionState = checkpoint.evolutionState,
+                        historicalMemory = checkpoint.historicalMemory,
                     )
                 } else branch
             },
