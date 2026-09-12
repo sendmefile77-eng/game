@@ -29,4 +29,9 @@ class LocalDreamClientTest {
         assertEquals(first, second)
         assertTrue(first in 0L..0xffffffffL)
     }
+
+    @Test
+    fun currentLocalDreamBackendIsAskedForPngOutput() {
+        assertEquals("png", client.requestedOutputFormat())
+    }
 }
