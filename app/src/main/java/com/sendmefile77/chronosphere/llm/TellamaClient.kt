@@ -21,6 +21,11 @@ internal data class TellamaStatus(
     val detail: String? = null,
 )
 
+/** One process-wide client keeps local text inference serialized across Chronicle and World UI. */
+internal object TellamaRuntime {
+    val client = TellamaClient()
+}
+
 /**
  * Tiny same-device client for Tellama's Local Only server.
  *
