@@ -11,12 +11,23 @@ data class GameObjective(
     val complete: Boolean,
 )
 
+data class NeighborStanding(
+    val civilizationId: String,
+    val name: String,
+    val relation: Double,
+    val atWar: Boolean,
+    val allied: Boolean,
+    val status: String,
+)
+
 data class GameBriefing(
     val headline: String,
     val pressure: String,
     val hint: String,
     val wars: List<String>,
     val allies: List<String>,
+    val neighbors: List<NeighborStanding>,
+    val latestEvent: String?,
     val objective: GameObjective,
 )
 
@@ -48,8 +59,14 @@ object GameSituation {
                 else -> null
             }
         }
+        val neighbors = neighborsOf(state, civilization.id)
         val rank = state.civilizations.sortedByDescending { it.population }.indexOfFirst { it.id == civilization.id } + 1
         val era = economy?.economy(civilization.id)?.era?.displayNameUk ?: "рання епоха"
+        val latest = state.recentEvents.lastOrNull()?.let { event ->
+            val code = eventLabel(event.code)
+            val other = event.facts["b"] ?: event.facts["settlement"] ?: event.facts["civilization"]
+            if (other != null) "$code · $other" else code
+        }
 
         val headline = when {
             wars.isNotEmpty() -> "${civilization.name} у війні з ${wars.joinToString(", ")}"
@@ -63,12 +80,14 @@ object GameSituation {
             add("розвиток ${techBand(civilization.technology)}")
             if (economy != null) add("ресурси ${shortageBandLocal(economy.economy(civilization.id)?.shortageIndex)}")
         }.joinToString(" · ")
+        val worst = neighbors.minByOrNull { it.relation }
         val hint = when {
             pendingDecisionTitle != null -> "У вкладці «Хроніка» чекає рішення: $pendingDecisionTitle"
             hungry -> "Натисни «Врожай», потім «+1 рік», щоб побачити, чи відійшов голод."
-            wars.isNotEmpty() -> "Можна бити суперника кнопкою «Набіг» або зміцнити тил «Святом» / «Порядком»."
+            wars.isNotEmpty() -> "Можна бити суперника «Набігом», укласти «Мир» або тримати тил «Святом»."
+            worst != null && worst.relation < -0.35 -> "Відносини з ${worst.name} погані. «Посольство» пом’якшить, «Війна» розірве."
             fragile -> "«Свято» або «Порядок» піднімають стабільність. Потім прокрути +1 рік."
-            else -> "Тикаєш державу на карті, втручаєшся, тоді крутиш час. Світ змінюється сам."
+            else -> "Обери сусіда в списку, зроби дію, тоді крути час. Світ змінюється і сам."
         }
         return GameBriefing(
             headline = headline,
@@ -76,8 +95,40 @@ object GameSituation {
             hint = hint,
             wars = wars,
             allies = allies,
-            objective = objective(state, civilization, foodPer, wars, pendingDecisionTitle, rank),
+            neighbors = neighbors,
+            latestEvent = latest,
+            objective = objective(state, civilization, foodPer, wars, neighbors, pendingDecisionTitle, rank),
         )
+    }
+
+    fun neighborsOf(state: LivingPlanetState, civilizationId: String): List<NeighborStanding> {
+        val names = state.civilizations.associate { it.id to it.name }
+        return state.civilizations.filter { it.id != civilizationId }.map { other ->
+            val relation = state.relations.firstOrNull { it.matches(civilizationId, other.id) }?.value ?: 0.0
+            val atWar = state.wars.any { it.matches(civilizationId, other.id) }
+            val allied = state.alliances.any { it.matches(civilizationId, other.id) }
+            NeighborStanding(
+                civilizationId = other.id,
+                name = names[other.id] ?: other.name,
+                relation = relation,
+                atWar = atWar,
+                allied = allied,
+                status = when {
+                    atWar -> "війна"
+                    allied -> "союз"
+                    relation < -0.45 -> "ворожість"
+                    relation < -0.12 -> "холод"
+                    relation > 0.55 -> "дружба"
+                    else -> "нейтралітет"
+                },
+            )
+        }.sortedWith(compareByDescending<NeighborStanding> { it.atWar }.thenBy { it.relation })
+    }
+
+    fun defaultCounterpartId(state: LivingPlanetState, civilizationId: String): String? {
+        val neighbors = neighborsOf(state, civilizationId)
+        return neighbors.firstOrNull { it.atWar }?.civilizationId
+            ?: neighbors.minByOrNull { it.relation }?.civilizationId
     }
 
     private fun objective(
@@ -85,10 +136,12 @@ object GameSituation {
         civilization: Civilization,
         foodPer: Double,
         wars: List<String>,
+        neighbors: List<NeighborStanding>,
         pendingDecisionTitle: String?,
         rank: Int,
     ): GameObjective {
         val leader = state.civilizations.maxByOrNull { it.population }
+        val hostile = neighbors.firstOrNull { !it.atWar && it.relation < -0.45 }
         return when {
             foodPer < 0.45 -> GameObjective(
                 title = "Відверни голод",
@@ -110,8 +163,14 @@ object GameSituation {
             )
             wars.isNotEmpty() -> GameObjective(
                 title = "Переживи війну",
-                detail = "Ворог: ${wars.joinToString(", ")}. Набіг б'є їхні запаси, порядок тримає твій тил.",
+                detail = "Ворог: ${wars.joinToString(", ")}. Набіг б’є запаси, «Мир» зупиняє війну.",
                 meter = "${wars.size} активн. воєн",
+                complete = false,
+            )
+            hostile != null -> GameObjective(
+                title = "Розряди напругу з ${hostile.name}",
+                detail = "Посольство піднімає відносини. Війна відкриває фронт.",
+                meter = "відносини ${relationPercent(hostile.relation)}",
                 complete = false,
             )
             rank > 1 && leader != null -> GameObjective(
@@ -134,6 +193,26 @@ object GameSituation {
             )
         }
     }
+
+    private fun eventLabel(code: String): String = when (code) {
+        "INTERVENTION_HARVEST_AID" -> "Врожай"
+        "INTERVENTION_DROUGHT" -> "Посуха"
+        "INTERVENTION_TECH_BOOST" -> "Прорив"
+        "INTERVENTION_STABILITY_SUPPORT" -> "Порядок"
+        "INTERVENTION_WAR_RAID" -> "Набіг"
+        "INTERVENTION_FESTIVAL" -> "Свято"
+        "INTERVENTION_EMBASSY" -> "Посольство"
+        "WAR_STARTED" -> "Оголошено війну"
+        "PEACE_TREATY" -> "Мир"
+        "ALLIANCE_FORMED" -> "Союз"
+        "ALLIANCE_ENDED" -> "Союз розпався"
+        "FOOD_SHORTAGE" -> "Голод"
+        "SETTLEMENT_GROWTH" -> "Місто зросло"
+        "CITY_CAPTURED" -> "Місто взято"
+        else -> code.lowercase().replace('_', ' ')
+    }
+
+    private fun relationPercent(value: Double): String = String.format("%+.0f", value * 100)
 
     private fun foodBand(foodPer: Double): String = when {
         foodPer < 0.30 -> "критично мало"
