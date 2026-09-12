@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,8 +31,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.ChronosphereSmallShape
 import com.sendmefile77.chronosphere.GalleryCapture
 import com.sendmefile77.chronosphere.GeneratedImageGalleryStore
+import com.sendmefile77.chronosphere.StatusPill
 import kotlinx.coroutines.CancellationException
 import java.io.File
 
@@ -87,20 +90,18 @@ internal fun HordeChronicleEventView(
                 fallbackNote = prepared.fallbackNote,
             )
         } catch (cancelled: CancellationException) {
-            // Changing tabs only detaches this observer; the process-level coordinator keeps the
-            // Local Dream/Horde job alive and stores its result in cache for the next visit.
             throw cancelled
         } catch (error: Throwable) {
             state = ChronicleHordeUiState.Failed(error.message ?: "невідома помилка")
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         when (val current = state) {
             ChronicleHordeUiState.Loading -> {
                 Surface(
                     modifier = modifier,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     tonalElevation = 2.dp,
                 ) {
                     Box(
@@ -131,7 +132,7 @@ internal fun HordeChronicleEventView(
                 } else {
                     Surface(
                         modifier = modifier.clickable { showFullscreen = true },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         tonalElevation = 2.dp,
                     ) {
                         Image(
@@ -141,37 +142,59 @@ internal fun HordeChronicleEventView(
                             contentScale = ContentScale.Crop,
                         )
                     }
-                    Row(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        shape = ChronosphereSmallShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
                     ) {
-                        Text(
-                            text = buildString {
-                                append(current.provider.displayNameUk)
-                                append(" · ${current.width}×${current.height}")
-                                current.model?.let { append(" · $it") }
-                                append(" · торкніться для перегляду")
-                            },
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = "Інший кадр",
-                            modifier = Modifier.clickable {
-                                cache.remove(request.cacheKey)
-                                retryNonce += 1
-                            }.padding(vertical = 5.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                StatusPill(
+                                    current.provider.displayNameUk,
+                                    color = if (current.provider == ImageGenerationProvider.LOCAL_DREAM) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                                )
+                                Text(
+                                    text = buildString {
+                                        append("${current.width}×${current.height}")
+                                        current.model?.let { append(" · $it") }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    "На весь екран",
+                                    modifier = Modifier.clickable { showFullscreen = true },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    cache.remove(request.cacheKey)
+                                    retryNonce += 1
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = ChronosphereSmallShape,
+                            ) { Text("Згенерувати інший кадр") }
+                        }
                     }
                     if (current.provider == ImageGenerationProvider.AI_HORDE && current.fallbackNote != null) {
                         Text(
-                            text = "Local Dream → Horde: ${current.fallbackNote}",
+                            text = "Local Dream → Horde · ${current.fallbackNote}",
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.labelSmall,
@@ -208,26 +231,21 @@ private fun ChronicleFailure(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.error.copy(alpha = 0.06f),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     "Генерація · ${message.take(100)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    "Спробувати ще",
-                    modifier = Modifier.clickable(onClick = onRetry).padding(vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                OutlinedButton(onClick = onRetry, shape = ChronosphereSmallShape) { Text("Повторити") }
             }
         }
     }
