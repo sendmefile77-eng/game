@@ -8,7 +8,7 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
     fun pack(id: String): AdultContentPack = packs.first { it.id == id }
 
     fun selectPack(request: AdultEventRequest, fingerprint: Long): AdultContentPack {
-        val tags = expandedCultureTags(request.context.cultureTags)
+        val tags = expandedCultureTags(request)
         val numeric = request.context.numericContext
         val scored = packs.map { pack -> pack to packScore(pack, tags, numeric) }
         val bestScore = scored.maxOf { it.second }
@@ -25,7 +25,7 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
 
     fun eventWeight(event: AdultEventRule, request: AdultEventRequest): Double {
         if (!AdultEligibility.isEligible(event, request)) return 0.0
-        val tags = expandedCultureTags(request.context.cultureTags)
+        val tags = expandedCultureTags(request)
         var weight = event.baseWeight
         for (tag in tags) {
             val bump = event.cultureWeights[tag] ?: 0.0
@@ -36,6 +36,8 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
             eraWeights = AdultContextSignals.eventEraWeights(event),
             numericWeights = AdultContextSignals.eventNumericWeights(event),
         )
+        val historyBump = AdultHistoricalCulture.eventWeightBump(event.code, AdultHistoricalContext.from(request))
+        weight *= (1.0 + historyBump).coerceAtLeast(0.0)
         return if (weight.isFinite()) weight.coerceAtLeast(0.0) else 0.0
     }
 
@@ -51,12 +53,18 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
         if (pack.id == PACK_HARDCORE && war >= 0.75) score += 1
         val wealth = AdultContextSignals.finite(numeric, SocialContextKeys.WEALTH) ?: 0.0
         if (pack.id == PACK_DYNASTIC && wealth >= 0.75) score += 1
+        if (pack.id == PACK_HARDCORE && "history_process:war" in tags) score += 1
+        if (pack.id == PACK_DYNASTIC && tags.any { it.startsWith("person_role:ruler") || it == "dynastic" }) score += 1
+        if (pack.id == PACK_SACRED && tags.any { it == "sacred" || it == "person_role:cleric" }) score += 1
+        if (pack.id == PACK_AUSTERE && tags.any { it == "austere" || it == "puritan" }) score += 1
         return score
     }
 
     private fun pickClassic(eligible: List<AdultEventRule>, request: AdultEventRequest, fingerprint: Long): AdultEventRule {
-        val tone = AdultCulture.tone(expandedCultureTags(request.context.cultureTags))
-        val preferred = eligible.filter { rule -> tone.preferredCodes.isEmpty() || rule.code in tone.preferredCodes }
+        val tone = AdultCulture.tone(expandedCultureTags(request))
+        val historical = AdultHistoricalCulture.preferredEventCodes(AdultHistoricalContext.from(request))
+        val preferredCodes = tone.preferredCodes + historical
+        val preferred = eligible.filter { rule -> preferredCodes.isEmpty() || rule.code in preferredCodes }
         val pool = preferred.ifEmpty { eligible }
         return pool[AdultFingerprint.index(fingerprint, 7L, pool.size)]
     }
@@ -74,29 +82,8 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
         return weighted.last().first
     }
 
-    /**
-     * The world constructor exposes player-facing culture names. Translate those stable tags into
-     * the older pack vocabulary so a chosen fetish actually biases pack/event selection.
-     */
-    private fun expandedCultureTags(raw: Set<String>): Set<String> {
-        val tags = AdultCulture.normalizedTags(raw)
-        return buildSet {
-            addAll(tags)
-            if ("nudity_culture" in tags) addAll(listOf("open", "libertine"))
-            if ("public_sex" in tags) addAll(listOf("open", "libertine"))
-            if ("ritual_sex" in tags) addAll(listOf("sacred", "temple"))
-            if ("fertility_cult" in tags) addAll(listOf("open", "hedonist"))
-            if ("dominance_culture" in tags) addAll(listOf("martial", "warrior"))
-            if ("submission_culture" in tags) add("hedonist")
-            if ("bondage_culture" in tags) addAll(listOf("hedonist", "martial"))
-            if ("group_sex" in tags) addAll(listOf("hedonist", "open"))
-            if ("voyeurism_culture" in tags) add("libertine")
-            if ("status_bonds" in tags) addAll(listOf("dynastic", "royal"))
-            if ("plural_bonding" in tags) addAll(listOf("libertine", "open"))
-            if ("warlike" in tags) addAll(listOf("martial", "warrior"))
-            if ("body_cult" in tags) add("hedonist")
-        }
-    }
+    private fun expandedCultureTags(request: AdultEventRequest): Set<String> =
+        AdultHistoricalCulture.expand(request.context.cultureTags, request.context.numericContext)
 
     companion object {
         const val PACK_CLASSIC = "classic"
