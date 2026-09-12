@@ -43,7 +43,7 @@ internal fun HordeSceneView(
     modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     val context = LocalContext.current.applicationContext
-    val cache = remember(context) { HordeImageCache(File(context.filesDir, "horde-images")) }
+    val cache = remember(context) { HordeImageCache(File(context.filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)) }
     val references = remember(context) { HordeCharacterReferenceStore(File(context.filesDir, "horde-character-references")) }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
