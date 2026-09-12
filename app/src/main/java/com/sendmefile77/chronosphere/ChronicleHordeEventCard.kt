@@ -10,8 +10,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -21,10 +23,14 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventView
+import com.sendmefile77.chronosphere.horde.HordeGenerationCoordinator
+import com.sendmefile77.chronosphere.llm.ChronicleLlmEnricher
+import com.sendmefile77.chronosphere.llm.LlmChronicleEnrichment
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationClock
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun ChronicleHordeEventCard(
@@ -47,11 +53,43 @@ internal fun ChronicleHordeEventCard(
         }
     }
     val eventTime = remember(event.tick) { clock.at(event.tick) }
-    val narrative = remember(event) { textGenerator.narrative(event) }
+    val baseNarrative = remember(event) { textGenerator.narrative(event) }
     var decisionNonce by remember { mutableIntStateOf(0) }
-    val decision = remember(events, peopleState, economyState, decisionNonce) {
+    val baseDecision = remember(events, peopleState, economyState, decisionNonce) {
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
     }
+
+    var llmEnrichment by remember(event.id, baseDecision?.eventId) {
+        mutableStateOf<LlmChronicleEnrichment?>(null)
+    }
+    var llmWorking by remember(event.id, baseDecision?.eventId) { mutableStateOf(false) }
+    var llmAttempted by remember(event.id, baseDecision?.eventId) { mutableStateOf(false) }
+
+    LaunchedEffect(event.id, baseDecision?.eventId, request.cacheKey) {
+        llmEnrichment = null
+        llmWorking = true
+        llmAttempted = false
+
+        // Give the image composable one frame to register its job, then let Local Dream/Horde finish
+        // before starting LLM inference. Both services may stay resident, but heavy work is serialized
+        // so a phone does not run SDXL and the GGUF model against the same RAM/thermal budget at once.
+        delay(350L)
+        while (HordeGenerationCoordinator.isLoading(request)) delay(500L)
+
+        llmEnrichment = ChronicleLlmEnricher.enrich(
+            event = event,
+            recentEvents = events,
+            people = peopleState,
+            economy = economyState,
+            baseNarrative = baseNarrative,
+            baseDecision = baseDecision,
+        )
+        llmAttempted = true
+        llmWorking = false
+    }
+
+    val narrative = llmEnrichment?.narrative ?: baseNarrative
+    val decision = llmEnrichment?.decision ?: baseDecision
 
     Text(
         "Останній важливий кадр · ${eventTime.year}",
@@ -68,6 +106,24 @@ internal fun ChronicleHordeEventCard(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+
+    when {
+        llmEnrichment != null -> Text(
+            "Tellama · ${llmEnrichment!!.model} · ${String.format("%.1f", llmEnrichment!!.elapsedMs / 1000.0)} с",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+        llmWorking -> Text(
+            "Локальна LLM · чекає завершення генерації зображення…",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        llmAttempted -> Text(
+            "Вбудований текст · Tellama неактивна",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 
     HordeChronicleEventView(request = request)
 
