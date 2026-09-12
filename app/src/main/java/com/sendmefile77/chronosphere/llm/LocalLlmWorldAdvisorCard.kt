@@ -38,7 +38,7 @@ internal fun LocalLlmWorldAdvisorCard(
 
     LaunchedEffect(state.tick, civilization.id, briefing.headline, briefing.objective.title, enabled) {
         advice = null
-        if (!enabled) return@LaunchedEffect
+        if (!enabled || !TellamaRuntime.client.hasApiKey()) return@LaunchedEffect
         advice = WorldLlmAdvisor.advise(
             state = state,
             civilization = civilization,
@@ -47,43 +47,52 @@ internal fun LocalLlmWorldAdvisorCard(
         )
     }
 
-    val current = advice ?: return
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.07f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.40f)),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                "Локальний радник · Tellama",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-            )
-            Text(current.titleUk, fontWeight = FontWeight.SemiBold)
-            Text(current.adviceUk, style = MaterialTheme.typography.bodySmall)
-            if (current.whyUk.isNotBlank()) {
-                Text(
-                    current.whyUk,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        TellamaSettingsCard(enabled = enabled)
+
+        val current = advice
+        if (current != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.07f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.40f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "Локальний радник · Tellama",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                    Text(current.titleUk, fontWeight = FontWeight.SemiBold)
+                    Text(current.adviceUk, style = MaterialTheme.typography.bodySmall)
+                    if (current.whyUk.isNotBlank()) {
+                        Text(
+                            current.whyUk,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    current.actionUk?.let { action ->
+                        Text(
+                            "Рекомендована дія: $action",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Text(
+                        "${current.model} · ${String.format("%.1f", current.elapsedMs / 1000.0)} с · порада не виконується автоматично",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            current.actionUk?.let { action ->
-                Text(
-                    "Рекомендована дія: $action",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Text(
-                "${current.model} · ${String.format("%.1f", current.elapsedMs / 1000.0)} с · порада не виконується автоматично",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
