@@ -13,6 +13,7 @@ import com.sendmefile77.chronosphere.worldgen.Biome
 import com.sendmefile77.chronosphere.worldgen.TileCoord
 import com.sendmefile77.chronosphere.worldgen.WorldMap
 import com.sendmefile77.chronosphere.worldgen.WorldTile
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 data class SettlementMarker(val x: Int, val y: Int, val population: Long, val civilizationIndex: Int)
@@ -40,20 +41,17 @@ fun WorldMapView(
                 val cellW = size.width.toFloat() / world.width.toFloat()
                 val cellH = size.height.toFloat() / world.height.toFloat()
                 val nearest = settlements.minByOrNull { settlement ->
-                    val cx = (settlement.x + 0.5f) * cellW
-                    val cy = (settlement.y + 0.5f) * cellH
-                    val dx = tap.x - cx
-                    val dy = tap.y - cy
+                    val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
+                    val dx = tap.x - center.x
+                    val dy = tap.y - center.y
                     dx * dx + dy * dy
                 } ?: return@detectTapGestures
-                val cx = (nearest.x + 0.5f) * cellW
-                val cy = (nearest.y + 0.5f) * cellH
-                val dx = tap.x - cx
-                val dy = tap.y - cy
-                val distanceSquared = dx * dx + dy * dy
-                val radius = (2.4f + sqrt(nearest.population.coerceAtLeast(1).toFloat()) / 48f).coerceIn(2.4f, 8.0f)
-                val hitRadius = (radius * 2.6f).coerceAtLeast(22f)
-                if (distanceSquared <= hitRadius * hitRadius) {
+                val center = Offset((nearest.x + 0.5f) * cellW, (nearest.y + 0.5f) * cellH)
+                val dx = tap.x - center.x
+                val dy = tap.y - center.y
+                val radius = settlementRadius(nearest.population)
+                val hitRadius = (radius * 2.8f).coerceAtLeast(22f)
+                if (dx * dx + dy * dy <= hitRadius * hitRadius) {
                     onCivilizationSelected(nearest.civilizationIndex)
                 }
             }
@@ -63,130 +61,187 @@ fun WorldMapView(
     Canvas(modifier = interactiveModifier) {
         val cellW = size.width / world.width
         val cellH = size.height / world.height
+        val minCell = minOf(cellW, cellH)
 
-        drawRect(Color(0xFF07131C))
+        drawRect(Color(0xFF06131D))
 
+        // Base terrain. Elevation, moisture and temperature tint each cell so the map reads as
+        // geography first and a simulation overlay second.
         world.tiles.forEach { tile ->
             drawRect(
                 color = tile.renderColor(),
                 topLeft = Offset(tile.x * cellW, tile.y * cellH),
-                size = Size(cellW + 0.6f, cellH + 0.6f),
+                size = Size(cellW + 0.7f, cellH + 0.7f),
             )
         }
 
-        // Coastline makes continents readable at a glance instead of looking like a raw biome grid.
+        // Relief shading. A small highlight/shadow on meaningful height changes gives mountain
+        // chains and plateaus volume without adding raster assets or slowing the simulation.
         world.tiles.forEachIndexed { index, tile ->
-            val tileLand = tile.biome.isLand()
+            if (!tile.biome.isLand()) return@forEachIndexed
             if (tile.x + 1 < world.width) {
                 val right = world.tiles[index + 1]
-                if (tileLand != right.biome.isLand()) {
-                    drawLine(
-                        color = Color(0xFFCFD8D5).copy(alpha = 0.48f),
-                        start = Offset((tile.x + 1) * cellW, tile.y * cellH),
-                        end = Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
-                        strokeWidth = 0.75f,
-                    )
+                if (right.biome.isLand()) {
+                    val delta = tile.elevation - right.elevation
+                    if (abs(delta) > 0.065) {
+                        drawLine(
+                            color = if (delta > 0) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.20f),
+                            start = Offset((tile.x + 1) * cellW, tile.y * cellH),
+                            end = Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                            strokeWidth = 0.65f,
+                        )
+                    }
                 }
             }
             if (tile.y + 1 < world.height) {
                 val down = world.tiles[index + world.width]
-                if (tileLand != down.biome.isLand()) {
-                    drawLine(
-                        color = Color(0xFFCFD8D5).copy(alpha = 0.48f),
-                        start = Offset(tile.x * cellW, (tile.y + 1) * cellH),
-                        end = Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
-                        strokeWidth = 0.75f,
-                    )
+                if (down.biome.isLand()) {
+                    val delta = tile.elevation - down.elevation
+                    if (abs(delta) > 0.065) {
+                        drawLine(
+                            color = if (delta > 0) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.18f),
+                            start = Offset(tile.x * cellW, (tile.y + 1) * cellH),
+                            end = Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                            strokeWidth = 0.65f,
+                        )
+                    }
                 }
+            }
+        }
+
+        // Two-tone coastline: a dark ocean-side edge plus a pale land edge. It remains legible
+        // under territory tinting and avoids the old raw-pixel look.
+        world.tiles.forEachIndexed { index, tile ->
+            val land = tile.biome.isLand()
+            fun coastSegment(start: Offset, end: Offset) {
+                drawLine(Color(0xFF031019).copy(alpha = 0.82f), start, end, 2.2f)
+                drawLine(Color(0xFFDCE6DE).copy(alpha = 0.58f), start, end, 0.85f)
+            }
+            if (tile.x + 1 < world.width && land != world.tiles[index + 1].biome.isLand()) {
+                coastSegment(
+                    Offset((tile.x + 1) * cellW, tile.y * cellH),
+                    Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                )
+            }
+            if (tile.y + 1 < world.height && land != world.tiles[index + world.width].biome.isLand()) {
+                coastSegment(
+                    Offset(tile.x * cellW, (tile.y + 1) * cellH),
+                    Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                )
             }
         }
 
         if (territoryOwners != null && territoryOwners.size == world.tiles.size) {
             world.tiles.forEachIndexed { index, tile ->
                 val owner = territoryOwners[index]
-                if (owner >= 0 && tile.biome.isLand()) {
-                    val selected = owner == selectedCivilizationIndex
-                    val alpha = if (selected) 0.36f else 0.18f
-                    drawRect(
-                        color = civilizationPalette[owner % civilizationPalette.size].copy(alpha = alpha),
-                        topLeft = Offset(tile.x * cellW, tile.y * cellH),
-                        size = Size(cellW + 0.5f, cellH + 0.5f),
+                if (owner < 0 || !tile.biome.isLand()) return@forEachIndexed
+                val selected = owner == selectedCivilizationIndex
+                val nationColor = civilizationPalette[owner % civilizationPalette.size]
+                drawRect(
+                    color = nationColor.copy(alpha = if (selected) 0.30f else 0.115f),
+                    topLeft = Offset(tile.x * cellW, tile.y * cellH),
+                    size = Size(cellW + 0.5f, cellH + 0.5f),
+                )
+
+                fun border(start: Offset, end: Offset) {
+                    if (selected) drawLine(Color.Black.copy(alpha = 0.58f), start, end, 2.5f)
+                    drawLine(
+                        color = if (selected) nationColor.copy(alpha = 0.98f) else Color(0xFFDCE5E8).copy(alpha = 0.46f),
+                        start = start,
+                        end = end,
+                        strokeWidth = if (selected) 1.45f else 0.75f,
                     )
-                    val rightOwner = if (tile.x + 1 < world.width) territoryOwners[index + 1] else owner
-                    val downOwner = if (tile.y + 1 < world.height) territoryOwners[index + world.width] else owner
-                    if (rightOwner != owner) {
-                        drawLine(
-                            Color(0xFFE8EEF2).copy(alpha = if (selected) 0.84f else 0.42f),
-                            Offset((tile.x + 1) * cellW, tile.y * cellH),
-                            Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
-                            if (selected) 1.45f else 0.75f,
-                        )
-                    }
-                    if (downOwner != owner) {
-                        drawLine(
-                            Color(0xFFE8EEF2).copy(alpha = if (selected) 0.84f else 0.42f),
-                            Offset(tile.x * cellW, (tile.y + 1) * cellH),
-                            Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
-                            if (selected) 1.45f else 0.75f,
-                        )
-                    }
+                }
+
+                val rightOwner = if (tile.x + 1 < world.width) territoryOwners[index + 1] else -1
+                val downOwner = if (tile.y + 1 < world.height) territoryOwners[index + world.width] else -1
+                if (rightOwner != owner) {
+                    border(
+                        Offset((tile.x + 1) * cellW, tile.y * cellH),
+                        Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                    )
+                }
+                if (downOwner != owner) {
+                    border(
+                        Offset(tile.x * cellW, (tile.y + 1) * cellH),
+                        Offset((tile.x + 1) * cellW, (tile.y + 1) * cellH),
+                    )
                 }
             }
         }
 
-        // Very subtle geographic grid gives the map structure without reading as debug pixels.
+        // Geographic grid is intentionally very faint; it provides scale without looking like a
+        // debug overlay.
         for (x in 12 until world.width step 12) {
-            drawLine(
-                Color.White.copy(alpha = 0.035f),
-                Offset(x * cellW, 0f),
-                Offset(x * cellW, size.height),
-                0.6f,
-            )
+            drawLine(Color.White.copy(alpha = 0.025f), Offset(x * cellW, 0f), Offset(x * cellW, size.height), 0.55f)
         }
         for (y in 9 until world.height step 9) {
-            drawLine(
-                Color.White.copy(alpha = 0.035f),
-                Offset(0f, y * cellH),
-                Offset(size.width, y * cellH),
-                0.6f,
-            )
+            drawLine(Color.White.copy(alpha = 0.025f), Offset(0f, y * cellH), Offset(size.width, y * cellH), 0.55f)
         }
 
-        rivers.forEach { river ->
-            drawRect(
-                Color(0xFF5CB7E8).copy(alpha = 0.86f),
-                Offset(river.x * cellW, river.y * cellH),
-                Size(cellW.coerceAtLeast(1.1f), cellH.coerceAtLeast(1.1f)),
-            )
-        }
-
-        settlements.forEach { settlement ->
-            val radius = (2.4f + sqrt(settlement.population.coerceAtLeast(1).toFloat()) / 48f).coerceIn(2.4f, 8.0f)
-            val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
-            if (settlement.civilizationIndex == selectedCivilizationIndex) {
-                drawCircle(Color(0xFFE9F0F4).copy(alpha = 0.92f), radius + 3.5f, center)
-                drawCircle(Color(0xFF0A1117).copy(alpha = 0.90f), radius + 2.0f, center)
+        // Rivers are connected centre-to-centre rather than painted as blue square cells.
+        if (rivers.isNotEmpty()) {
+            val riverSet = rivers.toHashSet()
+            val directions = listOf(1 to 0, 0 to 1)
+            rivers.forEach { river ->
+                val from = Offset((river.x + 0.5f) * cellW, (river.y + 0.5f) * cellH)
+                var connected = false
+                directions.forEach { (dx, dy) ->
+                    val neighbour = TileCoord(river.x + dx, river.y + dy)
+                    if (neighbour in riverSet) {
+                        connected = true
+                        val to = Offset((neighbour.x + 0.5f) * cellW, (neighbour.y + 0.5f) * cellH)
+                        drawLine(Color(0xFF082437).copy(alpha = 0.88f), from, to, (minCell * 0.42f).coerceIn(1.8f, 4.5f))
+                        drawLine(Color(0xFF63C8F2).copy(alpha = 0.92f), from, to, (minCell * 0.19f).coerceIn(0.9f, 2.2f))
+                    }
+                }
+                if (!connected) {
+                    drawCircle(Color(0xFF63C8F2).copy(alpha = 0.90f), (minCell * 0.24f).coerceAtLeast(0.9f), from)
+                }
             }
-            drawCircle(civilizationPalette[settlement.civilizationIndex % civilizationPalette.size], radius, center)
-            drawCircle(Color.White.copy(alpha = 0.82f), (radius * 0.30f).coerceAtLeast(1f), center)
         }
 
-        drawRect(
-            color = Color.White.copy(alpha = 0.12f),
-            style = Stroke(width = 1f),
-        )
+        settlements.sortedBy { it.population }.forEach { settlement ->
+            val radius = settlementRadius(settlement.population)
+            val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
+            val nationColor = civilizationPalette[settlement.civilizationIndex % civilizationPalette.size]
+            val selected = settlement.civilizationIndex == selectedCivilizationIndex
+
+            if (selected) {
+                drawCircle(nationColor.copy(alpha = 0.16f), radius + 7.0f, center)
+                drawCircle(Color.White.copy(alpha = 0.50f), radius + 4.2f, center, style = Stroke(1.2f))
+            }
+            drawCircle(Color(0xFF061017).copy(alpha = 0.95f), radius + 2.0f, center)
+            drawCircle(nationColor, radius, center)
+            drawCircle(Color.White.copy(alpha = 0.90f), (radius * 0.28f).coerceAtLeast(1f), center)
+
+            if (radius >= 5.2f) {
+                drawLine(Color.White.copy(alpha = 0.58f), center.copy(x = center.x - radius * 0.55f), center.copy(x = center.x + radius * 0.55f), 0.75f)
+                drawLine(Color.White.copy(alpha = 0.58f), center.copy(y = center.y - radius * 0.55f), center.copy(y = center.y + radius * 0.55f), 0.75f)
+            }
+        }
+
+        // Inner and outer frame make the map feel like an intentional game surface.
+        drawRect(Color.Black.copy(alpha = 0.46f), style = Stroke(width = 3f))
+        drawRect(Color.White.copy(alpha = 0.14f), style = Stroke(width = 1f))
     }
 }
 
+private fun settlementRadius(population: Long): Float =
+    (2.5f + sqrt(population.coerceAtLeast(1).toFloat()) / 48f).coerceIn(2.5f, 8.2f)
+
 private fun WorldTile.renderColor(): Color {
     val base = biome.baseColor()
-    val elevationLight = (elevation.coerceIn(-1.0, 1.0) * 0.10).toFloat()
-    val moistureShift = ((moisture.coerceIn(0.0, 1.0) - 0.5) * 0.025).toFloat()
-    val temperatureShift = ((temperature.coerceIn(-1.0, 1.0)) * 0.018).toFloat()
+    val elevationLight = (elevation.coerceIn(-1.0, 1.0) * 0.14).toFloat()
+    val moistureShift = ((moisture.coerceIn(0.0, 1.0) - 0.5) * 0.045).toFloat()
+    val temperatureShift = (temperature.coerceIn(-1.0, 1.0) * 0.026).toFloat()
+    val oceanDepth = if (biome == Biome.DEEP_OCEAN || biome == Biome.OCEAN) {
+        (-elevation.coerceAtMost(0.0) * 0.07).toFloat()
+    } else 0f
     return Color(
-        red = (base.red + elevationLight + temperatureShift).coerceIn(0f, 1f),
-        green = (base.green + elevationLight + moistureShift).coerceIn(0f, 1f),
-        blue = (base.blue + elevationLight - temperatureShift).coerceIn(0f, 1f),
+        red = (base.red + elevationLight + temperatureShift - oceanDepth * 0.30f).coerceIn(0f, 1f),
+        green = (base.green + elevationLight + moistureShift - oceanDepth * 0.10f).coerceIn(0f, 1f),
+        blue = (base.blue + elevationLight - temperatureShift + oceanDepth).coerceIn(0f, 1f),
         alpha = 1f,
     )
 }
@@ -194,16 +249,16 @@ private fun WorldTile.renderColor(): Color {
 private fun Biome.isLand(): Boolean = this != Biome.OCEAN && this != Biome.DEEP_OCEAN
 
 private fun Biome.baseColor(): Color = when (this) {
-    Biome.DEEP_OCEAN -> Color(0xFF091F30)
-    Biome.OCEAN -> Color(0xFF174A67)
-    Biome.COAST -> Color(0xFFC8B77C)
-    Biome.DESERT -> Color(0xFFB99454)
-    Biome.STEPPE -> Color(0xFF7F8B53)
-    Biome.GRASSLAND -> Color(0xFF527D49)
-    Biome.FOREST -> Color(0xFF28553D)
-    Biome.RAINFOREST -> Color(0xFF173F30)
-    Biome.TAIGA -> Color(0xFF3A554A)
-    Biome.TUNDRA -> Color(0xFF74847A)
-    Biome.MOUNTAIN -> Color(0xFF66645E)
-    Biome.ICE -> Color(0xFFD8E6EA)
+    Biome.DEEP_OCEAN -> Color(0xFF071C2B)
+    Biome.OCEAN -> Color(0xFF124762)
+    Biome.COAST -> Color(0xFFC6B77C)
+    Biome.DESERT -> Color(0xFFB99255)
+    Biome.STEPPE -> Color(0xFF7F8952)
+    Biome.GRASSLAND -> Color(0xFF4C7848)
+    Biome.FOREST -> Color(0xFF24543C)
+    Biome.RAINFOREST -> Color(0xFF153E2E)
+    Biome.TAIGA -> Color(0xFF38564B)
+    Biome.TUNDRA -> Color(0xFF74867E)
+    Biome.MOUNTAIN -> Color(0xFF66645F)
+    Biome.ICE -> Color(0xFFDCE9EC)
 }
