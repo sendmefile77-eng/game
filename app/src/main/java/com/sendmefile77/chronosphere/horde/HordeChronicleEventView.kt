@@ -30,12 +30,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.GalleryCapture
+import com.sendmefile77.chronosphere.GeneratedImageGalleryStore
 import kotlinx.coroutines.CancellationException
 import java.io.File
 
 @Composable
 internal fun HordeChronicleEventView(
     request: HordeImageRequest,
+    galleryCapture: GalleryCapture? = null,
     modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
 ) {
     val context = LocalContext.current.applicationContext
@@ -47,7 +50,7 @@ internal fun HordeChronicleEventView(
         HordeGenerationCoordinator.observeProgress(request.cacheKey)
     }.collectAsState()
 
-    LaunchedEffect(request.cacheKey, retryNonce) {
+    LaunchedEffect(request.cacheKey, retryNonce, galleryCapture) {
         state = ChronicleHordeUiState.Loading
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
         val localDreamAttempt = attempt.copy(
@@ -65,12 +68,22 @@ internal fun HordeChronicleEventView(
                 localDreamRequest = localDreamAttempt,
                 localDreamTimeoutMillis = LOCAL_DREAM_CHRONICLE_TIMEOUT_MS,
             )
+            val width = prepared.actualWidth ?: request.width
+            val height = prepared.actualHeight ?: request.height
+            GeneratedImageGalleryStore.save(
+                filesDir = context.filesDir,
+                capture = galleryCapture,
+                bytes = prepared.bytes,
+                provider = prepared.provider,
+                width = width,
+                height = height,
+            )
             state = ChronicleHordeUiState.Ready(
                 bytes = prepared.bytes,
                 model = prepared.model,
                 provider = prepared.provider,
-                width = prepared.actualWidth ?: request.width,
-                height = prepared.actualHeight ?: request.height,
+                width = width,
+                height = height,
                 fallbackNote = prepared.fallbackNote,
             )
         } catch (cancelled: CancellationException) {
