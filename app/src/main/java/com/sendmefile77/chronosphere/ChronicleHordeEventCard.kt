@@ -39,7 +39,40 @@ internal fun ChronicleHordeEventCard(
     economyState: EconomyState,
     clock: SimulationClock,
     textGenerator: ChronicleTextGenerator,
+    civilizationNames: Map<String, String> = emptyMap(),
 ) {
+    val story = remember(events, civilizationNames) {
+        ChronicleStoryComposer.compose(events, civilizationNames, textGenerator)
+    }
+    if (story != null) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.055f)),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Text("ІСТОРІЯ, А НЕ ЖУРНАЛ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(story.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(story.lead, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                story.paragraphs.forEach { paragraph ->
+                    Text(paragraph, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (story.beats.isNotEmpty()) {
+                    Text("Ключові повороти", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                    story.beats.forEach { beat ->
+                        Text(
+                            "${clock.at(beat.tick).year} · ${beat.title} — ${beat.summary}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     val event = remember(events) { HordeChronicleEventPromptFactory.latestSignificant(events) } ?: return
     val request = remember(event, peopleState, economyState) {
         if (event.code == "ADULT_SOCIAL_EVENT") {
@@ -59,6 +92,19 @@ internal fun ChronicleHordeEventCard(
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
     }
     val decisionForLlm = baseDecision?.takeIf { it.eventId == event.id }
+    val economyCivilizationIds = remember(economyState) { economyState.civilizations.mapTo(hashSetOf()) { it.civilizationId } }
+    val eventCivilizationIds = remember(event, economyCivilizationIds) {
+        event.actorIds.filter { it in economyCivilizationIds }.distinct()
+    }
+    val galleryCapture = remember(event.id, event.tick, eventCivilizationIds, peopleState.worldSeed, baseNarrative.title) {
+        GalleryCapture(
+            worldSeed = peopleState.worldSeed,
+            civilizationIds = eventCivilizationIds,
+            kind = GalleryImageKind.CHRONICLE,
+            subject = baseNarrative.title,
+            tick = event.tick,
+        )
+    }
 
     var llmEnrichment by remember(event.id, decisionForLlm?.eventId) {
         mutableStateOf<LlmChronicleEnrichment?>(null)
@@ -130,7 +176,7 @@ internal fun ChronicleHordeEventCard(
         )
     }
 
-    HordeChronicleEventView(request = request)
+    HordeChronicleEventView(request = request, galleryCapture = galleryCapture)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
