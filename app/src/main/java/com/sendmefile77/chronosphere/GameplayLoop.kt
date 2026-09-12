@@ -80,7 +80,6 @@ internal object GameplayLoop {
 
     fun turnSourceId(tick: Long): String = "player-turn-$tick"
 
-    /** One direct player command globally per current simulation tick. Switching states cannot reset it. */
     fun actionSpent(state: LivingPlanetState): Boolean = state.recentEvents.any { event ->
         event.tick == state.tick && event.id.startsWith("player-")
     }
@@ -175,31 +174,24 @@ internal object GameplayLoop {
             return GameplayActionGate(false, "Потрібно ${cost.toInt()} казни", cost)
         }
         if (kind !in diplomaticKinds) return GameplayActionGate(true, treasuryCost = cost)
-
-        val targetId = targetCivilizationId
-            ?: return GameplayActionGate(false, "Оберіть іншу державу", cost)
+        val targetId = targetCivilizationId ?: return GameplayActionGate(false, "Оберіть іншу державу", cost)
         if (targetId == civilizationId || state.civilizations.none { it.id == targetId }) {
             return GameplayActionGate(false, "Некоректна ціль", cost)
         }
         val atWar = state.wars.any { it.matches(civilizationId, targetId) }
         val allied = state.alliances.any { it.matches(civilizationId, targetId) }
         val relation = state.relations.firstOrNull { it.matches(civilizationId, targetId) }?.value ?: 0.0
-
         return when (kind) {
-            InterventionKind.WAR_RAID -> if (atWar) GameplayActionGate(true, treasuryCost = cost)
-                else GameplayActionGate(false, "Набіг доступний лише у війні", cost)
-            InterventionKind.MAKE_PEACE -> if (atWar) GameplayActionGate(true, treasuryCost = cost)
-                else GameplayActionGate(false, "Війни з цією державою немає", cost)
-            InterventionKind.DECLARE_WAR -> if (!atWar) GameplayActionGate(true, treasuryCost = cost)
-                else GameplayActionGate(false, "Війна вже триває", cost)
+            InterventionKind.WAR_RAID -> if (atWar) GameplayActionGate(true, treasuryCost = cost) else GameplayActionGate(false, "Набіг доступний лише у війні", cost)
+            InterventionKind.MAKE_PEACE -> if (atWar) GameplayActionGate(true, treasuryCost = cost) else GameplayActionGate(false, "Війни з цією державою немає", cost)
+            InterventionKind.DECLARE_WAR -> if (!atWar) GameplayActionGate(true, treasuryCost = cost) else GameplayActionGate(false, "Війна вже триває", cost)
             InterventionKind.FORM_ALLIANCE -> when {
                 atWar -> GameplayActionGate(false, "Спочатку укладіть мир", cost)
                 allied -> GameplayActionGate(false, "Союз уже діє", cost)
                 relation < 0.30 -> GameplayActionGate(false, "Для союзу потрібні відносини +30 або вище", cost)
                 else -> GameplayActionGate(true, treasuryCost = cost)
             }
-            InterventionKind.EMBASSY -> if (!atWar) GameplayActionGate(true, treasuryCost = cost)
-                else GameplayActionGate(false, "Під час війни спочатку потрібен мир", cost)
+            InterventionKind.EMBASSY -> if (!atWar) GameplayActionGate(true, treasuryCost = cost) else GameplayActionGate(false, "Під час війни спочатку потрібен мир", cost)
             else -> GameplayActionGate(true, treasuryCost = cost)
         }
     }
@@ -279,19 +271,23 @@ internal object GameplayLoop {
         )
     }
 
-    private fun eventSummary(event: SimulationEvent): String = when (event.code) {
-        "WAR_STARTED" -> "Почалася війна${event.facts[\"b\"]?.let { \" з $it\" } ?: \"\"}"
-        "PEACE_TREATY" -> "Укладено мир${event.facts[\"b\"]?.let { \" з $it\" } ?: \"\"}"
-        "ALLIANCE_FORMED" -> "Створено союз${event.facts[\"b\"]?.let { \" з $it\" } ?: \"\"}"
-        "CITY_CAPTURED" -> "Змінився контроль над містом ${event.facts[\"settlement\"] ?: \"\"}".trim()
-        "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "Загострився дефіцит ресурсів"
-        "ERA_ADVANCED" -> "Держава перейшла до нової епохи"
-        "RULER_SUCCEEDED" -> "До влади прийшов новий правитель"
-        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> "Засновано нове поселення"
-        "PLAYER_EVOLUTION_DIVERGENCE" -> "Відокремилася нова біологічна лінія"
-        "PLAYER_STRUCTURAL_MUTATION" -> "Закріпилася структурна мутація"
-        "PLAYER_HYBRIDIZATION" -> "Сформувалася гібридна лінія"
-        else -> event.code.lowercase().replace('_', ' ')
+    private fun eventSummary(event: SimulationEvent): String {
+        val counterpart = event.facts["b"]
+        val place = event.facts["settlement"] ?: ""
+        return when (event.code) {
+            "WAR_STARTED" -> if (counterpart != null) "Почалася війна з $counterpart" else "Почалася війна"
+            "PEACE_TREATY" -> if (counterpart != null) "Укладено мир з $counterpart" else "Укладено мир"
+            "ALLIANCE_FORMED" -> if (counterpart != null) "Створено союз з $counterpart" else "Створено союз"
+            "CITY_CAPTURED" -> "Змінився контроль над містом $place".trim()
+            "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "Загострився дефіцит ресурсів"
+            "ERA_ADVANCED" -> "Держава перейшла до нової епохи"
+            "RULER_SUCCEEDED" -> "До влади прийшов новий правитель"
+            "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> "Засновано нове поселення"
+            "PLAYER_EVOLUTION_DIVERGENCE" -> "Відокремилася нова біологічна лінія"
+            "PLAYER_STRUCTURAL_MUTATION" -> "Закріпилася структурна мутація"
+            "PLAYER_HYBRIDIZATION" -> "Сформувалася гібридна лінія"
+            else -> event.code.lowercase().replace('_', ' ')
+        }
     }
 
     fun signedLong(value: Long): String = when {
@@ -300,9 +296,12 @@ internal object GameplayLoop {
         else -> "0"
     }
 
-    fun signedDouble(value: Double, suffix: String = ""): String = when {
-        value > 0.0005 -> "+${String.format(\"%.1f\", value)}$suffix"
-        value < -0.0005 -> "−${String.format(\"%.1f\", abs(value))}$suffix"
-        else -> "0$suffix"
+    fun signedDouble(value: Double, suffix: String = ""): String {
+        val formatted = String.format("%.1f", kotlin.math.abs(value))
+        return when {
+            value > 0.0005 -> "+$formatted$suffix"
+            value < -0.0005 -> "−$formatted$suffix"
+            else -> "0$suffix"
+        }
     }
 }
