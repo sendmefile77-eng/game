@@ -973,6 +973,13 @@ private fun ChroniclePanel(
         }
     }
 
+    ChronicleHordeEventCard(
+        events = session.state.recentEvents,
+        peopleState = peopleState,
+        clock = clock,
+        textGenerator = textGenerator,
+    )
+
     Text("Останні події", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
     val events = session.state.recentEvents.takeLast(12).reversed()
     if (events.isEmpty()) {
