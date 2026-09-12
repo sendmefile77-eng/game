@@ -58,14 +58,15 @@ internal fun ChronicleHordeEventCard(
     val baseDecision = remember(events, peopleState, economyState, decisionNonce) {
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
     }
+    val decisionForLlm = baseDecision?.takeIf { it.eventId == event.id }
 
-    var llmEnrichment by remember(event.id, baseDecision?.eventId) {
+    var llmEnrichment by remember(event.id, decisionForLlm?.eventId) {
         mutableStateOf<LlmChronicleEnrichment?>(null)
     }
-    var llmWorking by remember(event.id, baseDecision?.eventId) { mutableStateOf(false) }
-    var llmAttempted by remember(event.id, baseDecision?.eventId) { mutableStateOf(false) }
+    var llmWorking by remember(event.id, decisionForLlm?.eventId) { mutableStateOf(false) }
+    var llmAttempted by remember(event.id, decisionForLlm?.eventId) { mutableStateOf(false) }
 
-    LaunchedEffect(event.id, baseDecision?.eventId, request.cacheKey) {
+    LaunchedEffect(event.id, decisionForLlm?.eventId, request.cacheKey) {
         llmEnrichment = null
         llmWorking = true
         llmAttempted = false
@@ -82,14 +83,18 @@ internal fun ChronicleHordeEventCard(
             people = peopleState,
             economy = economyState,
             baseNarrative = baseNarrative,
-            baseDecision = baseDecision,
+            baseDecision = decisionForLlm,
         )
         llmAttempted = true
         llmWorking = false
     }
 
     val narrative = llmEnrichment?.narrative ?: baseNarrative
-    val decision = llmEnrichment?.decision ?: baseDecision
+    val decision = if (decisionForLlm != null) {
+        llmEnrichment?.decision ?: baseDecision
+    } else {
+        baseDecision
+    }
 
     Text(
         "Останній важливий кадр · ${eventTime.year}",
