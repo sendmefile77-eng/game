@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeChronicleEventPromptFactory
@@ -45,10 +46,10 @@ internal fun ChronicleHordeEventCard(
     }
     if (story != null) {
         PanelCard(accent = MaterialTheme.colorScheme.primary) {
-            Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(8f)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     StatusPill("ГОЛОВНА ЛІНІЯ", color = MaterialTheme.colorScheme.primary)
@@ -73,7 +74,7 @@ internal fun ChronicleHordeEventCard(
                     story.beats.forEach { beat ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(8f)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.Top,
                         ) {
                             StatusPill(clock.at(beat.tick).year.toString(), color = MaterialTheme.colorScheme.secondary)
@@ -180,7 +181,7 @@ internal fun ChronicleHordeEventCard(
     HordeChronicleEventView(request = request, galleryCapture = galleryCapture)
 
     PanelCard {
-        Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text(narrative.body, style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Чому це важливо",
@@ -209,7 +210,7 @@ internal fun ChronicleHordeEventCard(
 
     if (decision != null) {
         PanelCard(accent = MaterialTheme.colorScheme.primary) {
-            Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(9f))) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -226,7 +227,7 @@ internal fun ChronicleHordeEventCard(
                 )
                 decision.options.forEachIndexed { index, option ->
                     PanelCard(accent = if (index == 0) MaterialTheme.colorScheme.secondary else null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.dp(5f))) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(option.titleUk, fontWeight = FontWeight.SemiBold)
                             Text("Наслідок · ${option.effectUk}", style = MaterialTheme.typography.bodySmall)
                             Text(
