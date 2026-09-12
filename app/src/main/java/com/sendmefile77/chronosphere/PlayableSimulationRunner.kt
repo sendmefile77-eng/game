@@ -9,6 +9,8 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.AdmixtureEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.history.InterventionCommand
+import com.sendmefile77.chronosphere.history.InterventionEngine
 import com.sendmefile77.chronosphere.people.PeopleEngine
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
@@ -45,73 +47,101 @@ internal class PlayableSimulationRunner(
         val economyEngine = EconomyEngine(worldMap, resources)
         val evolutionEngine = EvolutionEngine(worldMap)
         val admixtureEngine = AdmixtureEngine(worldMap)
+        val interventionEngine = InterventionEngine()
+        val queuedDecisions = ChronicleDecisionMailbox.drain()
 
-        var worldState = currentWorld
-        var people = currentPeople
-        var economy = currentEconomy
-        var evolution = currentEvolution
-        var remaining = months
-
-        while (remaining > 0) {
-            val step = minOf(12, remaining)
-            val fromTick = worldState.tick
-
-            val civilizationNext = applyConfiguredCultureDynamics(
-                consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
-                months = step,
-            )
-            val economyResult = economyEngine.advance(economy, civilizationNext)
-            val peopleResult = peopleEngine.advance(people, economyResult.world)
-            val worldWithPeople = economyResult.world.copy(
-                recentEvents = (economyResult.world.recentEvents + peopleResult.events).takeLast(96),
-            )
-            val peopleAtTick = peopleResult.state.copy(tick = worldWithPeople.tick)
-            val economyAtTick = economyResult.state.copy(tick = worldWithPeople.tick)
-
-            val evolutionResult = evolutionEngine.advance(evolution, worldWithPeople)
-            val cultureBiasedEvolution = applyConfiguredEvolutionBias(evolutionResult.state)
-            val admixtureEvents = mutableListOf<SimulationEvent>()
-            val evolutionAtTick = if (step == 12) {
-                admixtureEngine.annualStep(
-                    cultureBiasedEvolution,
-                    worldWithPeople,
-                    worldWithPeople.tick,
-                    admixtureEvents,
-                )
-            } else {
-                cultureBiasedEvolution
+        try {
+            val alreadyResolved = currentWorld.recentEvents.asSequence()
+                .mapNotNull { it.facts["sourceEventId"] }
+                .toSet()
+            var worldState = queuedDecisions.fold(currentWorld) { state, pending ->
+                val option = pending.option
+                if (option.sourceEventId in alreadyResolved || state.civilizations.none { it.id == option.targetCivilizationId }) {
+                    state
+                } else {
+                    interventionEngine.apply(
+                        state,
+                        InterventionCommand(
+                            id = pending.commandId,
+                            kind = option.kind,
+                            civilizationId = option.targetCivilizationId,
+                            strength = option.strength,
+                            sourceEventId = option.sourceEventId,
+                            choiceId = option.id,
+                            choiceLabel = option.titleUk,
+                        ),
+                    )
+                }
             }
-            val worldWithEvolution = worldWithPeople.copy(
-                recentEvents = (
-                    worldWithPeople.recentEvents + evolutionResult.events + admixtureEvents
-                    ).takeLast(96),
-            )
+            var people = currentPeople
+            var economy = currentEconomy
+            var evolution = currentEvolution
+            var remaining = months
 
-            val morphologyAwareModule = MorphologyContextAdultModule(
-                delegate = adultModule,
-                people = peopleAtTick,
-                evolution = evolutionAtTick,
-            )
-            val societyResult = SocietyEngine(morphologyAwareModule).advance(
-                fromTick = fromTick,
-                world = worldWithEvolution,
-                people = peopleAtTick,
-                economy = economyAtTick,
-            )
+            while (remaining > 0) {
+                val step = minOf(12, remaining)
+                val fromTick = worldState.tick
 
-            worldState = societyResult.world
-            people = societyResult.people.copy(tick = worldState.tick)
-            economy = economyAtTick
-            evolution = evolutionAtTick.copy(tick = worldState.tick)
-            remaining -= step
+                val civilizationNext = applyConfiguredCultureDynamics(
+                    consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
+                    months = step,
+                )
+                val economyResult = economyEngine.advance(economy, civilizationNext)
+                val peopleResult = peopleEngine.advance(people, economyResult.world)
+                val worldWithPeople = economyResult.world.copy(
+                    recentEvents = (economyResult.world.recentEvents + peopleResult.events).takeLast(96),
+                )
+                val peopleAtTick = peopleResult.state.copy(tick = worldWithPeople.tick)
+                val economyAtTick = economyResult.state.copy(tick = worldWithPeople.tick)
+
+                val evolutionResult = evolutionEngine.advance(evolution, worldWithPeople)
+                val cultureBiasedEvolution = applyConfiguredEvolutionBias(evolutionResult.state)
+                val admixtureEvents = mutableListOf<SimulationEvent>()
+                val evolutionAtTick = if (step == 12) {
+                    admixtureEngine.annualStep(
+                        cultureBiasedEvolution,
+                        worldWithPeople,
+                        worldWithPeople.tick,
+                        admixtureEvents,
+                    )
+                } else {
+                    cultureBiasedEvolution
+                }
+                val worldWithEvolution = worldWithPeople.copy(
+                    recentEvents = (
+                        worldWithPeople.recentEvents + evolutionResult.events + admixtureEvents
+                        ).takeLast(96),
+                )
+
+                val morphologyAwareModule = MorphologyContextAdultModule(
+                    delegate = adultModule,
+                    people = peopleAtTick,
+                    evolution = evolutionAtTick,
+                )
+                val societyResult = SocietyEngine(morphologyAwareModule).advance(
+                    fromTick = fromTick,
+                    world = worldWithEvolution,
+                    people = peopleAtTick,
+                    economy = economyAtTick,
+                )
+
+                worldState = societyResult.world
+                people = societyResult.people.copy(tick = worldState.tick)
+                economy = economyAtTick
+                evolution = evolutionAtTick.copy(tick = worldState.tick)
+                remaining -= step
+            }
+
+            return PlayableSimulationState(
+                world = worldState,
+                people = people,
+                economy = economy,
+                evolution = evolution,
+            )
+        } catch (error: Throwable) {
+            ChronicleDecisionMailbox.restore(queuedDecisions)
+            throw error
         }
-
-        return PlayableSimulationState(
-            world = worldState,
-            people = people,
-            economy = economy,
-            evolution = evolution,
-        )
     }
 
     /**
