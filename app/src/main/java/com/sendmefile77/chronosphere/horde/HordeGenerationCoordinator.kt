@@ -1,5 +1,6 @@
 package com.sendmefile77.chronosphere.horde
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -99,7 +100,9 @@ internal object HordeGenerationCoordinator {
                     timeoutMillis = timeoutMillis,
                     pollIntervalMillis = pollIntervalMillis,
                 )
-            } catch (error: Throwable) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
                 // A reference/model combination may be unavailable on the Horde. Retrying txt2img
                 // preserves availability while keeping the background job alive.
                 client.generate(
