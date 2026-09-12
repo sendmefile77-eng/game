@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.horde.HordeResolvedScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeSceneView
 import com.sendmefile77.chronosphere.scene.ResolvedScene
@@ -23,15 +24,17 @@ internal fun OfflineSceneView(
     ageYears: Int = 30,
     visualTags: Set<String> = emptySet(),
     visualNumeric: Map<String, Double> = emptyMap(),
+    technologyEra: TechnologyEra? = null,
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
-    val request = remember(scene, characterKey, ageYears, visualTags, visualNumeric) {
+    val request = remember(scene, characterKey, ageYears, visualTags, visualNumeric, technologyEra) {
         HordeResolvedScenePromptFactory.create(
             scene = scene,
             characterKey = characterKey,
             ageYears = ageYears,
             visualTags = visualTags,
             visualNumeric = visualNumeric,
+            technologyEra = technologyEra,
         )
     }
     HordeSceneView(
