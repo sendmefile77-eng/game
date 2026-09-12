@@ -31,6 +31,7 @@ internal fun OfflineSceneView(
     technologyEra: TechnologyEra? = null,
     adultVisual: AdultVisualSceneDescriptor? = null,
     actionPlan: AdultActionPlan? = null,
+    galleryCapture: GalleryCapture? = null,
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
     val adultFullBody = ageYears >= 18 && (
@@ -90,6 +91,7 @@ internal fun OfflineSceneView(
         characterKey = characterKey,
         ageYears = ageYears,
         fitFullBody = adultFullBody,
+        galleryCapture = galleryCapture,
         modifier = modifier,
     )
 }
