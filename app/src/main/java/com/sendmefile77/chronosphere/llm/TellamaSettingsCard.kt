@@ -86,8 +86,13 @@ internal fun TellamaSettingsCard(enabled: Boolean) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Tellama → Server → This phone only → New key → Start server. Вставте створений ключ нижче.",
+                "Tellama → Server → This phone only → New key → Start server. Після запуску має бути кнопка «Stop server». Не закривайте Tellama з меню останніх програм.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Якщо Android зупиняє сервер у фоні, дозвольте Tellama фонову роботу та режим батареї «Без обмежень».",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
