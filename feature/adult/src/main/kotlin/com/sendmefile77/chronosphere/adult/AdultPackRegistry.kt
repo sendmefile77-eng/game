@@ -8,7 +8,7 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
     fun pack(id: String): AdultContentPack = packs.first { it.id == id }
 
     fun selectPack(request: AdultEventRequest, fingerprint: Long): AdultContentPack {
-        val tags = AdultCulture.normalizedTags(request.context.cultureTags)
+        val tags = expandedCultureTags(request.context.cultureTags)
         val numeric = request.context.numericContext
         val scored = packs.map { pack -> pack to packScore(pack, tags, numeric) }
         val bestScore = scored.maxOf { it.second }
@@ -25,7 +25,7 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
 
     fun eventWeight(event: AdultEventRule, request: AdultEventRequest): Double {
         if (!AdultEligibility.isEligible(event, request)) return 0.0
-        val tags = AdultCulture.normalizedTags(request.context.cultureTags)
+        val tags = expandedCultureTags(request.context.cultureTags)
         var weight = event.baseWeight
         for (tag in tags) {
             val bump = event.cultureWeights[tag] ?: 0.0
@@ -55,7 +55,7 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
     }
 
     private fun pickClassic(eligible: List<AdultEventRule>, request: AdultEventRequest, fingerprint: Long): AdultEventRule {
-        val tone = AdultCulture.tone(request.context.cultureTags)
+        val tone = AdultCulture.tone(expandedCultureTags(request.context.cultureTags))
         val preferred = eligible.filter { rule -> tone.preferredCodes.isEmpty() || rule.code in tone.preferredCodes }
         val pool = preferred.ifEmpty { eligible }
         return pool[AdultFingerprint.index(fingerprint, 7L, pool.size)]
@@ -72,6 +72,30 @@ internal class AdultPackRegistry(packs: List<AdultContentPack>) {
             if (target < acc) return event
         }
         return weighted.last().first
+    }
+
+    /**
+     * The world constructor exposes player-facing culture names. Translate those stable tags into
+     * the older pack vocabulary so a chosen fetish actually biases pack/event selection.
+     */
+    private fun expandedCultureTags(raw: Set<String>): Set<String> {
+        val tags = AdultCulture.normalizedTags(raw)
+        return buildSet {
+            addAll(tags)
+            if ("nudity_culture" in tags) addAll(listOf("open", "libertine"))
+            if ("public_sex" in tags) addAll(listOf("open", "libertine"))
+            if ("ritual_sex" in tags) addAll(listOf("sacred", "temple"))
+            if ("fertility_cult" in tags) addAll(listOf("open", "hedonist"))
+            if ("dominance_culture" in tags) addAll(listOf("martial", "warrior"))
+            if ("submission_culture" in tags) add("hedonist")
+            if ("bondage_culture" in tags) addAll(listOf("hedonist", "martial"))
+            if ("group_sex" in tags) addAll(listOf("hedonist", "open"))
+            if ("voyeurism_culture" in tags) add("libertine")
+            if ("status_bonds" in tags) addAll(listOf("dynastic", "royal"))
+            if ("plural_bonding" in tags) addAll(listOf("libertine", "open"))
+            if ("warlike" in tags) addAll(listOf("martial", "warrior"))
+            if ("body_cult" in tags) add("hedonist")
+        }
     }
 
     companion object {
