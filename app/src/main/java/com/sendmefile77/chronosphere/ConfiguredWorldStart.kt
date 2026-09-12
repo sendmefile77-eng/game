@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
+import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.economy.EconomyEngine
 import com.sendmefile77.chronosphere.economy.EconomyState
@@ -47,7 +48,8 @@ internal fun createConfiguredWorldStart(
             seed = setup.seed,
         ),
     )
-    val configuredWorld = WorldSetupApplier.applyWorld(positioned, setup)
+    val positionedWithClimate = refreshStartingClimateTags(positioned, map)
+    val configuredWorld = WorldSetupApplier.applyWorld(positionedWithClimate, setup)
     val session = GameSession(
         world = map,
         resources = resources,
@@ -65,9 +67,39 @@ internal fun createConfiguredWorldStart(
     return ConfiguredWorldStart(setup, session, people, economy, evolution)
 }
 
+private fun refreshStartingClimateTags(state: LivingPlanetState, map: WorldMap): LivingPlanetState {
+    val startByCivilization = state.settlements
+        .groupBy { it.civilizationId }
+        .mapValues { (_, settlements) -> settlements.minByOrNull { it.foundedTick } }
+    return state.copy(
+        civilizations = state.civilizations.map { civilization ->
+            val settlement = startByCivilization[civilization.id] ?: return@map civilization
+            val tile = map.tiles[settlement.y.coerceIn(0, map.height - 1) * map.width + settlement.x.coerceIn(0, map.width - 1)]
+            civilization.copy(
+                cultureTags = (civilization.cultureTags - START_CLIMATE_TAGS) + climateTags(tile),
+            )
+        },
+    )
+}
+
+private val START_CLIMATE_TAGS = setOf(
+    "warm-climate",
+    "temperate-climate",
+    "river-and-rain",
+    "highland",
+    "coastal",
+)
+
+private fun climateTags(tile: WorldTile): Set<String> = buildSet {
+    add(if (tile.temperature > 0.65) "warm-climate" else "temperate-climate")
+    if (tile.moisture > 0.65) add("river-and-rain")
+    if (tile.elevation > 0.70) add("highland")
+    if (tile.biome == Biome.COAST) add("coastal")
+}
+
 private fun makeDistinctConfiguredRacesIndependent(
     state: EvolutionState,
-    world: com.sendmefile77.chronosphere.civilization.LivingPlanetState,
+    world: LivingPlanetState,
     setup: WorldSetup,
 ): EvolutionState {
     val civs = world.civilizations.sortedBy { civilizationOrdinal(it.id) }
@@ -136,8 +168,6 @@ private fun repositionStartingSettlements(
             continue
         }
 
-        // Extremely fragmented maps may not satisfy the requested distance. Relax deterministically
-        // instead of silently creating fewer tribes than the player selected.
         val fallback = candidates.asSequence()
             .filter { it !in selected }
             .maxWithOrNull(
