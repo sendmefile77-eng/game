@@ -18,9 +18,10 @@ import kotlin.math.max
 /**
  * Client for Local Dream's on-device Stable Diffusion HTTP backend.
  *
- * Local Dream starts the server only after a model is loaded in the companion app. The endpoint
- * binds to 127.0.0.1:8081 and streams /generate as Server-Sent Events. The final image is raw RGB,
- * so it is converted to PNG before it enters Chronosphere's normal image/reference cache.
+ * The standalone Local Dream app starts the generation backend only while a model is active. The
+ * backend binds to 127.0.0.1:8081, exposes /health and /tokenize, and streams /generate as
+ * Server-Sent Events. Current Local Dream can return PNG directly; raw RGB remains supported here
+ * as a compatibility fallback for older/custom builds.
  */
 internal class LocalDreamClient(
     private val baseUrl: String = DEFAULT_BASE_URL,
@@ -30,17 +31,17 @@ internal class LocalDreamClient(
     @Volatile
     private var availability: AvailabilityCache? = null
 
-    suspend fun isAvailable(force: Boolean = false): Boolean {
+    suspend fun status(force: Boolean = false): LocalDreamStatus {
         val now = System.nanoTime()
         availability?.takeIf { !force && elapsedMillis(it.checkedAtNanos, now) < AVAILABILITY_TTL_MILLIS }
-            ?.let { return it.available }
+            ?.let { return it.status }
 
-        val available = withContext(Dispatchers.IO) {
-            runCatching { probeBlocking() }.getOrDefault(false)
-        }
-        availability = AvailabilityCache(now, available)
-        return available
+        val status = withContext(Dispatchers.IO) { probeBlocking() }
+        availability = AvailabilityCache(now, status)
+        return status
     }
+
+    suspend fun isAvailable(force: Boolean = false): Boolean = status(force).available
 
     suspend fun generate(
         request: HordeImageRequest,
@@ -53,31 +54,76 @@ internal class LocalDreamClient(
             withContext(Dispatchers.IO) {
                 generateBlocking(request, sourceImageBytes, timeoutMillis)
             }.also {
-                availability = AvailabilityCache(System.nanoTime(), true)
+                availability = AvailabilityCache(
+                    checkedAtNanos = System.nanoTime(),
+                    status = LocalDreamStatus.ready(LocalDreamProbeMethod.GENERATE),
+                )
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            // A loaded model can reject an unsupported NPU resolution. Keep the backend marked as
-            // reachable so the next request may still succeed with another aspect/resolution.
-            availability = AvailabilityCache(System.nanoTime(), true)
             if (error is LocalDreamGenerationException) throw error
+            availability = null
             throw LocalDreamGenerationException(error.message ?: "Local Dream generation failed", error)
         }
     }
 
-    private fun probeBlocking(): Boolean {
-        val payload = JSONObject().put("prompt", "chronosphere")
-        val connection = openConnection("$baseUrl/tokenize", "POST", PROBE_TIMEOUT_MILLIS).apply {
-            doOutput = true
+    private fun probeBlocking(): LocalDreamStatus {
+        val health = probeHealthBlocking()
+        if (health.ok) return LocalDreamStatus.ready(LocalDreamProbeMethod.HEALTH)
+
+        // /health is the canonical readiness check in current Local Dream. Keep /tokenize as a
+        // compatibility fallback for older/custom builds which may expose generation but no health.
+        val tokenize = probeTokenizeBlocking()
+        if (tokenize.ok) {
+            return LocalDreamStatus(
+                available = true,
+                probeMethod = LocalDreamProbeMethod.TOKENIZE,
+                detail = "backend відповів через /tokenize; /health недоступний",
+            )
         }
+
+        val detail = listOfNotNull(health.detail, tokenize.detail)
+            .distinct()
+            .joinToString("; ")
+            .ifBlank { "backend 127.0.0.1:8081 не відповідає; відкрийте Local Dream і запустіть модель" }
+        return LocalDreamStatus(
+            available = false,
+            probeMethod = null,
+            detail = detail.take(MAX_STATUS_DETAIL_CHARS),
+        )
+    }
+
+    private fun probeHealthBlocking(): ProbeAttempt {
+        val connection = runCatching {
+            openConnection("$baseUrl/health", "GET", PROBE_TIMEOUT_MILLIS)
+        }.getOrElse { return ProbeAttempt(false, probeFailureMessage("/health", it)) }
+        return try {
+            val code = connection.responseCode
+            if (code in 200..299) ProbeAttempt(true, null)
+            else ProbeAttempt(false, "Local Dream /health: HTTP $code")
+        } catch (error: Throwable) {
+            ProbeAttempt(false, probeFailureMessage("/health", error))
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun probeTokenizeBlocking(): ProbeAttempt {
+        val payload = JSONObject().put("prompt", "chronosphere")
+        val connection = runCatching {
+            openConnection("$baseUrl/tokenize", "POST", PROBE_TIMEOUT_MILLIS).apply { doOutput = true }
+        }.getOrElse { return ProbeAttempt(false, probeFailureMessage("/tokenize", it)) }
         return try {
             connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
-            if (code !in 200..299) return false
+            if (code !in 200..299) return ProbeAttempt(false, "Local Dream /tokenize: HTTP $code")
             val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val json = JSONObject(body)
-            json.has("count") || json.has("max_length")
+            if (json.has("count") || json.has("max_length")) ProbeAttempt(true, null)
+            else ProbeAttempt(false, "Local Dream /tokenize повернув неочікувану відповідь")
+        } catch (error: Throwable) {
+            ProbeAttempt(false, probeFailureMessage("/tokenize", error))
         } finally {
             connection.disconnect()
         }
@@ -99,6 +145,7 @@ internal class LocalDreamClient(
             .put("height", request.height)
             .put("aspect_ratio", aspectRatioFor(request.width, request.height))
             .put("show_diffusion_process", false)
+            .put("output_format", OUTPUT_FORMAT_PNG)
 
         if (sourceImageBytes != null) {
             val normalizedReference = normalizeReferenceToPng(sourceImageBytes)
@@ -190,16 +237,35 @@ internal class LocalDreamClient(
         }
         val encoded = json.optString("image").trim()
         if (encoded.isBlank()) throw LocalDreamGenerationException("Local Dream повернув порожнє зображення")
-        val raw = runCatching { Base64.decode(encoded, Base64.DEFAULT) }
-            .getOrElse { throw LocalDreamGenerationException("Local Dream повернув некоректний RGB base64", it) }
-        val png = rawRgbToPng(raw, width, height, channels)
+        val decoded = runCatching { Base64.decode(encoded, Base64.DEFAULT) }
+            .getOrElse { throw LocalDreamGenerationException("Local Dream повернув некоректний image base64", it) }
+        val format = json.optString("format", "raw").lowercase()
+        val imageBytes = decodeCompletedImage(decoded, width, height, channels, format)
         return LocalDreamGenerationResult(
-            imageBytes = png,
+            imageBytes = imageBytes,
             seed = json.optLong("seed").takeIf { json.has("seed") },
             width = width,
             height = height,
             generationTimeMillis = json.optLong("generation_time_ms").takeIf { json.has("generation_time_ms") },
         )
+    }
+
+    private fun decodeCompletedImage(
+        decoded: ByteArray,
+        width: Int,
+        height: Int,
+        channels: Int,
+        format: String,
+    ): ByteArray = when (format) {
+        "png", "jpeg", "jpg" -> {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(decoded, 0, decoded.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                throw LocalDreamGenerationException("Local Dream повернув пошкоджене $format зображення")
+            }
+            decoded
+        }
+        else -> rawRgbToPng(decoded, width, height, channels)
     }
 
     private fun rawRgbToPng(raw: ByteArray, width: Int, height: Int, channels: Int): ByteArray {
@@ -253,10 +319,19 @@ internal class LocalDreamClient(
     private fun localDreamHttpMessage(code: Int, body: String): String {
         val message = runCatching {
             val json = JSONObject(body)
-            json.optString("message").takeIf { it.isNotBlank() }
-                ?: json.optString("error").takeIf { it.isNotBlank() }
+            when (val error = json.opt("error")) {
+                is JSONObject -> error.optString("message").takeIf { it.isNotBlank() }
+                is String -> error.takeIf { it.isNotBlank() }
+                else -> json.optString("message").takeIf { it.isNotBlank() }
+            }
         }.getOrNull()
         return "Local Dream HTTP $code${message?.let { ": $it" } ?: ""}"
+    }
+
+    private fun probeFailureMessage(endpoint: String, error: Throwable): String {
+        val raw = error.message?.trim().orEmpty()
+        val compact = raw.takeIf { it.isNotBlank() } ?: error::class.java.simpleName
+        return "Local Dream $endpoint: ${compact.take(120)}"
     }
 
     internal fun localSeed(value: String): Long {
@@ -279,6 +354,8 @@ internal class LocalDreamClient(
         return "${width / divisor}:${height / divisor}"
     }
 
+    internal fun requestedOutputFormat(): String = OUTPUT_FORMAT_PNG
+
     private fun greatestCommonDivisor(a: Int, b: Int): Int {
         var left = max(1, a)
         var right = max(1, b)
@@ -293,9 +370,14 @@ internal class LocalDreamClient(
     private fun elapsedMillis(startedAtNanos: Long, nowNanos: Long = System.nanoTime()): Long =
         (nowNanos - startedAtNanos) / 1_000_000L
 
+    private data class ProbeAttempt(
+        val ok: Boolean,
+        val detail: String?,
+    )
+
     private data class AvailabilityCache(
         val checkedAtNanos: Long,
-        val available: Boolean,
+        val status: LocalDreamStatus,
     )
 
     companion object {
@@ -303,6 +385,25 @@ internal class LocalDreamClient(
         private const val PROBE_TIMEOUT_MILLIS = 1_500
         private const val AVAILABILITY_TTL_MILLIS = 20_000L
         private const val MAX_PIXELS = 16_777_216L
+        private const val MAX_STATUS_DETAIL_CHARS = 240
+        private const val OUTPUT_FORMAT_PNG = "png"
+    }
+}
+
+internal enum class LocalDreamProbeMethod {
+    HEALTH,
+    TOKENIZE,
+    GENERATE,
+}
+
+internal data class LocalDreamStatus(
+    val available: Boolean,
+    val probeMethod: LocalDreamProbeMethod?,
+    val detail: String? = null,
+) {
+    companion object {
+        fun ready(method: LocalDreamProbeMethod): LocalDreamStatus =
+            LocalDreamStatus(available = true, probeMethod = method)
     }
 }
 
