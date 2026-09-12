@@ -151,7 +151,7 @@ object HordeResolvedScenePromptFactory {
             eraSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v9",
+            "horde-resolved-scene-v10",
             characterKey,
             identity.signature,
             morphology.signature,
@@ -179,8 +179,8 @@ object HordeResolvedScenePromptFactory {
             ageYears = ageYears,
             width = 768,
             height = 1152,
-            steps = 32,
-            cfgScale = 6.8,
+            steps = 22,
+            cfgScale = 5.5,
             seed = "chronosphere:$characterKey:${morphology.signature}:$eraSignature",
             preferredModels = if (undressed) nsfwModels else sfwModels,
             qualityPriority = true,
