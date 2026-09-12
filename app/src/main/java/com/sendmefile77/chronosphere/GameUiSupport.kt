@@ -290,30 +290,9 @@ internal fun ChroniclePanel(
     textGenerator: ChronicleTextGenerator,
 ) {
     Text("Хроніка світу", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-    val leaders = session.state.civilizations.sortedByDescending { it.population }.take(5)
-    Text("Найвпливовіші держави", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-    leaders.forEachIndexed { index, civilization ->
-        val leaderName = peopleState.ruler(civilization.id)?.name ?: "без відомого правителя"
-        val eraName = economyState.economy(civilization.id)?.era?.displayNameUk ?: "невизначена епоха"
-        Text(
-            "${index + 1}. ${civilization.name} · ${compactNumber(civilization.population)} людей · $leaderName · $eraName",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
     val names = session.state.civilizations.associate { it.id to it.name }
-    if (session.state.wars.isNotEmpty()) {
-        Text("Війни", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-        session.state.wars.take(5).forEach { war ->
-            Text("${names[war.civilizationA] ?: "Невідома держава"} — ${names[war.civilizationB] ?: "Невідома держава"}")
-        }
-    }
 
-    GeneratedImageGalleryPanel(
-        worldSeed = session.state.worldSeed,
-        civilizations = session.state.civilizations,
-        clock = clock,
-    )
-
+    // The story is the primary content now. Rankings and raw facts are context below it.
     ChronicleHordeEventCard(
         events = session.state.recentEvents,
         peopleState = peopleState,
@@ -323,9 +302,32 @@ internal fun ChroniclePanel(
         civilizationNames = names,
     )
 
+    GeneratedImageGalleryPanel(
+        worldSeed = session.state.worldSeed,
+        civilizations = session.state.civilizations,
+        clock = clock,
+    )
+
+    Text("Світ зараз", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    val leaders = session.state.civilizations.sortedByDescending { it.population }.take(5)
+    leaders.forEachIndexed { index, civilization ->
+        val leaderName = peopleState.ruler(civilization.id)?.name ?: "без відомого правителя"
+        val eraName = economyState.economy(civilization.id)?.era?.displayNameUk ?: "невизначена епоха"
+        Text(
+            "${index + 1}. ${civilization.name} · ${compactNumber(civilization.population)} людей · $leaderName · $eraName",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    if (session.state.wars.isNotEmpty()) {
+        Text("Активні війни", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+        session.state.wars.take(5).forEach { war ->
+            Text("${names[war.civilizationA] ?: "Невідома держава"} — ${names[war.civilizationB] ?: "Невідома держава"}")
+        }
+    }
+
     Text("Літопис фактів", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
     Text(
-        "Короткий журнал лишається як довідка. Основна історія тепер зібрана вище у зв’язний сюжет.",
+        "Короткий журнал лишається лише як довідка. Основний текст вище показує послідовність подій і наслідків.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -335,7 +337,7 @@ internal fun ChroniclePanel(
     } else {
         events.forEach { event ->
             val eventTime = clock.at(event.tick)
-            val narrative = textGenerator.narrative(event)
+            val narrative = ChroniclePresentation.narrative(event, textGenerator)
             Text(
                 "${eventTime.year} · ${narrative.title} — ${narrative.hook}",
                 style = MaterialTheme.typography.bodySmall,
