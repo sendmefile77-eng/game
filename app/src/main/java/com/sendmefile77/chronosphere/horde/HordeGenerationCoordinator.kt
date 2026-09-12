@@ -28,6 +28,8 @@ internal object HordeGenerationCoordinator {
     private val localDreamClient = LocalDreamClient()
     private val inFlight = ConcurrentHashMap<String, Deferred<HordePreparedImage>>()
     private val progressByCacheKey = ConcurrentHashMap<String, MutableStateFlow<ImageJobProgress>>()
+    private val preparedByCacheKey = ConcurrentHashMap<String, HordePreparedImage>()
+    private val retryNonceByCacheKey = ConcurrentHashMap<String, Int>()
 
     suspend fun load(
         filesDir: File,
@@ -37,6 +39,8 @@ internal object HordeGenerationCoordinator {
         localDreamRequest: HordeImageRequest? = null,
         localDreamTimeoutMillis: Long? = null,
     ): HordePreparedImage {
+        preparedByCacheKey[request.cacheKey]?.let { return it }
+
         val cache = HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY))
         cache.read(request.cacheKey)?.let { cached ->
             if (request.saveResultAsReference) {
@@ -53,7 +57,7 @@ internal object HordeGenerationCoordinator {
                 provider = ImageGenerationProvider.CACHE,
                 actualWidth = null,
                 actualHeight = null,
-            )
+            ).also { preparedByCacheKey[request.cacheKey] = it }
         }
 
         val localProfile = localDreamRequest ?: LocalDreamFastProfile.apply(request)
@@ -103,6 +107,18 @@ internal object HordeGenerationCoordinator {
     fun observeProgress(cacheKey: String): StateFlow<ImageJobProgress> =
         progressFlow(cacheKey)
 
+    fun peekPrepared(cacheKey: String): HordePreparedImage? = preparedByCacheKey[cacheKey]
+
+    fun retryNonce(cacheKey: String): Int = retryNonceByCacheKey[cacheKey] ?: 0
+
+    fun nextRetryNonce(cacheKey: String): Int = retryNonceByCacheKey.merge(cacheKey, 1, Int::plus) ?: 1
+
+    fun invalidate(filesDir: File, cacheKey: String) {
+        preparedByCacheKey.remove(cacheKey)
+        HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)).remove(cacheKey)
+        progressFlow(cacheKey).value = ImageJobProgress.idle()
+    }
+
     private fun progressFlow(cacheKey: String): MutableStateFlow<ImageJobProgress> =
         progressByCacheKey.getOrPut(cacheKey) { MutableStateFlow(ImageJobProgress.idle()) }
 
@@ -127,7 +143,7 @@ internal object HordeGenerationCoordinator {
                 provider = ImageGenerationProvider.CACHE,
                 actualWidth = null,
                 actualHeight = null,
-            )
+            ).also { preparedByCacheKey[request.cacheKey] = it }
         }
 
         val references = HordeCharacterReferenceStore(File(filesDir, "horde-character-references"))
@@ -188,7 +204,7 @@ internal object HordeGenerationCoordinator {
                 provider = ImageGenerationProvider.LOCAL_DREAM,
                 actualWidth = localResult.width,
                 actualHeight = localResult.height,
-            )
+            ).also { preparedByCacheKey[request.cacheKey] = it }
         }
 
         publish(
@@ -246,7 +262,7 @@ internal object HordeGenerationCoordinator {
             actualWidth = request.width,
             actualHeight = request.height,
             fallbackNote = localDreamFallbackNote,
-        )
+        ).also { preparedByCacheKey[request.cacheKey] = it }
     }
 
     private fun compactReason(error: Throwable): String {
