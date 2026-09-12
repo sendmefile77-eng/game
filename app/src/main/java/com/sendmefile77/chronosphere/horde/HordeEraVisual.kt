@@ -70,6 +70,38 @@ internal object HordeEraVisual {
         null -> "era-specific props must be visible in the background"
     }
 
+    fun cityErotica(era: TechnologyEra?): String = when (era) {
+        TechnologyEra.TRIBAL ->
+            "tribal camp street life, hide tents and open hearth, two consenting nude adults having sex on furs " +
+                "beside the fire while other adults work hides and roast meat in the same circle, explicit genitals, sweat, firelight"
+        TechnologyEra.AGRARIAN ->
+            "agrarian village everyday life, thatch cottages, grain threshing floor, livestock pens, two consenting nude adults " +
+                "having sex against a timber post by the granary while villagers carry sheaves, explicit, dusty sunlight"
+        TechnologyEra.URBAN ->
+            "crowded pre-industrial town street, mudbrick workshops and market awnings, two consenting nude adults having sex " +
+                "under a stall canopy while the market continues, explicit wet skin, clay pots, packed dirt street"
+        TechnologyEra.METALLURGIC ->
+            "metalworking settlement everyday life, open-air bronze furnaces, anvils, glowing crucibles, soot-black timber sheds, " +
+                "two consenting nude adults having explicit sex beside a hot forge, sweat and soot on skin, hammered bowls, " +
+                "other smiths working in the same yard, night furnace glow"
+        TechnologyEra.MEDIEVAL ->
+            "medieval town lane inside timber-and-stone walls, two consenting nude adults having sex in an alley by a smithy " +
+                "while the street lives, explicit, torchlight, wet cobbles"
+        TechnologyEra.EARLY_INDUSTRIAL ->
+            "early industrial brick yard, chimneys and belt-driven machines, two consenting nude adults having sex against a brick wall " +
+                "after a shift, soot, steam, explicit"
+        TechnologyEra.INDUSTRIAL ->
+            "industrial factory street after whistle, two consenting nude adults having sex in a loading alley, steel, rail, explicit"
+        TechnologyEra.ELECTRIC ->
+            "electrified early-modern street under wired lamps, two consenting nude adults having sex in a workshop doorway, explicit"
+        TechnologyEra.INFORMATION ->
+            "contemporary city night, neon-free realistic street, two consenting nude adults having sex on a rooftop terrace, explicit"
+        TechnologyEra.SPACEFARING ->
+            "space habitat corridor with viewport, two consenting nude adults having sex against a bulkhead while the concourse lives, explicit"
+        null ->
+            "settlement everyday life with two consenting nude adults having explicit sex in public work space"
+    }
+
     fun portraitInterior(era: TechnologyEra?): String = when (era) {
         TechnologyEra.TRIBAL -> "standing in a tribal camp of hide tents and hearths, wild landscape and smoke behind the figure"
         TechnologyEra.AGRARIAN -> "standing in a village of timber and thatch, grain fields behind the figure"
