@@ -55,7 +55,7 @@ internal object ChronicleLlmEnricher {
         } ?: return null
 
         val parsed = runCatching {
-            parse(completion.content, baseNarrative, baseDecision)
+            parseResponse(completion.content, baseNarrative, baseDecision)
         }.getOrNull() ?: return null
 
         return LlmChronicleEnrichment(
@@ -130,7 +130,7 @@ internal object ChronicleLlmEnricher {
         }.take(MAX_PROMPT_CHARS)
     }
 
-    private fun parse(
+    internal fun parseResponse(
         raw: String,
         baseNarrative: ChronicleNarrative,
         baseDecision: ChronicleDecision?,
