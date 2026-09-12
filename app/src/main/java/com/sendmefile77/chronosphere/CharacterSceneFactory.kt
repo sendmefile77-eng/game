@@ -4,6 +4,7 @@ import com.sendmefile77.chronosphere.adultcontracts.AdultEventRequest
 import com.sendmefile77.chronosphere.adultcontracts.AdultParticipantRef
 import com.sendmefile77.chronosphere.adultcontracts.AdultWorldContext
 import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.scene.ResolvedScene
@@ -14,6 +15,7 @@ import com.sendmefile77.chronosphere.scene.SceneRecipe
 import com.sendmefile77.chronosphere.scene.SceneRequest
 import com.sendmefile77.chronosphere.scene.SceneResolver
 import com.sendmefile77.chronosphere.scene.WardrobeState
+import com.sendmefile77.chronosphere.society.HistoricalAdultContextBridge
 
 /**
  * Base/offline card scenes. Full builds may replace these logical recipes with an optional
@@ -142,10 +144,19 @@ object CharacterSceneFactory {
 
         val descriptor = person.settlementId?.let(evolution::visualDescriptor)
         val profile = people.profile(person.civilizationId)
-        val tags = buildSet {
+        val activeHistory = ActiveHistoricalContextRegistry.snapshot(evolution.worldSeed)
+        val baseTags = buildSet {
             addAll(profile?.tags ?: emptySet())
             addAll(descriptor?.tags ?: emptySet())
+            activeHistory?.eraByCivilization?.get(person.civilizationId)?.let { era -> add("era_$era") }
         }
+        val tags = HistoricalAdultContextBridge.tags(
+            baseTags = baseTags,
+            civilizationId = person.civilizationId,
+            historicalMemory = activeHistory?.historicalMemory,
+            branchId = activeHistory?.branchId,
+            primaryPerson = person,
+        )
         val numeric = linkedMapOf<String, Double>().apply {
             descriptor?.numeric?.let { putAll(it) }
             if (profile != null) {
