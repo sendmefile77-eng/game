@@ -51,9 +51,10 @@ class MorphologyContextAdultModule(
                 if (descriptor != null) addAll(encodedParticipantMorphology(index, descriptor))
             }
         }
-        if (participantMorphTags.isEmpty() || result.mediaCue == null) return result
+        if (participantMorphTags.isEmpty()) return result
+        val mediaCue = result.mediaCue ?: return result
         return result.copy(
-            mediaCue = result.mediaCue.copy(tags = result.mediaCue.tags + participantMorphTags),
+            mediaCue = mediaCue.copy(tags = mediaCue.tags + participantMorphTags),
         )
     }
 
