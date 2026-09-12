@@ -23,7 +23,7 @@ object HordeAdultActionPromptFactory {
         val partnerLine = plan.partner?.let { partner -> "second confirmed adult age ${partner.ageYears}, ${partnerIdentity?.promptFragment}, fully nude" }
         val positive = listOf(actionPrompt(plan), actLock(plan.type), cameraPrompt(plan), "explicit uncensored adult sex, adults 18+", "primary adult face locked: ${identity.promptFragment}", partnerLine, "completely nude, genitals visible, sexual contact readable at a glance", HordeEraVisual.intimateInterior(technologyEra), HordeEraVisual.distinctiveMarker(technologyEra), HordeEraVisual.materialCulture(technologyEra), recipeSetting, morphology.promptFragment.takeIf { it.isNotBlank() }, "environment matches era $eraName, no modern kitchen, no tiled bathroom", "no text in image").filter { !it.isNullOrBlank() }.joinToString(", ")
         return base.copy(
-            cacheKey = listOf("horde-adult-action-v8", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none").joinToString("|"),
+            cacheKey = listOf("horde-adult-action-v9", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none").joinToString("|"),
             positivePrompt = positive,
             negativePrompt = buildList {
                 add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
@@ -35,7 +35,7 @@ object HordeAdultActionPromptFactory {
             nsfw = true,
             width = if (plan.type == AdultActionType.BUKKAKE || plan.type == AdultActionType.BDSM) 896 else if (plan.type == AdultActionType.FOOTJOB) 832 else if (plan.solo) 768 else 832,
             height = if (plan.type == AdultActionType.BUKKAKE) 1152 else if (plan.type == AdultActionType.FOOTJOB) 1216 else if (plan.solo) 1152 else 1216,
-            steps = 24, cfgScale = 6.0, seed = "${base.seed}:action-v8:$eraName:${plan.cacheToken}", preferredModels = nsfwModels, qualityPriority = true, referenceCacheKey = base.referenceCacheKey, saveResultAsReference = false, referenceDenoisingStrength = 0.34,
+            steps = 24, cfgScale = 6.0, seed = "${base.seed}:action-v9:$eraName:${plan.cacheToken}", preferredModels = nsfwModels, qualityPriority = true, referenceCacheKey = base.referenceCacheKey, saveResultAsReference = false, referenceDenoisingStrength = 0.34,
         )
     }
 
