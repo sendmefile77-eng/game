@@ -48,10 +48,6 @@ data class AdultActionPlan(
         ).joinToString(":")
 }
 
-/**
- * Deterministic adult-action selection kept out of Compose.
- * Sequence + person + tick must change the chosen act; partners come only from real PeopleState adults.
- */
 object AdultActionPlanner {
     private val forbiddenPartnerKinds = setOf(
         RelationshipKind.PARENT_CHILD,
@@ -63,11 +59,12 @@ object AdultActionPlanner {
         tick: Long,
         people: PeopleState,
         sequence: Int,
+        preferredType: AdultActionType? = null,
     ): AdultActionPlan? {
         val age = person.ageYearsAt(tick)
         if (age < 18 || sequence <= 0) return null
 
-        val rawType = pickType(person.id, tick, sequence)
+        val rawType = preferredType ?: pickType(person.id, tick, sequence)
         val partner = pickPartner(person, tick, people, sequence)
         val type = normalizeType(rawType, person.biologicalSex, partner?.biologicalSex)
 
@@ -117,9 +114,7 @@ object AdultActionPlanner {
                 candidate.ageYearsAt(tick) >= 18
 
         fun choose(candidates: List<NotablePerson>, tier: String): NotablePerson? {
-            val valid = candidates
-                .filter(::eligible)
-                .distinctBy { it.id }
+            val valid = candidates.filter(::eligible).distinctBy { it.id }
             if (valid.isEmpty()) return null
             val index = (stableHash("${person.id}:$tick:$sequence:partner:$tier") % valid.size.toLong()).toInt()
             return valid[index]
@@ -137,30 +132,23 @@ object AdultActionPlanner {
             }
             .toList()
 
-        // Preserve relationship intent first. Randomness is only used inside one priority tier,
-        // so a real adult lover cannot be displaced by a generic notable or a foreign fallback.
         choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
         choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
         choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
-
         choose(
             people.featuredPeople(person.civilizationId, tick)
                 .filter { it.civilizationId == person.civilizationId }
                 .sortedByDescending { it.prestige },
             "featured-local",
         )?.let { return it }
-
         choose(
             people.allLivingPeople(person.civilizationId)
                 .filter { it.civilizationId == person.civilizationId }
                 .sortedByDescending { it.prestige },
             "living-local",
         )?.let { return it }
-
         return choose(
-            people.persons
-                .filter { it.civilizationId != person.civilizationId }
-                .sortedByDescending { it.prestige },
+            people.persons.filter { it.civilizationId != person.civilizationId }.sortedByDescending { it.prestige },
             "foreign-fallback",
         )
     }
