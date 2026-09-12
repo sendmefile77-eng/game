@@ -24,7 +24,7 @@ internal data class LlmChronicleEnrichment(
  * JSON the deterministic ChronicleTextGenerator/ChronicleDecisionCatalog output stays on screen.
  */
 internal object ChronicleLlmEnricher {
-    private val client = TellamaClient()
+    private val client = TellamaRuntime.client
     private val cache = ConcurrentHashMap<String, LlmChronicleEnrichment>()
 
     suspend fun enrich(
