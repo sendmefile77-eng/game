@@ -117,7 +117,6 @@ object AdultActionPlanner {
             if (candidate.id in forbiddenIds) return
             if (!candidate.isAlive) return
             if (candidate.ageYearsAt(tick) < 18) return
-            if (candidate.civilizationId != person.civilizationId) return
             ranked.putIfAbsent("${prioritySalt}:${candidate.id}", candidate)
         }
 
@@ -143,6 +142,11 @@ object AdultActionPlanner {
             .filter { it.ageYearsAt(tick) >= 18 }
             .sortedByDescending { it.prestige }
             .forEach { consider(it, "05-living") }
+
+        people.persons
+            .filter { it.isAlive && it.ageYearsAt(tick) >= 18 && it.civilizationId != person.civilizationId }
+            .sortedByDescending { it.prestige }
+            .forEach { consider(it, "06-foreign-adult") }
 
         val candidates = ranked.values.distinctBy { it.id }
         if (candidates.isEmpty()) return null
