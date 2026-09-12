@@ -67,7 +67,9 @@ internal object ChronicleStoryComposer {
     ): ChronicleStory? {
         if (events.isEmpty()) return null
 
-        val window = events.takeLast(24)
+        // recentEvents currently retains up to 96 entries. Using most of that window gives the player
+        // an actual arc across years instead of merely paraphrasing the last screenful of events.
+        val window = events.takeLast(72)
         val focusId = window.asReversed()
             .flatMap { event -> event.actorIds.asReversed() }
             .filter { it in civilizationNames }
@@ -100,7 +102,7 @@ internal object ChronicleStoryComposer {
             acc
         }
 
-        val selected = selectTurningPoints(deduped, 7)
+        val selected = selectTurningPoints(deduped, 8)
         if (selected.isEmpty()) return null
         val narratives = selected.map { event -> event to ChroniclePresentation.narrative(event, textGenerator) }
         val first = narratives.first()
