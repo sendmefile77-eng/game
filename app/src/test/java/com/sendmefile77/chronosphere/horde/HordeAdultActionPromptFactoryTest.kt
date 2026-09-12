@@ -8,6 +8,7 @@ import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,32 +20,39 @@ class HordeAdultActionPromptFactoryTest {
             plan = plan(AdultActionType.ORAL),
         )
         assertTrue(request.nsfw)
-        assertTrue(request.cacheKey.startsWith("horde-adult-action-v5|"))
+        assertTrue(request.cacheKey.startsWith("horde-adult-action-v6|"))
         assertTrue(request.positivePrompt.contains("blowjob") || request.positivePrompt.contains("cunnilingus"))
         assertTrue(request.positivePrompt.contains("mouth"))
+        assertTrue(request.positivePrompt.contains("exact face match"))
         assertTrue(request.positivePrompt.contains("the only sex act"))
         assertFalse(request.positivePrompt.contains("natural standing or seated pose"))
         assertFalse(request.negativePrompt.contains("multiple people"))
         assertTrue(request.negativePrompt.contains("standing idle portrait"))
         assertTrue(request.negativePrompt.contains("footjob"))
-        assertTrue(request.referenceDenoisingStrength >= 0.85)
+        assertTrue(request.preferredModels.first().contains("illustrious", ignoreCase = true))
+        assertTrue(request.referenceDenoisingStrength >= 0.70)
         assertFalse(request.saveResultAsReference)
     }
 
     @Test
-    fun tribalFootjobUsesHideTentNotAModernBathroom() {
-        val request = HordeAdultActionPromptFactory.create(
+    fun tribalAndMedievalFootjobsAreDifferentScenes() {
+        val tribal = HordeAdultActionPromptFactory.create(
             scene = scene(),
             plan = plan(AdultActionType.FOOTJOB),
             technologyEra = TechnologyEra.TRIBAL,
         )
-        assertTrue(request.positivePrompt.contains("footjob"))
-        assertTrue(request.positivePrompt.contains("hide tent") || request.positivePrompt.contains("reed hut"))
-        assertTrue(request.positivePrompt.contains("hearth"))
-        assertTrue(request.positivePrompt.contains("prehistoric tribal"))
-        assertTrue(request.negativePrompt.contains("modern tiled bathroom"))
-        assertTrue(request.negativePrompt.contains("blowjob"))
-        assertTrue(request.cacheKey.contains("TRIBAL"))
+        val medieval = HordeAdultActionPromptFactory.create(
+            scene = scene(),
+            plan = plan(AdultActionType.FOOTJOB),
+            technologyEra = TechnologyEra.MEDIEVAL,
+        )
+        assertTrue(tribal.positivePrompt.contains("footjob"))
+        assertTrue(tribal.positivePrompt.contains("hide tent") || tribal.positivePrompt.contains("reed hut"))
+        assertTrue(tribal.positivePrompt.contains("ochre") || tribal.positivePrompt.contains("mammoth"))
+        assertTrue(medieval.positivePrompt.contains("rope bed") || medieval.positivePrompt.contains("candle"))
+        assertTrue(tribal.negativePrompt.contains("modern tiled bathroom"))
+        assertNotEquals(tribal.cacheKey, medieval.cacheKey)
+        assertNotEquals(tribal.seed, medieval.seed)
     }
 
     @Test

@@ -11,10 +11,10 @@ import com.sendmefile77.chronosphere.scene.WardrobeState
 /** Explicit character-card action scenes. Kept separate from idle portrait mapping. */
 object HordeAdultActionPromptFactory {
     private val nsfwModels = listOf(
+        "WAI-NSFW-illustrious-SDXL",
+        "CyberRealistic Pony",
         "AbsoluteReality",
         "Realistic Vision",
-        "CyberRealistic Pony",
-        "WAI-NSFW-illustrious-SDXL",
     )
 
     fun create(
@@ -54,31 +54,37 @@ object HordeAdultActionPromptFactory {
         val recipeSetting = adultVisual?.settingKey
             ?.takeIf { it.isNotBlank() }
             ?.let { "structured scene setting ${it.replace('.', ' ').replace('-', ' ')}" }
+        val eraName = technologyEra?.name ?: "UNSPECIFIED"
+        val identityLock =
+            "same named adult as the reference portrait, exact face match, " +
+                "${identity.promptFragment}, do not change hair color, eye color, skin tone or face shape"
 
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-action-v5",
+                "horde-adult-action-v6",
                 plan.cacheToken,
                 identity.signature,
                 morphology.signature,
-                technologyEra?.name ?: "UNSPECIFIED",
+                eraName,
                 adultVisual?.recipeId ?: "none",
                 adultVisual?.settingKey ?: "none",
             ).joinToString("|"),
             positivePrompt = listOf(
-                "explicit uncensored photorealistic adult sex scene, adults 18+",
+                "explicit uncensored adult sex scene, adults 18+, anime-influenced illustration allowed",
+                identityLock,
+                identityLock,
                 actLock,
                 act,
                 act,
                 composition,
                 HordeEraVisual.intimateInterior(technologyEra),
+                HordeEraVisual.distinctiveMarker(technologyEra),
                 HordeEraVisual.materialCulture(technologyEra),
                 recipeSetting,
-                "primary adult identity: ${identity.promptFragment}",
                 morphology.promptFragment.takeIf { it.isNotBlank() },
                 partnerLine,
                 "completely nude, no clothing, genitals in view, sexual contact clearly readable",
-                "the environment, furniture, light and materials must match the stated technological era",
+                "the environment, furniture, light and materials must match era $eraName",
                 "full-length bodies, no bust crop, no portrait crop",
                 "keep the primary adult face and hair locked to the reference identity",
                 "no text in image",
@@ -94,7 +100,7 @@ object HordeAdultActionPromptFactory {
                         "posed fashion nude", "just standing", "arms at sides",
                         "no sexual contact", "closed mouth far from genitals",
                         "bust crop", "portrait crop", "missing feet", "cropped head",
-                        "wrong person", "identity change",
+                        "wrong person", "identity change", "different hair color", "different eye color",
                         "wrong sex act", "mismatched sex act",
                         "oversaturated", "overexposed", "burnt colors", "overcooked",
                         "high contrast", "oversharpened",
@@ -116,12 +122,12 @@ object HordeAdultActionPromptFactory {
             height = if (plan.solo) 1152 else 1216,
             steps = 20,
             cfgScale = 5.2,
-            seed = "${base.seed}:action-v5:${plan.cacheToken}",
+            seed = "${base.seed}:action-v6:$eraName:${plan.cacheToken}",
             preferredModels = nsfwModels,
             qualityPriority = true,
             referenceCacheKey = base.referenceCacheKey,
             saveResultAsReference = false,
-            referenceDenoisingStrength = 0.88,
+            referenceDenoisingStrength = 0.72,
         )
     }
 
