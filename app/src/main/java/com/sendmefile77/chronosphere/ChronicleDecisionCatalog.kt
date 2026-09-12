@@ -70,13 +70,23 @@ internal object ChronicleDecisionCatalog {
         people: PeopleState,
         economy: EconomyState,
     ): ChronicleDecision? {
+        val byId = events.associateBy { it.id }
         val resolved = events.asSequence().mapNotNull { it.facts["sourceEventId"] }.toSet()
-        return events.asReversed().firstNotNullOfOrNull { event ->
+        val latestResolvedTick = resolved.asSequence()
+            .mapNotNull { sourceId -> byId[sourceId]?.tick }
+            .maxOrNull() ?: Long.MIN_VALUE
+
+        for (event in events.asReversed()) {
             // Initial SETTLEMENT_FOUNDED events are world setup, not player-facing historical crises.
-            if (event.tick == 0L && event.code == "SETTLEMENT_FOUNDED") null
-            else if (event.id in resolved || ChronicleDecisionMailbox.contains(event.id)) null
-            else forEvent(event, people, economy)
+            if (event.tick == 0L && event.code == "SETTLEMENT_FOUNDED") continue
+            if (event.id in resolved || event.tick < latestResolvedTick) continue
+            val decision = forEvent(event, people, economy) ?: continue
+            // Once the newest relevant fork has a queued answer, do not resurrect older forks while
+            // that answer is waiting for the next simulation step.
+            if (ChronicleDecisionMailbox.contains(event.id)) return null
+            return decision
         }
+        return null
     }
 
     fun forEvent(
