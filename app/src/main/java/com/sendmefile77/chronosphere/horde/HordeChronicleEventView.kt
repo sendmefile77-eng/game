@@ -55,11 +55,12 @@ internal fun HordeChronicleEventView(
         }
 
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
+        val timeout = if (request.qualityPriority) 135_000L else 75_000L
         try {
             val result = client.generate(
                 request = attempt,
                 sourceImageBytes = null,
-                timeoutMillis = 75_000L,
+                timeoutMillis = timeout,
                 pollIntervalMillis = 3_000L,
             )
             withContext(Dispatchers.IO) { cache.write(request.cacheKey, result.imageBytes) }
@@ -84,7 +85,7 @@ internal fun HordeChronicleEventView(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "AI Horde · ілюстрація події генерується…",
+                            if (request.qualityPriority) "AI Horde · якісний кадр події генерується…" else "AI Horde · ілюстрація події генерується…",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -125,7 +126,8 @@ internal fun HordeChronicleEventView(
                     ) {
                         Text(
                             text = buildString {
-                                append(current.model?.let { "AI Horde · $it" } ?: "AI Horde")
+                                append("AI Horde · ${request.width}×${request.height}")
+                                current.model?.let { append(" · $it") }
                                 append(" · торкніться для перегляду")
                             },
                             modifier = Modifier.weight(1f),
