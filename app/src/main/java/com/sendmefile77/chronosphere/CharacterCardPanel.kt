@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -31,6 +32,7 @@ fun CharacterCardPanel(
     people: PeopleState,
     evolution: EvolutionState,
     scene: ResolvedScene,
+    technologyEra: TechnologyEra? = null,
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
     onToggleWardrobe: () -> Unit,
@@ -89,6 +91,7 @@ fun CharacterCardPanel(
                 ageYears = age,
                 visualTags = descriptor?.tags ?: emptySet(),
                 visualNumeric = descriptor?.numeric ?: emptyMap(),
+                technologyEra = technologyEra,
             )
 
             if (dynasty != null) {
