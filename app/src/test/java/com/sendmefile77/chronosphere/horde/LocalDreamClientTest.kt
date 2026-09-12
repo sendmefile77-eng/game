@@ -34,4 +34,11 @@ class LocalDreamClientTest {
     fun currentLocalDreamBackendIsAskedForPngOutput() {
         assertEquals("png", client.requestedOutputFormat())
     }
+
+    @Test
+    fun localDreamProgressReportsStepFraction() {
+        val progress = LocalDreamProgress(step = 4, totalSteps = 10)
+        assertEquals(0.4f, progress.fraction, 0.0001f)
+        assertEquals("Local Dream · крок 4/10", progress.captionUk)
+    }
 }
