@@ -61,6 +61,26 @@ class InterventionEngineTest {
         assertEquals(before.population, after.population)
     }
 
+    @Test
+    fun chronicleDecisionProvenanceIsStoredInResultEvent() {
+        val result = engine.apply(
+            sampleState(),
+            InterventionCommand(
+                id = "decision-1",
+                kind = InterventionKind.STABILITY_SUPPORT,
+                civilizationId = "civ-a",
+                strength = 0.55,
+                sourceEventId = "war-started-12",
+                choiceId = "war-homefront",
+                choiceLabel = "Зміцнити тил",
+            ),
+        )
+        val event = result.recentEvents.last()
+        assertEquals("war-started-12", event.facts["sourceEventId"])
+        assertEquals("war-homefront", event.facts["choiceId"])
+        assertEquals("Зміцнити тил", event.facts["choiceLabel"])
+    }
+
     private fun sampleState(): LivingPlanetState {
         val civA = Civilization("civ-a", "Ardan", 1_000L, 0.60, 0.10, 70.0)
         val civB = Civilization("civ-b", "Velor", 900L, 0.70, 0.20, 80.0)
