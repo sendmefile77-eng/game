@@ -1,0 +1,26 @@
+CHRONOSPHERE_SCENE_ASSET_V1
+PACK	adult-visual	1	1024	1536
+# Precomposed 1024x1536 illustrations for accepted G-006/G-007 recipe ids.
+ASSET	recipe:card.dressed.baseline	250	scene_packs/adult/recipe/card.dressed.baseline.png
+ASSET	recipe:card.undressed.baseline	250	scene_packs/adult/recipe/card.undressed.baseline.png
+ASSET	recipe:card.dressed.hybrid	250	scene_packs/adult/recipe/card.dressed.hybrid.png
+ASSET	recipe:card.undressed.hybrid	250	scene_packs/adult/recipe/card.undressed.hybrid.png
+ASSET	recipe:card.undressed.quad	250	scene_packs/adult/recipe/card.undressed.quad.png
+ASSET	recipe:card.undressed.tailed	250	scene_packs/adult/recipe/card.undressed.tailed.png
+ASSET	recipe:card.undressed.scaled	250	scene_packs/adult/recipe/card.undressed.scaled.png
+ASSET	recipe:card.dressed.scaled	250	scene_packs/adult/recipe/card.dressed.scaled.png
+ASSET	recipe:courtship.garden.clothed	250	scene_packs/adult/recipe/courtship.garden.clothed.png
+ASSET	recipe:union.chamber.missionary	250	scene_packs/adult/recipe/union.chamber.missionary.png
+ASSET	recipe:scandal.court.exposure	250	scene_packs/adult/recipe/scandal.court.exposure.png
+ASSET	recipe:fertility.shrine.creampie	250	scene_packs/adult/recipe/fertility.shrine.creampie.png
+ASSET	recipe:rough.bed.pounding	250	scene_packs/adult/recipe/rough.bed.pounding.png
+ASSET	recipe:power.wartent.claim	250	scene_packs/adult/recipe/power.wartent.claim.png
+ASSET	recipe:orgy.feast.group	250	scene_packs/adult/recipe/orgy.feast.group.png
+ASSET	recipe:public.plaza.exhibition	250	scene_packs/adult/recipe/public.plaza.exhibition.png
+ASSET	recipe:bondage.cellar.restraint	250	scene_packs/adult/recipe/bondage.cellar.restraint.png
+ASSET	recipe:sacred.temple.union	250	scene_packs/adult/recipe/sacred.temple.union.png
+ASSET	recipe:union.hybrid.blend	250	scene_packs/adult/recipe/union.hybrid.blend.png
+ASSET	recipe:union.divergent.quad	250	scene_packs/adult/recipe/union.divergent.quad.png
+ASSET	recipe:hold.threshold.silhouette	250	scene_packs/adult/recipe/hold.threshold.silhouette.png
+ASSET	recipe:fallback.silhouette.morph	250	scene_packs/adult/recipe/fallback.silhouette.morph.png
+ASSET	recipe:fallback.silhouette.undressed	250	scene_packs/adult/recipe/fallback.silhouette.undressed.png
