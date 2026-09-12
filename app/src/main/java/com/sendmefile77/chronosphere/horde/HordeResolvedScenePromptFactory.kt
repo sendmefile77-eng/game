@@ -4,6 +4,9 @@ import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
+internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v11"
+internal const val CHARACTER_REFERENCE_CACHE_SCHEMA = "horde-character-reference-v5"
+
 object HordeResolvedScenePromptFactory {
     private val sfwModels = listOf(
         "AbsoluteReality",
@@ -147,7 +150,7 @@ object HordeResolvedScenePromptFactory {
 
         val eraSignature = technologyEra?.name ?: "UNSPECIFIED"
         val referenceCacheKey = listOf(
-            "horde-character-reference-v5",
+            CHARACTER_REFERENCE_CACHE_SCHEMA,
             characterKey,
             identity.signature,
             morphology.signature,
@@ -155,7 +158,7 @@ object HordeResolvedScenePromptFactory {
             historicalSignature,
         ).joinToString("|")
         val cacheKey = listOf(
-            "horde-resolved-scene-v11",
+            RESOLVED_SCENE_CACHE_SCHEMA,
             characterKey,
             identity.signature,
             morphology.signature,
