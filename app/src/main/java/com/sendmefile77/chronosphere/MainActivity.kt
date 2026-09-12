@@ -26,4 +26,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        // Oppo/ColorOS and other aggressive Android builds may destroy the Activity immediately
+        // after it goes to background. Persist the last coherent world before that can happen.
+        GameAutoResume.flush(applicationContext)
+        super.onStop()
+    }
 }
