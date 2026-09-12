@@ -72,7 +72,9 @@ internal object ChronicleDecisionCatalog {
     ): ChronicleDecision? {
         val resolved = events.asSequence().mapNotNull { it.facts["sourceEventId"] }.toSet()
         return events.asReversed().firstNotNullOfOrNull { event ->
-            if (event.id in resolved || ChronicleDecisionMailbox.contains(event.id)) null
+            // Initial SETTLEMENT_FOUNDED events are world setup, not player-facing historical crises.
+            if (event.tick == 0L && event.code == "SETTLEMENT_FOUNDED") null
+            else if (event.id in resolved || ChronicleDecisionMailbox.contains(event.id)) null
             else forEvent(event, people, economy)
         }
     }
