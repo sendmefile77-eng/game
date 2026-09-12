@@ -149,7 +149,9 @@ internal class TellamaClient(
                 val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 throwHttpError(path, code, text)
             }
-            connection.inputStream.bufferedReader(Charsets.UTF_8).useLines(::collectChatNdjson)
+            connection.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                collectChatNdjson(lines)
+            }
         } finally {
             connection.disconnect()
         }
@@ -161,9 +163,9 @@ internal class TellamaClient(
             val trimmed = line.trim()
             if (trimmed.isBlank()) continue
             val event = JSONObject(trimmed)
-            val error = event.optJSONObject("error")
-            if (error != null) {
-                val message = error.optString("message").ifBlank { "Tellama generation error" }
+            val errorObject = event.optJSONObject("error")
+            if (errorObject != null) {
+                val message = errorObject.optString("message").ifBlank { "Tellama generation error" }
                 error(message)
             }
             event.optJSONObject("message")
