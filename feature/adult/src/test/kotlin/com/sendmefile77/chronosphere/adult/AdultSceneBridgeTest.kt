@@ -40,6 +40,24 @@ class AdultSceneBridgeTest {
     }
 
     @Test
+    fun undressedVisualDescriptorMatchesResolvedRecipe() {
+        val request = adult(tags = setOf("open"))
+        val scene = bridge.undressedCharacterCard(request)
+        val visual = bridge.undressedCharacterVisual(request)
+
+        assertEquals(scene.recipeId, visual.recipeId)
+        assertEquals(scene.bodyRigKey, visual.rigLayout)
+        assertEquals(scene.poseKey, visual.poseKey)
+        assertEquals(scene.backgroundKey, visual.settingKey)
+        assertEquals(scene.cameraKey, visual.cameraKey)
+        assertEquals(scene.lightingKey, visual.lightingKey)
+        assertEquals("character_undress", visual.intent)
+        assertEquals("explicit", visual.explicitness)
+        assertTrue(visual.participants.all { it.ageYears >= 18 })
+        assertTrue("undressed" in visual.effectTags)
+    }
+
+    @Test
     fun hybridMorphologyKeepsCompatibleRig() {
         val hybrid = adult(tags = setOf("courtly", "hybrid_lineage", "mixed_ancestry", "lineage:ash"))
         val fingerprint = AdultFingerprint.of(hybrid)
@@ -91,6 +109,25 @@ class AdultSceneBridgeTest {
         assertEquals(recipe.cameraKey, scene.cameraKey)
         assertEquals(recipe.lightingKey, scene.lightingKey)
         assertTrue(scene.layerKeys.contains("recipe:${recipe.id}"))
+    }
+
+    @Test
+    fun eventVisualDescriptorMatchesDeterministicEventScene() {
+        val request = adult(tags = setOf("open", "era_medieval"), participants = 2)
+        val scene = bridge.eventScene(request)
+        val visual = bridge.eventVisual(request)
+
+        assertEquals(scene.recipeId, visual.recipeId)
+        assertEquals(scene.bodyRigKey, visual.rigLayout)
+        assertEquals(scene.poseKey, visual.poseKey)
+        assertEquals(scene.backgroundKey, visual.settingKey)
+        assertEquals(scene.cameraKey, visual.cameraKey)
+        assertEquals(scene.lightingKey, visual.lightingKey)
+        assertEquals("event", visual.intent)
+        assertTrue(visual.eventCode.isNotBlank())
+        assertTrue(visual.mediaTags.any { it.startsWith("event:") })
+        assertTrue(visual.mediaTags.any { it.startsWith("camera:") })
+        assertTrue(visual.participants.all { it.ageYears >= 18 })
     }
 
     @Test
