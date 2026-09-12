@@ -40,6 +40,7 @@ internal fun HordeSceneView(
     fallbackScene: ResolvedScene,
     characterKey: String,
     ageYears: Int,
+    fitFullBody: Boolean = false,
     modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     val context = LocalContext.current.applicationContext
@@ -139,7 +140,7 @@ internal fun HordeSceneView(
                             bitmap = bitmap,
                             contentDescription = "Згенерований портрет персонажа",
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
+                            contentScale = if (fitFullBody) ContentScale.Fit else ContentScale.Crop,
                         )
                     }
                     Row(
