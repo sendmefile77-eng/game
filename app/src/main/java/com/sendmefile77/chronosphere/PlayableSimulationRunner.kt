@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere
 import com.sendmefile77.chronosphere.adultcontracts.AdultModule
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.economy.EconomyEngine
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.AdmixtureEngine
@@ -15,6 +16,7 @@ import com.sendmefile77.chronosphere.society.MorphologyContextAdultModule
 import com.sendmefile77.chronosphere.society.SocietyEngine
 import com.sendmefile77.chronosphere.worldgen.ResourceDeposit
 import com.sendmefile77.chronosphere.worldgen.WorldMap
+import kotlin.math.abs
 
 internal data class PlayableSimulationState(
     val world: LivingPlanetState,
@@ -23,12 +25,7 @@ internal data class PlayableSimulationState(
     val evolution: EvolutionState,
 )
 
-/**
- * Runs the causal playable simulation slice without any Compose/UI dependency.
- *
- * Keeping this work outside the composable lets the Android shell move long advances to a
- * background dispatcher while preserving the exact deterministic order used by the game.
- */
+/** Runs the causal playable simulation slice without any Compose/UI dependency. */
 internal class PlayableSimulationRunner(
     private val worldMap: WorldMap,
     private val resources: List<ResourceDeposit>,
@@ -55,14 +52,12 @@ internal class PlayableSimulationRunner(
         var evolution = currentEvolution
         var remaining = months
 
-        // A year is the causal integration slice: politics/economy/people/evolution/society
-        // are resolved in sequence before the next year begins.
         while (remaining > 0) {
             val step = minOf(12, remaining)
             val fromTick = worldState.tick
 
             val civilizationNext = applyConfiguredCultureDynamics(
-                civilizationEngine.advance(worldState, step),
+                consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
                 months = step,
             )
             val economyResult = economyEngine.advance(economy, civilizationNext)
@@ -119,16 +114,80 @@ internal class PlayableSimulationRunner(
         )
     }
 
-    /** Persistent gameplay effects for player-selected non-biological tribe traits. */
+    /**
+     * Keeps the map readable. The civilization core may found many small colonies over millennia;
+     * once a civilization exceeds its development-appropriate visible-center budget, the smallest
+     * colonies are folded into nearby major centers. Population, food and wealth are conserved.
+     */
+    private fun consolidateMinorSettlements(world: LivingPlanetState): LivingPlanetState {
+        val removedIds = linkedSetOf<String>()
+        val consolidated = mutableListOf<Settlement>()
+
+        world.civilizations.forEach { civilization ->
+            val all = world.settlements.filter { it.civilizationId == civilization.id }
+            val cap = visibleSettlementCap(civilization.technology)
+            if (all.size <= cap) {
+                consolidated += all
+                return@forEach
+            }
+
+            val keep = all.sortedWith(
+                compareByDescending<Settlement> { it.population }
+                    .thenBy { it.foundedTick }
+                    .thenBy { it.id },
+            ).take(cap)
+            val keepIds = keep.mapTo(hashSetOf()) { it.id }
+            val extras = all.filter { it.id !in keepIds }
+            removedIds += extras.map { it.id }
+
+            val populationBonus = keep.associate { it.id to 0L }.toMutableMap()
+            val foodBonus = keep.associate { it.id to 0.0 }.toMutableMap()
+            val wealthBonus = keep.associate { it.id to 0.0 }.toMutableMap()
+            extras.forEach { extra ->
+                val target = keep.minWithOrNull(
+                    compareBy<Settlement> { abs(it.x - extra.x) + abs(it.y - extra.y) }
+                        .thenByDescending { it.population },
+                ) ?: return@forEach
+                populationBonus[target.id] = populationBonus.getValue(target.id) + extra.population
+                foodBonus[target.id] = foodBonus.getValue(target.id) + extra.foodStock
+                wealthBonus[target.id] = wealthBonus.getValue(target.id) + extra.wealth
+            }
+            consolidated += keep.map { center ->
+                center.copy(
+                    population = center.population + populationBonus.getValue(center.id),
+                    foodStock = center.foodStock + foodBonus.getValue(center.id),
+                    wealth = center.wealth + wealthBonus.getValue(center.id),
+                )
+            }
+        }
+
+        if (removedIds.isEmpty()) return world
+        val retained = consolidated.sortedWith(
+            compareBy<Settlement> { it.civilizationId }
+                .thenByDescending { it.population }
+                .thenBy { it.id },
+        )
+        return world.copy(
+            settlements = retained,
+            recentEvents = world.recentEvents.filterNot { event ->
+                event.locationId in removedIds && event.code in NOISY_MINOR_SETTLEMENT_EVENTS
+            }.takeLast(96),
+        )
+    }
+
+    private fun visibleSettlementCap(technology: Double): Int = when {
+        technology < 0.10 -> 3
+        technology < 0.30 -> 4
+        technology < 0.55 -> 5
+        else -> 7
+    }
+
     private fun applyConfiguredCultureDynamics(world: LivingPlanetState, months: Int): LivingPlanetState {
         val years = months / 12.0
         val byId = world.civilizations.associateBy { it.id }
         val civilizations = world.civilizations.map { civ ->
             val tags = civ.cultureTags
-            val technologyDelta = when {
-                "technological" in tags -> 0.00020 * months
-                else -> 0.0
-            }
+            val technologyDelta = if ("technological" in tags) 0.00020 * months else 0.0
             val treasuryDelta = when {
                 "mercantile" in tags -> civ.population * 0.00010 * months
                 "weak_economy" in tags -> -civ.population * 0.00007 * months
@@ -158,7 +217,6 @@ internal class PlayableSimulationRunner(
         return world.copy(civilizations = civilizations, relations = relations)
     }
 
-    /** Re-applies cultural evolutionary pressure after geographic isolation is recalculated each year. */
     private fun applyConfiguredEvolutionBias(state: EvolutionState): EvolutionState = state.copy(
         populations = state.populations.map { population ->
             val tags = state.lineage(population.lineageId)?.tags.orEmpty()
@@ -176,4 +234,13 @@ internal class PlayableSimulationRunner(
             )
         },
     )
+
+    companion object {
+        private val NOISY_MINOR_SETTLEMENT_EVENTS = setOf(
+            "COLONY_FOUNDED",
+            "SETTLEMENT_GROWTH",
+            "FOOD_SHORTAGE",
+            "MIGRATION",
+        )
+    }
 }
