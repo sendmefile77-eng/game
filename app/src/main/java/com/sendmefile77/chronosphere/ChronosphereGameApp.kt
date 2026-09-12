@@ -65,6 +65,7 @@ internal enum class GamePanel { WORLD, PERSON, HISTORY, CHRONICLE }
 @Composable
 fun ChronosphereGameApp() {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val coroutineScope = rememberCoroutineScope()
     val generator = remember { WorldGenerator() }
     val hydrology = remember { WorldHydrology() }
@@ -80,42 +81,70 @@ fun ChronosphereGameApp() {
     val adultModuleActive = remember(adultModule) { AdultModuleRuntime.isActive(adultModule) }
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
 
-    val initialSetup = remember { WorldSetup.default(seed = 424242L, tribeCount = 3) }
-    val initialStart = remember {
-        createConfiguredWorldStart(
-            setup = initialSetup,
+    val restoredStart = remember(appContext) {
+        GameAutoResume.restore(
+            context = appContext,
             generator = generator,
             hydrology = hydrology,
             resourceGenerator = resourceGenerator,
             peopleEngine = peopleEngine,
+            historyTimeline = historyTimeline,
         )
     }
-    val initialSession = initialStart.session
-    val initialPeople = initialStart.people
-    val initialEconomy = initialStart.economy
-    val initialEvolution = initialStart.evolution
+    val initialSetup = remember(restoredStart) {
+        restoredStart?.let { restored ->
+            WorldSetup.default(
+                seed = restored.session.state.worldSeed,
+                tribeCount = restored.session.state.civilizations.size.coerceIn(WorldSetup.MIN_TRIBES, WorldSetup.MAX_TRIBES),
+            )
+        } ?: WorldSetup.default(seed = 424242L, tribeCount = 3)
+    }
+    val fallbackStart = remember(restoredStart) {
+        if (restoredStart == null) {
+            createConfiguredWorldStart(
+                setup = initialSetup,
+                generator = generator,
+                hydrology = hydrology,
+                resourceGenerator = resourceGenerator,
+                peopleEngine = peopleEngine,
+            )
+        } else {
+            null
+        }
+    }
+    val initialSession = restoredStart?.session ?: fallbackStart!!.session
+    val initialPeople = restoredStart?.people ?: fallbackStart!!.people
+    val initialEconomy = restoredStart?.economy ?: fallbackStart!!.economy
+    val initialEvolution = restoredStart?.evolution ?: fallbackStart!!.evolution
 
     var worldSetup by remember { mutableStateOf(initialSetup) }
-    var showNewWorldDialog by remember { mutableStateOf(true) }
+    var showNewWorldDialog by remember { mutableStateOf(restoredStart == null) }
     var session by remember { mutableStateOf(initialSession) }
     var peopleState by remember { mutableStateOf(initialPeople) }
     var economyState by remember { mutableStateOf(initialEconomy) }
     var evolutionState by remember { mutableStateOf(initialEvolution) }
     var workspace by remember {
-        mutableStateOf(historyTimeline.create(initialSession.state, initialPeople, initialEconomy, initialEvolution))
+        mutableStateOf(
+            restoredStart?.workspace
+                ?: historyTimeline.create(initialSession.state, initialPeople, initialEconomy, initialEvolution),
+        )
     }
-    var selectedCivilizationId by remember { mutableStateOf(initialSession.state.civilizations.first().id) }
+    var selectedCivilizationId by remember {
+        mutableStateOf(restoredStart?.selectedCivilizationId ?: initialSession.state.civilizations.first().id)
+    }
     var selectedPersonId by remember {
-        val civilizationId = initialSession.state.civilizations.first().id
+        val civilizationId = restoredStart?.selectedCivilizationId ?: initialSession.state.civilizations.first().id
+        val restoredPersonId = restoredStart?.selectedPersonId?.takeIf { id -> initialPeople.persons.any { it.id == id } }
         val featured = initialPeople.featuredPeople(civilizationId, initialSession.state.tick)
         mutableStateOf(
-            featured.maxByOrNull { it.prestige }?.id
+            restoredPersonId
+                ?: featured.maxByOrNull { it.prestige }?.id
                 ?: initialPeople.ruler(civilizationId)?.takeIf { it.ageYearsAt(initialSession.state.tick) <= 40 }?.id,
         )
     }
     var characterUndressed by remember { mutableStateOf(false) }
     var interventionSequence by remember { mutableStateOf(0L) }
-    var selectedPanel by remember { mutableStateOf(GamePanel.WORLD) }
+    var selectedPanel by remember { mutableStateOf(restoredStart?.selectedPanel ?: GamePanel.WORLD) }
     var isAdvancing by remember { mutableStateOf(false) }
     var pendingTurnMonths by remember { mutableStateOf<Int?>(null) }
     var turnDecision by remember { mutableStateOf<ChronicleDecision?>(null) }
@@ -123,7 +152,68 @@ fun ChronosphereGameApp() {
     var showDevelopmentDialog by remember { mutableStateOf(false) }
     var developmentAcknowledged by remember { mutableStateOf(true) }
     var saveStatus by remember {
-        mutableStateOf(if (adultModuleActive) "Гібридний режим · AI Horde · розширений модуль активний" else "Гібридний режим · AI Horde")
+        mutableStateOf(
+            if (restoredStart != null) {
+                "Світ автоматично відновлено"
+            } else if (adultModuleActive) {
+                "Гібридний режим · AI Horde · розширений модуль активний"
+            } else {
+                "Гібридний режим · AI Horde"
+            },
+        )
+    }
+
+    SideEffect {
+        if (!showNewWorldDialog) {
+            GameAutoResume.publish(
+                GameAutoResumeState(
+                    session = session,
+                    people = peopleState,
+                    economy = economyState,
+                    evolution = evolutionState,
+                    workspace = workspace,
+                    selectedCivilizationId = selectedCivilizationId,
+                    selectedPersonId = selectedPersonId,
+                    selectedPanel = selectedPanel,
+                ),
+            )
+        }
+    }
+
+    LaunchedEffect(
+        session.state,
+        peopleState,
+        economyState,
+        evolutionState,
+        workspace,
+        selectedCivilizationId,
+        selectedPersonId,
+        selectedPanel,
+        showNewWorldDialog,
+        isAdvancing,
+    ) {
+        if (!showNewWorldDialog && !isAdvancing) {
+            val snapshot = GameAutoResumeState(
+                session = session,
+                people = peopleState,
+                economy = economyState,
+                evolution = evolutionState,
+                workspace = historyTimeline.syncActive(
+                    workspace,
+                    session.state,
+                    peopleState,
+                    economyState,
+                    evolutionState,
+                ),
+                selectedCivilizationId = selectedCivilizationId,
+                selectedPersonId = selectedPersonId,
+                selectedPanel = selectedPanel,
+            )
+            GameAutoResume.publish(snapshot)
+            withContext(Dispatchers.IO) {
+                GameAutoResume.persist(appContext, snapshot)
+            }
+        }
     }
 
     fun resetCharacterSelection(civilizationId: String, people: PeopleState) {
