@@ -17,8 +17,8 @@ internal const val GENERATED_IMAGE_CACHE_DIRECTORY = "generated-images-v2"
  *
  * Compose screens are only observers: leaving a tab must not cancel an already submitted request.
  * Local Dream is preferred when its on-device backend is reachable; AI Horde remains the automatic
- * network fallback. Completed images share a provider-neutral disk cache and canonical reference
- * store. The v2 cache intentionally does not reuse pre-Local-Dream Horde frames.
+ * network fallback. A caller may provide a Local-Dream-specific request profile without changing
+ * the Horde request; this is useful for distilled on-device models which need far fewer steps.
  */
 internal object HordeGenerationCoordinator {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -31,6 +31,8 @@ internal object HordeGenerationCoordinator {
         request: HordeImageRequest,
         timeoutMillis: Long,
         pollIntervalMillis: Long = 3_000L,
+        localDreamRequest: HordeImageRequest? = null,
+        localDreamTimeoutMillis: Long? = null,
     ): HordePreparedImage {
         val cache = HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY))
         cache.read(request.cacheKey)?.let { cached ->
@@ -51,12 +53,16 @@ internal object HordeGenerationCoordinator {
             )
         }
 
+        val localProfile = localDreamRequest ?: request
         val jobKey = listOf(
             request.cacheKey,
             request.seed,
             request.width.toString(),
             request.height.toString(),
             request.steps.toString(),
+            localProfile.steps.toString(),
+            localProfile.cfgScale.toString(),
+            localProfile.samplerName,
         ).joinToString("|")
 
         inFlight[jobKey]?.let { return it.await() }
@@ -67,6 +73,8 @@ internal object HordeGenerationCoordinator {
                 request = request,
                 timeoutMillis = timeoutMillis,
                 pollIntervalMillis = pollIntervalMillis,
+                localDreamRequest = localProfile,
+                localDreamTimeoutMillis = localDreamTimeoutMillis,
             )
         }
         val existing = inFlight.putIfAbsent(jobKey, created)
@@ -94,6 +102,8 @@ internal object HordeGenerationCoordinator {
         request: HordeImageRequest,
         timeoutMillis: Long,
         pollIntervalMillis: Long,
+        localDreamRequest: HordeImageRequest,
+        localDreamTimeoutMillis: Long?,
     ): HordePreparedImage {
         val cache = HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY))
         cache.read(request.cacheKey)?.let { cached ->
@@ -115,9 +125,9 @@ internal object HordeGenerationCoordinator {
         val localResult = if (localStatus.available) {
             try {
                 localDreamClient.generate(
-                    request = request,
+                    request = localDreamRequest,
                     sourceImageBytes = reference?.imageBytes,
-                    timeoutMillis = timeoutMillis,
+                    timeoutMillis = (localDreamTimeoutMillis ?: timeoutMillis).coerceAtLeast(5_000L),
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -169,8 +179,6 @@ internal object HordeGenerationCoordinator {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                // A reference/model combination may be unavailable on the Horde. Retrying txt2img
-                // preserves availability while keeping the background job alive.
                 hordeClient.generate(
                     request = request,
                     sourceImageBytes = null,
