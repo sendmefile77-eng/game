@@ -5,6 +5,7 @@
     <application
         android:allowBackup="true"
         android:label="Chronosphere"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity
