@@ -64,12 +64,8 @@ internal fun HordeChronicleEventView(
             state = ChronicleHordeUiState.Loading
         }
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
-        val localDreamAttempt = attempt.copy(
-            steps = LOCAL_DREAM_DMD2_STEPS,
-            cfgScale = LOCAL_DREAM_DMD2_CFG,
-            samplerName = "lcm",
-        )
-        val timeout = if (request.qualityPriority) 120_000L else 75_000L
+        val localDreamAttempt = LocalDreamFastProfile.apply(attempt)
+        val timeout = LocalDreamFastProfile.TIMEOUT_MS
         try {
             val prepared = HordeGenerationCoordinator.load(
                 filesDir = context.filesDir,
@@ -77,7 +73,7 @@ internal fun HordeChronicleEventView(
                 timeoutMillis = timeout,
                 pollIntervalMillis = 3_000L,
                 localDreamRequest = localDreamAttempt,
-                localDreamTimeoutMillis = LOCAL_DREAM_CHRONICLE_TIMEOUT_MS,
+                localDreamTimeoutMillis = timeout,
             )
             val width = prepared.actualWidth ?: request.width
             val height = prepared.actualHeight ?: request.height
@@ -274,7 +270,3 @@ private sealed interface ChronicleHordeUiState {
     ) : ChronicleHordeUiState
     data class Failed(val message: String) : ChronicleHordeUiState
 }
-
-private const val LOCAL_DREAM_DMD2_STEPS = 10
-private const val LOCAL_DREAM_DMD2_CFG = 1.5
-private const val LOCAL_DREAM_CHRONICLE_TIMEOUT_MS = 60_000L
