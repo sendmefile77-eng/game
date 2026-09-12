@@ -6,29 +6,37 @@ import com.sendmefile77.chronosphere.economy.EconomyEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
 import com.sendmefile77.chronosphere.people.PeopleEngine
+import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.simulation.WorldSeed
 import com.sendmefile77.chronosphere.worldgen.WorldGenerator
 import com.sendmefile77.chronosphere.worldgen.WorldResourceGenerator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class PlayableSimulationRunnerTest {
     @Test
-    fun repeatedRunFromSameStateIsDeterministic() {
+    fun repeatedRunFromSameStateIsDeterministicEvenWhenFastForwardPauses() {
         ChronicleDecisionMailbox.drain()
         val fixture = fixture()
 
         val first = fixture.runner.advance(fixture.worldState, fixture.people, fixture.economy, fixture.evolution, months = 120)
+        ChronicleDecisionMailbox.drain()
         val second = fixture.runner.advance(fixture.worldState, fixture.people, fixture.economy, fixture.evolution, months = 120)
 
         assertEquals(first, second)
-        assertEquals(120L, first.world.tick)
+        assertTrue(first.world.tick in 1L..120L)
         assertEquals(first.world.tick, first.people.tick)
         assertEquals(first.world.tick, first.economy.tick)
         assertEquals(first.world.tick, first.evolution.tick)
         assertTrue(first.world.totalPopulation >= 0L)
         assertTrue(first.world.civilizations.all { it.treasury.isFinite() && it.stability.isFinite() && it.technology.isFinite() })
+        if (first.world.tick < 120L) {
+            assertTrue(
+                ChronicleDecisionCatalog.latestUnresolved(first.world.recentEvents, first.people, first.economy) != null,
+            )
+        }
     }
 
     @Test
@@ -65,6 +73,29 @@ class PlayableSimulationRunnerTest {
             },
         )
         assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
+    }
+
+    @Test
+    fun unresolvedImportantEventBlocksFurtherTimeUntilPlayerChooses() {
+        ChronicleDecisionMailbox.drain()
+        val fixture = fixture()
+        val target = fixture.worldState.civilizations.first()
+        val blockedWorld = fixture.worldState.copy(
+            recentEvents = fixture.worldState.recentEvents + SimulationEvent(
+                id = "shortage-now",
+                tick = 1L,
+                code = "FOOD_SHORTAGE",
+                actorIds = listOf(target.id),
+                facts = mapOf("civilization" to target.name),
+            ),
+        )
+
+        try {
+            fixture.runner.advance(blockedWorld, fixture.people, fixture.economy, fixture.evolution, months = 12)
+            fail("Expected PendingChronicleDecisionException")
+        } catch (error: PendingChronicleDecisionException) {
+            assertTrue(error.titleUk.contains("Дефіцит"))
+        }
     }
 
     private fun fixture(): Fixture {
