@@ -76,6 +76,40 @@ class PlayableSimulationRunnerTest {
     }
 
     @Test
+    fun queuedDiplomacyIsAppliedToTheExplicitSelectedCivilization() {
+        ChronicleDecisionMailbox.drain()
+        val fixture = fixture()
+        val actor = fixture.worldState.civilizations.first()
+        val target = fixture.worldState.civilizations[1]
+        GameplayLoop.queueAction(
+            state = fixture.worldState,
+            civilizationId = actor.id,
+            kind = InterventionKind.EMBASSY,
+            titleUk = "Посольство до ${target.name}",
+            effectUk = "Покращити відносини",
+            riskUk = "Витрати казни",
+            counterpartCivilizationId = target.id,
+        )
+
+        val result = fixture.runner.advance(
+            fixture.worldState,
+            fixture.people,
+            fixture.economy,
+            fixture.evolution,
+            months = 1,
+        )
+
+        val action = result.world.recentEvents.firstOrNull {
+            it.facts["sourceEventId"] == GameplayLoop.turnSourceId(fixture.worldState.tick)
+        }
+        assertTrue(action != null)
+        assertEquals(target.id, action!!.facts["targetCivilizationId"])
+        assertTrue(action.actorIds.contains(actor.id))
+        assertTrue(action.actorIds.contains(target.id))
+        assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
+    }
+
+    @Test
     fun unresolvedImportantEventBlocksFurtherTimeUntilPlayerChooses() {
         ChronicleDecisionMailbox.drain()
         val fixture = fixture()
