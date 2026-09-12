@@ -86,7 +86,7 @@ internal fun ChronicleHordeEventCard(
         }
     }
     val eventTime = remember(event.tick) { clock.at(event.tick) }
-    val baseNarrative = remember(event) { textGenerator.narrative(event) }
+    val baseNarrative = remember(event) { ChroniclePresentation.narrative(event, textGenerator) }
     var decisionNonce by remember { mutableIntStateOf(0) }
     val baseDecision = remember(events, peopleState, economyState, decisionNonce) {
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
