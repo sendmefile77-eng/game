@@ -56,7 +56,7 @@ internal object HordeGenerationCoordinator {
             )
         }
 
-        val localProfile = localDreamRequest ?: request
+        val localProfile = localDreamRequest ?: LocalDreamFastProfile.apply(request)
         val jobKey = listOf(
             request.cacheKey,
             request.seed,
