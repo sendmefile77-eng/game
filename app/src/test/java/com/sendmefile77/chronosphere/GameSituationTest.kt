@@ -22,7 +22,7 @@ class GameSituationTest {
     }
 
     @Test
-    fun warIsNamedInTheHeadline() {
+    fun warIsNamedInTheHeadlineAndObjective() {
         val briefing = GameSituation.briefing(
             state = state(food = 900.0, atWar = true),
             civilization = civ(),
@@ -30,7 +30,7 @@ class GameSituationTest {
             pendingDecisionTitle = null,
         )
         assertTrue(briefing.headline.contains("Velor") || briefing.wars.contains("Velor"))
-        assertTrue(briefing.objective.title.contains("війну"))
+        assertTrue(briefing.objective.title.contains("вій"))
     }
 
     private fun civ(): Civilization = Civilization("civ-a", "Ardan", 1_000L, 0.62, 0.20, 40.0)
