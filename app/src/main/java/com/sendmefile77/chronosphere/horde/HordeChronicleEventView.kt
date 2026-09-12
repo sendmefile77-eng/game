@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,9 @@ internal fun HordeChronicleEventView(
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<ChronicleHordeUiState>(ChronicleHordeUiState.Loading) }
+    val jobProgress by remember(request.cacheKey) {
+        HordeGenerationCoordinator.observeProgress(request.cacheKey)
+    }.collectAsState()
 
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = ChronicleHordeUiState.Loading
@@ -88,13 +92,11 @@ internal fun HordeChronicleEventView(
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = Alignment.BottomStart,
                     ) {
-                        Text(
-                            "Local Dream · швидкий кадр DMD2 → AI Horde за потреби…",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        GenerationProgressPlaque(
+                            progress = jobProgress,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }

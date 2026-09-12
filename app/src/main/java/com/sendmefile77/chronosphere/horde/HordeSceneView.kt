@@ -2,7 +2,6 @@ package com.sendmefile77.chronosphere.horde
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +49,9 @@ internal fun HordeSceneView(
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<HordeUiState>(HordeUiState.Loading) }
+    val jobProgress by remember(request.cacheKey) {
+        HordeGenerationCoordinator.observeProgress(request.cacheKey)
+    }.collectAsState()
 
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = HordeUiState.Loading
@@ -93,21 +96,11 @@ internal fun HordeSceneView(
                         ageYears = ageYears,
                         modifier = modifier,
                     )
-                    Text(
-                        text = if (request.qualityPriority) {
-                            "Local Dream → AI Horde · якісний кадр генерується у фоні…"
-                        } else {
-                            "Local Dream → AI Horde · генерується у фоні…"
-                        },
+                    GenerationProgressPlaque(
+                        progress = jobProgress,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                                shape = RoundedCornerShape(topEnd = 8.dp),
-                            )
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                            .fillMaxWidth(),
                     )
                 }
             }
