@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.adultcontracts.AdultVisualSceneDescriptor
 import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.evolution.EvolutionState
+import com.sendmefile77.chronosphere.llm.LocalLlmCharacterVoiceCard
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.people.PersonRole
@@ -106,6 +107,14 @@ fun CharacterCardPanel(
             }
         }
     }
+
+    LocalLlmCharacterVoiceCard(
+        person = person,
+        tick = tick,
+        people = people,
+        technologyEra = technologyEra,
+        enabled = controlsEnabled,
+    )
 
     if (lineage != null && descriptor != null) {
         val ancestry = descriptor.ancestry.entries.sortedByDescending { it.value }.take(4).joinToString(" · ") { (lineageId, share) ->
