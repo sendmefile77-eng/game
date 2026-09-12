@@ -26,7 +26,7 @@ class HordeAdultScenePromptFactoryTest {
         requireNotNull(request)
         assertTrue(request.nsfw)
         assertTrue(request.width > request.height)
-        assertTrue(request.cacheKey.startsWith("horde-adult-event-v2|"))
+        assertTrue(request.cacheKey.startsWith("horde-adult-event-v3|"))
         assertTrue(request.positivePrompt.contains("missionary"))
         assertTrue(request.positivePrompt.contains("private sleeping chamber"))
         assertTrue(request.positivePrompt.contains("intimate medium-close"))
