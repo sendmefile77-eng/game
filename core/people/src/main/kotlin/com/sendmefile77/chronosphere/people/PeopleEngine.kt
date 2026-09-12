@@ -228,17 +228,18 @@ class PeopleEngine {
 
         val existing = persons.asSequence()
             .filter { it.civilizationId == civilization.id && it.isAlive && it.id != ruler.id }
-            .filter { it.ageYearsAt(tick) in 18..65 }
+            .filter { it.ageYearsAt(tick) in 18..40 }
             .filter { candidate -> relationships.none { it.kind == RelationshipKind.PARTNER && it.involves(candidate.id) } }
             .maxByOrNull { it.prestige + it.aptitude * 0.25 }
 
+        val partnerAge = 22 + deterministicInt(seed, "consort-age:${civilization.id}:$tick", 19)
         val partner = existing ?: notableFromSeed(
             seed = seed,
             id = "person-${civilization.id}-consort-$tick",
             civilizationId = civilization.id,
             settlementId = capital?.id ?: ruler.settlementId,
             dynastyId = ruler.dynastyId,
-            birthTick = tick - (24 + deterministicInt(seed, "consort-age:${civilization.id}:$tick", 26)) * 12L,
+            birthTick = tick - partnerAge * 12L,
             role = PersonRole.DYNAST,
             prestigeBase = 0.48,
         ).also { persons += it }
@@ -365,7 +366,7 @@ class PeopleEngine {
             .filter { it.civilizationId == civilizationId && it.isAlive && it.id != ruler.id }
             .filter { it.dynastyId != null && it.dynastyId == ruler.dynastyId }
             .sortedWith(
-                compareByDescending<NotablePerson> { if (it.ageYearsAt(tick) >= 18) 1 else 0 }
+                compareByDescending<NotablePerson> { if (it.ageYearsAt(tick) in 18..40) 2 else if (it.ageYearsAt(tick) >= 18) 1 else 0 }
                     .thenByDescending { it.prestige }
                     .thenBy { it.id },
             )
@@ -395,10 +396,10 @@ class PeopleEngine {
         val childId = "person-$civId-child-0"
         val settlementId = capital?.id
 
-        val ruler = person(rng, rulerId, civId, settlementId, dynastyId, 42 + rng.nextInt(18), PersonRole.RULER, 0.78)
-        val partner = person(rng, partnerId, civId, settlementId, dynastyId, 33 + rng.nextInt(18), PersonRole.DYNAST, 0.60)
+        val ruler = person(rng, rulerId, civId, settlementId, dynastyId, 28 + rng.nextInt(13), PersonRole.RULER, 0.78)
+        val partner = person(rng, partnerId, civId, settlementId, dynastyId, 22 + rng.nextInt(17), PersonRole.DYNAST, 0.60)
         val heir = person(rng, heirId, civId, settlementId, dynastyId, 18 + rng.nextInt(10), PersonRole.HEIR, 0.54)
-        val younger = person(rng, childId, civId, settlementId, dynastyId, 7 + rng.nextInt(10), PersonRole.DYNAST, 0.38)
+        val younger = person(rng, childId, civId, settlementId, dynastyId, 8 + rng.nextInt(10), PersonRole.DYNAST, 0.38)
 
         val roles = listOf(PersonRole.GENERAL, PersonRole.SCHOLAR, PersonRole.MERCHANT, PersonRole.CLERGY)
         val figures = roles.mapIndexed { index, role ->
@@ -408,7 +409,7 @@ class PeopleEngine {
                 civilizationId = civId,
                 settlementId = settlementId,
                 dynastyId = null,
-                age = 25 + rng.nextInt(31),
+                age = 21 + rng.nextInt(20),
                 role = role,
                 prestigeBase = 0.36 + index * 0.02,
             )
@@ -447,18 +448,21 @@ class PeopleEngine {
         age: Int,
         role: PersonRole,
         prestigeBase: Double,
-    ): NotablePerson = NotablePerson(
-        id = id,
-        name = personName(rng.nextLong()),
-        civilizationId = civilizationId,
-        settlementId = settlementId,
-        dynastyId = dynastyId,
-        birthTick = -age * 12L,
-        role = role,
-        prestige = (prestigeBase + rng.nextDouble() * 0.18).coerceIn(0.0, 1.0),
-        aptitude = 0.35 + rng.nextDouble() * 0.55,
-        traits = traits(rng, 2),
-    )
+    ): NotablePerson {
+        require(age in 0..40) { "New notable characters must be 40 or younger" }
+        return NotablePerson(
+            id = id,
+            name = personName(rng.nextLong()),
+            civilizationId = civilizationId,
+            settlementId = settlementId,
+            dynastyId = dynastyId,
+            birthTick = -age * 12L,
+            role = role,
+            prestige = (prestigeBase + rng.nextDouble() * 0.18).coerceIn(0.0, 1.0),
+            aptitude = 0.35 + rng.nextDouble() * 0.55,
+            traits = traits(rng, 2),
+        )
+    }
 
     private fun notableFromSeed(
         seed: Long,
@@ -490,16 +494,19 @@ class PeopleEngine {
         civilization: Civilization,
         capital: Settlement?,
         tick: Long,
-    ): NotablePerson = notableFromSeed(
-        seed = seed,
-        id = "person-${civilization.id}-emergency-ruler-$tick",
-        civilizationId = civilization.id,
-        settlementId = capital?.id,
-        dynastyId = null,
-        birthTick = tick - (30 + deterministicInt(seed, "emergency-age:${civilization.id}:$tick", 26)) * 12L,
-        role = PersonRole.RULER,
-        prestigeBase = 0.62,
-    )
+    ): NotablePerson {
+        val age = 24 + deterministicInt(seed, "emergency-age:${civilization.id}:$tick", 17)
+        return notableFromSeed(
+            seed = seed,
+            id = "person-${civilization.id}-emergency-ruler-$tick",
+            civilizationId = civilization.id,
+            settlementId = capital?.id,
+            dynastyId = null,
+            birthTick = tick - age * 12L,
+            role = PersonRole.RULER,
+            prestigeBase = 0.62,
+        )
+    }
 
     private fun chooseSuccessor(
         civilizationId: String,
@@ -512,9 +519,12 @@ class PeopleEngine {
         val adults = persons.filter {
             it.civilizationId == civilizationId && it.isAlive && it.ageYearsAt(tick) >= 18 && it.id != oldRulerId
         }
-        return adults.filter { it.role == PersonRole.HEIR }.maxByOrNull { it.prestige }
-            ?: adults.filter { dynastyId != null && it.dynastyId == dynastyId }.maxByOrNull { it.prestige }
-            ?: adults.maxByOrNull { it.prestige + it.aptitude * 0.25 }
+        val preferred = adults.filter { it.ageYearsAt(tick) <= 40 }
+        fun choose(pool: List<NotablePerson>): NotablePerson? =
+            pool.filter { it.role == PersonRole.HEIR }.maxByOrNull { it.prestige }
+                ?: pool.filter { dynastyId != null && it.dynastyId == dynastyId }.maxByOrNull { it.prestige }
+                ?: pool.maxByOrNull { it.prestige + it.aptitude * 0.25 }
+        return choose(preferred) ?: choose(adults)
     }
 
     private fun createSocialProfile(civilization: Civilization, rng: DeterministicRng): SocialProfile {
