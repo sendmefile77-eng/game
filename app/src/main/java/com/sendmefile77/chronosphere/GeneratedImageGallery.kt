@@ -12,20 +12,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -163,61 +164,129 @@ internal fun GeneratedImageGalleryPanel(
     var expanded by remember { mutableStateOf(false) }
     var refreshNonce by remember { mutableIntStateOf(0) }
     var selectedCivilizationId by remember(worldSeed) { mutableStateOf<String?>(null) }
+    var selectedKind by remember(worldSeed) { mutableStateOf<GalleryImageKind?>(null) }
     val items = remember(worldSeed, refreshNonce, expanded) {
         GeneratedImageGalleryStore.list(context.filesDir, worldSeed)
     }
-    val filtered = selectedCivilizationId?.let { id -> items.filter { id in it.civilizationIds } } ?: items
+    val filtered = items.filter { item ->
+        (selectedCivilizationId == null || selectedCivilizationId in item.civilizationIds) &&
+            (selectedKind == null || item.kind == selectedKind)
+    }
     var fullscreen by remember { mutableStateOf<GalleryImageItem?>(null) }
+    val personCount = items.count { it.kind == GalleryImageKind.PERSON }
+    val chronicleCount = items.count { it.kind == GalleryImageKind.CHRONICLE }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Галерея світу", fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Галерея світу", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "${items.size} збережених кадрів · окремо від робочого кешу",
+                        "Усі згенеровані варіанти зберігаються окремо від кешу.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                OutlinedButton(onClick = { expanded = !expanded; refreshNonce += 1 }) {
+                StatusPill("${items.size} кадрів", color = MaterialTheme.colorScheme.secondary)
+                TextButton(onClick = { expanded = !expanded; refreshNonce += 1 }) {
                     Text(if (expanded) "Згорнути" else "Відкрити")
                 }
             }
-            if (expanded) {
+
+            if (!expanded && items.isNotEmpty()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    StatusPill("Люди · $personCount", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+                    StatusPill("Хроніка · $chronicleCount", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+
+            if (expanded) {
+                Text("Тип кадру", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     FilterChip(
-                        selected = selectedCivilizationId == null,
-                        onClick = { selectedCivilizationId = null },
-                        label = { Text("Усі (${items.size})") },
+                        selected = selectedKind == null,
+                        onClick = { selectedKind = null },
+                        label = { Text("Усі · ${items.size}") },
+                        modifier = Modifier.weight(1f),
                     )
-                    civilizations.forEach { civilization ->
-                        val count = items.count { civilization.id in it.civilizationIds }
+                    FilterChip(
+                        selected = selectedKind == GalleryImageKind.PERSON,
+                        onClick = { selectedKind = GalleryImageKind.PERSON },
+                        label = { Text("Люди · $personCount") },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = selectedKind == GalleryImageKind.CHRONICLE,
+                        onClick = { selectedKind = GalleryImageKind.CHRONICLE },
+                        label = { Text("Хроніка · $chronicleCount") },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                if (civilizations.size > 1) {
+                    Text("Плем’я / держава", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         FilterChip(
-                            selected = selectedCivilizationId == civilization.id,
-                            onClick = { selectedCivilizationId = civilization.id },
-                            label = { Text("${civilization.name} ($count)") },
+                            selected = selectedCivilizationId == null,
+                            onClick = { selectedCivilizationId = null },
+                            label = { Text("Усі") },
                         )
+                        civilizations.forEach { civilization ->
+                            val count = items.count { civilization.id in it.civilizationIds }
+                            FilterChip(
+                                selected = selectedCivilizationId == civilization.id,
+                                onClick = { selectedCivilizationId = civilization.id },
+                                label = { Text("${civilization.name} · $count") },
+                            )
+                        }
+                    }
+                } else {
+                    civilizations.firstOrNull()?.let { civilization ->
+                        StatusPill(civilization.name, color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                OutlinedButton(onClick = { refreshNonce += 1 }) { Text("Оновити галерею") }
-                if (filtered.isEmpty()) {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        "Для цього племені ще немає збережених генерацій.",
+                        "Показано ${filtered.size}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    OutlinedButton(onClick = { refreshNonce += 1 }, shape = ChronosphereSmallShape) {
+                        Text("Оновити")
+                    }
+                }
+
+                if (filtered.isEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ChronosphereSmallShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    ) {
+                        Text(
+                            "За цим фільтром ще немає збережених генерацій.",
+                            modifier = Modifier.padding(14.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 } else {
                     filtered.take(40).chunked(2).forEach { rowItems ->
                         Row(
@@ -233,7 +302,7 @@ internal fun GeneratedImageGalleryPanel(
                                 )
                             }
                             if (rowItems.size == 1) {
-                                Surface(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surface) {}
+                                Surface(modifier = Modifier.weight(1f), color = Color.Transparent) {}
                             }
                         }
                     }
@@ -269,9 +338,15 @@ private fun GalleryThumbnail(
             BitmapFactory.Options().apply { inSampleSize = 4 },
         )?.asImageBitmap()
     }
+    val ratio = when {
+        item.width > 0 && item.height > 0 -> (item.width.toFloat() / item.height.toFloat()).coerceIn(0.72f, 1.78f)
+        item.kind == GalleryImageKind.CHRONICLE -> 16f / 9f
+        else -> 0.78f
+    }
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
         tonalElevation = 1.dp,
     ) {
         Column {
@@ -279,19 +354,32 @@ private fun GalleryThumbnail(
                 Image(
                     bitmap = bitmap,
                     contentDescription = item.subject,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(0.88f),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio),
                     contentScale = ContentScale.Crop,
                 )
             }
-            Column(modifier = Modifier.padding(7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(item.subject, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "${item.kind.displayNameUk} · $year · ${providerLabel(item.provider)}",
-                    maxLines = 1,
+                    item.subject,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodySmall,
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusPill(item.kind.displayNameUk, color = if (item.kind == GalleryImageKind.PERSON) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                    Text(
+                        "$year · ${providerLabel(item.provider)}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
