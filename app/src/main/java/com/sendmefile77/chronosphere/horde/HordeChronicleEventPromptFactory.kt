@@ -72,6 +72,7 @@ object HordeChronicleEventPromptFactory {
             add("one physically coherent location and moment")
             add("environmental storytelling")
             add("realistic people with complete connected bodies")
+            add("crisp environmental detail, natural textures, clearly resolved faces and materials")
             add("realistic materials and lighting")
             add("wide establishing composition")
             add("all architecture, clothing, tools, furniture and technology strictly match the stated era")
@@ -105,7 +106,7 @@ object HordeChronicleEventPromptFactory {
         val eraSignature = era?.name ?: "UNSPECIFIED"
         return HordeImageRequest(
             cacheKey = listOf(
-                "horde-chronicle-event-v3",
+                "horde-chronicle-event-v4",
                 event.id,
                 event.tick.toString(),
                 event.code,
@@ -118,12 +119,13 @@ object HordeChronicleEventPromptFactory {
             negativePrompt = negative,
             nsfw = false,
             ageYears = participants.minOfOrNull { it.ageYearsAt(event.tick) }?.coerceAtLeast(0) ?: 18,
-            width = 768,
-            height = 448,
-            steps = 24,
-            cfgScale = 6.5,
+            width = 1152,
+            height = 768,
+            steps = 30,
+            cfgScale = 6.6,
             seed = "chronosphere:event:${event.id}:$eraSignature",
             preferredModels = preferredModels,
+            qualityPriority = true,
             referenceCacheKey = null,
             saveResultAsReference = false,
         )
