@@ -27,6 +27,7 @@ import com.sendmefile77.chronosphere.StatusPill
 import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.horde.LocalDreamSettingsCard
 
 /** Visible read-only Qwen layer. The deterministic game remains authoritative. */
 @Composable
@@ -74,6 +75,9 @@ internal fun LocalLlmWorldAdvisorCard(
     val currentStatus = status
     val statusDetail = currentStatus?.detail
     val accent = if (currentStatus?.available == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        LocalDreamSettingsCard(enabled = enabled)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -174,5 +178,6 @@ internal fun LocalLlmWorldAdvisorCard(
                 )
             }
         }
+    }
     }
 }
