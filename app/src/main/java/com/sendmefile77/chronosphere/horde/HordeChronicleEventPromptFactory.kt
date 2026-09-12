@@ -29,6 +29,9 @@ object HordeChronicleEventPromptFactory {
         "BIOLOGICAL_DIVERGENCE",
         "STRUCTURAL_MUTATION",
         "HYBRID_LINEAGE_FORMED",
+        "PLAYER_EVOLUTION_DIVERGENCE",
+        "PLAYER_STRUCTURAL_MUTATION",
+        "PLAYER_HYBRIDIZATION",
         "INTERVENTION_HARVEST_AID",
         "INTERVENTION_DROUGHT",
         "INTERVENTION_TECH_BOOST",
@@ -102,7 +105,7 @@ object HordeChronicleEventPromptFactory {
         val eraSignature = era?.name ?: "UNSPECIFIED"
         return HordeImageRequest(
             cacheKey = listOf(
-                "horde-chronicle-event-v2",
+                "horde-chronicle-event-v3",
                 event.id,
                 event.tick.toString(),
                 event.code,
@@ -178,6 +181,9 @@ object HordeChronicleEventPromptFactory {
         "BIOLOGICAL_DIVERGENCE" -> "fictional humanoid population in its real daily environment showing visible evolutionary divergence"
         "STRUCTURAL_MUTATION" -> "fictional evolved humanoid lineage in its normal settlement showing a newly established body-plan trait, complete coherent bodies"
         "HYBRID_LINEAGE_FORMED" -> "fictional hybrid humanoid community emerging in an era-appropriate settlement, complete coherent people"
+        "PLAYER_EVOLUTION_DIVERGENCE" -> "a newly separated humanoid population visibly diverging from its parent lineage, showing coherent changed proportions while living in its normal era-appropriate settlement"
+        "PLAYER_STRUCTURAL_MUTATION" -> "a newly established humanoid lineage visibly displaying the specific changed body plan described in the event facts, several complete coherent individuals in their normal era-appropriate settlement"
+        "PLAYER_HYBRIDIZATION" -> "a stable new hybrid humanoid population combining visible inherited traits from two genuinely different parent lineages, several complete coherent individuals in an era-appropriate settlement"
         "INTERVENTION_HARVEST_AID" -> "unexpectedly abundant harvest transforming era-appropriate fields, food stores and community life"
         "INTERVENTION_DROUGHT" -> "severe drought striking the era-appropriate settlement, fields and water sources"
         "INTERVENTION_TECH_BOOST" -> "sudden technological leap visibly changing tools, work and buildings while remaining internally coherent"
