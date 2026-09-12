@@ -48,8 +48,9 @@ fun CharacterCardPanel(
     controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
-    var localActionSequence by remember(person.id) { mutableStateOf(0) }
-    var chosenActionType by remember(person.id) { mutableStateOf<AdultActionType?>(null) }
+    val storedAction = remember(person.id) { AdultActionSelectionStore.get(person.id) }
+    var localActionSequence by remember(person.id) { mutableStateOf(storedAction?.sequence ?: 0) }
+    var chosenActionType by remember(person.id) { mutableStateOf(storedAction?.type) }
     var actionMenuOpen by remember(person.id) { mutableStateOf(false) }
     val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
     val displayScene = if (age >= 18) scene.copy(wardrobeState = WardrobeState.UNDRESSED) else scene
@@ -75,7 +76,7 @@ fun CharacterCardPanel(
         val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
         "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
     }
-    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, tick, actionPlan?.cacheToken) {
+    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, actionPlan?.cacheToken, technologyEra) {
         GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
     }
 
@@ -156,7 +157,7 @@ fun CharacterCardPanel(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Оберіть дію — кадр згенерується для цієї дорослої особи. Канонічний портрет не змінюється.",
+                    "Оберіть дію — кадр зберегається для цієї епохи, поки не натиснете інший варіант. Канонічний портрет не змінюється.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -169,8 +170,9 @@ fun CharacterCardPanel(
                             DropdownMenuItem(
                                 text = { Text(item.label) },
                                 onClick = {
-                                    chosenActionType = item.type
-                                    localActionSequence += 1
+                                    val stored = AdultActionSelectionStore.remember(person.id, item.type)
+                                    chosenActionType = stored.type
+                                    localActionSequence = stored.sequence
                                     onAdultAction()
                                     actionMenuOpen = false
                                 },
