@@ -65,7 +65,7 @@ class HordeAdultActionPromptFactoryTest {
         assertTrue(request.nsfw)
         assertTrue(request.positivePrompt.contains("completely naked"))
         assertTrue(request.negativePrompt.contains("dress"))
-        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v10|"))
+        assertTrue(request.cacheKey.startsWith("horde-resolved-scene-v11|"))
     }
 
     private fun plan(type: AdultActionType): AdultActionPlan = AdultActionPlan(
