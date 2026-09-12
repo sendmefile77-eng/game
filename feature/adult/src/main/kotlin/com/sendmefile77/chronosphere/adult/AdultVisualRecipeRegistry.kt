@@ -64,8 +64,8 @@ internal class AdultVisualRecipeRegistry(
     }
 
     fun encode(recipe: AdultVisualRecipe, event: AdultEventRule, request: AdultEventRequest): MediaCue {
-        val tone = AdultCulture.tone(request.context.cultureTags)
-        val cultures = request.context.cultureTags.map { it.lowercase() }.filterNot { isMorphTag(it) }.sorted()
+        val tone = AdultCulture.tone(AdultHistoricalCulture.expand(request.context.cultureTags, request.context.numericContext))
+        val cultures = request.context.cultureTags.map { it.lowercase() }.filterNot { isMorphTag(it) || isHistoryNoise(it) }.sorted()
         val eras = AdultContextSignals.eraTags(request.context.cultureTags).sorted()
         val morph = AdultMorphologyParser.parse(request)
         val tags = buildSet {
@@ -86,6 +86,7 @@ internal class AdultVisualRecipeRegistry(
             addAll(event.mediaTags.map { it.lowercase() })
             addAll(cultures.take(4))
             eras.firstOrNull()?.let { add("era:$it") }
+            addAll(AdultHistoricalVisualRules.mediaTags(request))
             if (morph.signaled) {
                 add("covering:${morph.covering}")
                 add("posture:${morph.posture}")
@@ -132,6 +133,12 @@ internal class AdultVisualRecipeRegistry(
             t.startsWith("covering:") || t.startsWith("arms:") || t.startsWith("legs:") ||
             t.startsWith("eyes:") || t.startsWith("ancestry:") || t == "tail" ||
             t == "mixed_ancestry" || t == "hybrid_lineage" || t.startsWith("wardrobe:")
+    }
+
+    private fun isHistoryNoise(tag: String): Boolean {
+        val t = tag.lowercase()
+        return t.startsWith("history_") || t.startsWith("foundation:") || t.startsWith("civ:") ||
+            t.startsWith("person_role:") || t.startsWith("person_status:")
     }
 
     companion object {
