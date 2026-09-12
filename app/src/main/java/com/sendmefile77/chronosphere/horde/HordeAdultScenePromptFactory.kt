@@ -4,7 +4,6 @@ import com.sendmefile77.chronosphere.adultcontracts.AdultParticipantRef
 import com.sendmefile77.chronosphere.adultcontracts.AdultVisualSceneDescriptor
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.economy.TechnologyEra
-import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
@@ -28,7 +27,7 @@ object HordeAdultScenePromptFactory {
         technologyEra: TechnologyEra? = null,
     ): HordeImageRequest {
         require(ageYears >= 18) { "Adult Horde scenes require adult participants" }
-        require(descriptor.participants.all { it.ageYears >= 18 })
+        require(descriptor.participants.isNotEmpty() && descriptor.participants.all { it.ageYears >= 18 })
 
         val base = HordeResolvedScenePromptFactory.create(
             scene = scene,
@@ -38,7 +37,6 @@ object HordeAdultScenePromptFactory {
             visualNumeric = visualNumeric,
             technologyEra = technologyEra,
         )
-        val semantics = semanticPrompt(descriptor, technologyEra)
         return base.copy(
             cacheKey = listOf(
                 "horde-adult-character-v1",
@@ -47,9 +45,9 @@ object HordeAdultScenePromptFactory {
             ).joinToString("|"),
             positivePrompt = listOf(
                 base.positivePrompt,
-                semantics,
+                semanticPrompt(descriptor, technologyEra),
                 "the selected adult-module pose, setting, camera and lighting are visually dominant",
-                "one coherent adult scene rather than a generic nude studio portrait",
+                "one coherent adult scene rather than a generic studio nude",
             ).joinToString(", "),
             negativePrompt = listOf(
                 base.negativePrompt,
@@ -60,55 +58,52 @@ object HordeAdultScenePromptFactory {
                 "wrong camera angle",
             ).joinToString(", "),
             nsfw = true,
-            ageYears = ageYears,
             seed = "${base.seed}:adult:${descriptor.recipeId}:${descriptor.poseKey}",
             preferredModels = nsfwModels,
-            saveResultAsReference = false,
-            // Keep the safe canonical character portrait as an img2img identity source for solo cards.
+            // Use the safe canonical portrait only as an identity source. Never replace it with NSFW output.
             referenceCacheKey = base.referenceCacheKey,
+            saveResultAsReference = false,
             referenceDenoisingStrength = 0.72,
         )
     }
 
     /**
-     * Rebuilds the actual visual recipe stored on ADULT_SOCIAL_EVENT and renders it as a scene.
-     * Returns null if the original event did not preserve enough structured data or any participant
-     * is not provably 18+ at the event tick.
+     * Rebuilds the exact adult recipe preserved on ADULT_SOCIAL_EVENT.
+     * Unknown participants and minors are never sent to Horde as adult content.
      */
     fun createEvent(
         event: SimulationEvent,
         people: PeopleState,
-        evolution: EvolutionState,
         economy: EconomyState? = null,
     ): HordeImageRequest? {
         if (event.code != "ADULT_SOCIAL_EVENT") return null
+
         val participants = event.actorIds.mapNotNull { actorId ->
             people.persons.firstOrNull { it.id == actorId }
         }.distinctBy { it.id }
         if (participants.isEmpty()) return null
 
-        val refs = participants.map { person ->
-            AdultParticipantRef(person.id, person.ageYearsAt(event.tick))
-        }
+        val refs = participants.map { person -> AdultParticipantRef(person.id, person.ageYearsAt(event.tick)) }
         if (refs.any { it.ageYears < 18 }) return null
 
         val descriptor = descriptorFromEvent(event, refs) ?: return null
         val era = eraFromDescriptor(descriptor) ?: event.actorIds.firstNotNullOfOrNull { id ->
             economy?.economy(id)?.era
         }
+        val sharedMorphology = HordeMorphologyVisual.from(
+            visualTags = descriptor.mediaTags,
+            visualNumeric = emptyMap(),
+        )
 
         val participantPrompt = participants.joinToString("; ") { person ->
             val age = person.ageYearsAt(event.tick)
             val identity = HordeCharacterVisualProfile.from(person.id)
-            val visual = person.settlementId?.let(evolution::visualDescriptor)
-            val morphology = HordeMorphologyVisual.from(
-                visualTags = visual?.tags.orEmpty(),
-                visualNumeric = visual?.numeric.orEmpty(),
-            )
             buildString {
                 append("adult participant age $age, ")
                 append(identity.promptFragment)
-                if (morphology.promptFragment.isNotBlank()) append(", ${morphology.promptFragment}")
+                if (sharedMorphology.promptFragment.isNotBlank()) {
+                    append(", body plan constrained by event morphology: ${sharedMorphology.promptFragment}")
+                }
             }
         }
 
@@ -120,7 +115,7 @@ object HordeAdultScenePromptFactory {
             add(eraPrompt(era))
             add("complete anatomically coherent connected bodies")
             add("clear readable interaction between the specified participants")
-            add("body plans and morphology must match each participant description")
+            add("body plan and morphology must follow the preserved event recipe")
             add("environment, clothing remnants, props and architecture strictly match the stated era")
             add("single continuous scene, believable spatial relationship, cinematic realism")
             add("no text in image")
@@ -151,6 +146,9 @@ object HordeAdultScenePromptFactory {
 
         val width = if (refs.size == 1) 512 else 768
         val height = if (refs.size == 1) 768 else 512
+        val explicit = descriptor.explicitness.lowercase() != "implied" ||
+            descriptor.effectTags.any(::isExplicitEffect)
+
         return HordeImageRequest(
             cacheKey = listOf(
                 "horde-adult-event-v1",
@@ -162,7 +160,7 @@ object HordeAdultScenePromptFactory {
             ).joinToString("|"),
             positivePrompt = positive,
             negativePrompt = negative,
-            nsfw = descriptor.explicitness.lowercase() != "implied" || descriptor.effectTags.any(::isExplicitEffect),
+            nsfw = explicit,
             ageYears = refs.minOf { it.ageYears },
             width = width,
             height = height,
@@ -181,7 +179,9 @@ object HordeAdultScenePromptFactory {
         participants: List<AdultParticipantRef>,
     ): AdultVisualSceneDescriptor? {
         val mediaKey = event.facts["mediaKey"] ?: return null
-        val recipeId = mediaKey.removePrefix("adult://recipe/").takeIf { it != mediaKey && it.isNotBlank() } ?: return null
+        val recipeId = mediaKey.removePrefix("adult://recipe/")
+            .takeIf { it != mediaKey && it.isNotBlank() }
+            ?: return null
         val tags = event.facts["mediaTags"]
             ?.split('|')
             ?.map { it.trim().lowercase() }
@@ -190,7 +190,11 @@ object HordeAdultScenePromptFactory {
             .orEmpty()
         if (tags.isEmpty()) return null
 
-        fun value(prefix: String): String? = tags.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix)?.takeIf { it.isNotBlank() }
+        fun value(prefix: String): String? = tags
+            .firstOrNull { it.startsWith(prefix) }
+            ?.removePrefix(prefix)
+            ?.takeIf { it.isNotBlank() }
+
         val eventCode = event.facts["eventCode"]?.takeIf { it.isNotBlank() }
             ?: value("event:")?.uppercase()
             ?: return null
@@ -247,6 +251,7 @@ object HordeAdultScenePromptFactory {
     }.joinToString(", ")
 
     private fun eventPrompt(code: String): String = when (code.uppercase()) {
+        "CHARACTER_CARD" -> "adult character presentation matching the selected visual recipe"
         "COURTSHIP" -> "consensual adult courtship and close romantic attention"
         "UNION", "DYNASTIC_BOND", "SUCCESSION_BED" -> "consensual sexual union between adult participants"
         "AFFAIR", "SECRET_COUPLING" -> "clandestine consensual sexual encounter between adults"
@@ -258,11 +263,12 @@ object HordeAdultScenePromptFactory {
         "PUBLIC_SEX" -> "consensual adult sexual exhibition in the specified public setting"
         "BONDAGE_RITE" -> "consensual adult bondage and restraint scene"
         "TABOO_BREAK" -> "consensual adult forbidden or taboo-breaking intimate encounter"
-        "SCANDAL" -> "adult intimate scandal or public exposure without changing the selected recipe"
+        "SCANDAL" -> "adult intimate scandal or public exposure matching the selected recipe"
         else -> "consensual adult intimate scene matching event ${humanize(code)}"
     }
 
     private fun posePrompt(key: String): String = when (key.lowercase()) {
+        "pose.card-idle" -> "natural complete-body presentation pose"
         "pose.missionary", "pose.missionary-blend" -> "face-to-face missionary sexual position"
         "pose.from-behind", "pose.prone-bone" -> "rear-entry sexual position with clearly readable adult anatomy"
         "pose.upright-fuck" -> "upright penetrative sexual position"
@@ -295,14 +301,17 @@ object HordeAdultScenePromptFactory {
         else -> "wardrobe ${humanize(key)}"
     }
 
-    private fun compositionPrompt(rig: String, count: Int): String = when {
-        count <= 1 -> "one complete adult figure with the whole intended body composition visible"
-        count == 2 -> "two complete adult bodies interacting in one coherent composition, both participants clearly readable"
-        else -> "$count adult participants arranged in one coherent group composition without merged or ambiguous bodies"
-    } + ", rig layout ${humanize(rig)}"
+    private fun compositionPrompt(rig: String, count: Int): String = (
+        when {
+            count <= 1 -> "one complete adult figure with the whole intended body composition visible"
+            count == 2 -> "two complete adult bodies interacting in one coherent composition, both participants clearly readable"
+            else -> "$count adult participants arranged in one coherent group composition without merged or ambiguous bodies"
+        }
+        ) + ", rig layout ${humanize(rig)}"
 
     private fun settingPrompt(key: String, era: TechnologyEra?): String {
         val base = when (key.lowercase()) {
+            "set.card" -> "private character presentation environment"
             "set.chamber", "set.bedchamber" -> "private sleeping chamber"
             "set.hidden-room", "set.locked-room" -> "secluded private room"
             "set.garden" -> "secluded garden or natural courtship place"
@@ -317,7 +326,6 @@ object HordeAdultScenePromptFactory {
             "set.cellar" -> "private cellar or underground room"
             "set.loft" -> "industrial-era loft interior"
             "set.threshold" -> "simple threshold or doorway setting"
-            "set.card" -> "private character-card environment"
             else -> humanize(key)
         }
         return "$base, ${eraPrompt(era)}"
@@ -325,7 +333,7 @@ object HordeAdultScenePromptFactory {
 
     private fun cameraPrompt(key: String): String = when (key.lowercase()) {
         "cam.intimate" -> "intimate medium-close cinematic camera with the interaction fully readable"
-        "cam.close", "cam.tight" -> "close cinematic framing while keeping the important interacting anatomy in frame"
+        "cam.close", "cam.tight" -> "close cinematic framing while keeping important interacting anatomy in frame"
         "cam.wide" -> "wide composition showing every participant and the setting"
         "cam.three-quarter" -> "three-quarter view showing bodies and interaction clearly"
         "cam.over-shoulder" -> "over-the-shoulder angle with both adult bodies readable"
@@ -349,6 +357,7 @@ object HordeAdultScenePromptFactory {
         "light.amber" -> "warm amber light"
         "light.noon" -> "clear midday light"
         "light.cool" -> "cool naturalistic light"
+        "light.soft" -> "soft naturalistic light"
         else -> "lighting ${humanize(key)}"
     }
 
