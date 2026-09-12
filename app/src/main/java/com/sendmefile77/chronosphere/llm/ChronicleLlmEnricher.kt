@@ -6,6 +6,7 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.textgen.ChronicleNarrative
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
@@ -42,10 +43,16 @@ internal object ChronicleLlmEnricher {
         }
         cache[cacheKey]?.let { return it }
 
-        val completion = client.completeJson(
-            systemPrompt = SYSTEM_PROMPT,
-            userPrompt = buildPrompt(event, recentEvents, people, economy, baseNarrative, baseDecision),
-        ) ?: return null
+        val completion = try {
+            client.completeJson(
+                systemPrompt = SYSTEM_PROMPT,
+                userPrompt = buildPrompt(event, recentEvents, people, economy, baseNarrative, baseDecision),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        } ?: return null
 
         val parsed = runCatching {
             parse(completion.content, baseNarrative, baseDecision)
