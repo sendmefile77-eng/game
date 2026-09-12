@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
+import com.sendmefile77.chronosphere.textgen.ChronicleNarrative
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
 
 internal data class ChronicleStoryBeat(
@@ -16,6 +17,43 @@ internal data class ChronicleStory(
     val paragraphs: List<String>,
     val beats: List<ChronicleStoryBeat>,
 )
+
+/** User-facing prose layer. Internal event codes never leak into the chronicle. */
+internal object ChroniclePresentation {
+    fun narrative(event: SimulationEvent, textGenerator: ChronicleTextGenerator): ChronicleNarrative {
+        val base = textGenerator.narrative(event)
+        if (event.code != "ADULT_SOCIAL_EVENT") return base
+
+        val civilization = event.facts["civilization"]?.takeIf { it.isNotBlank() } ?: "невідомій державі"
+        val practice = socialPracticeName(event.facts["eventCode"])
+        val participants = event.facts["participants"]?.takeIf { it.isNotBlank() }
+        return ChronicleNarrative(
+            title = "$civilization · приватні звичаї стають суспільною традицією",
+            hook = "Повсякденна поведінка дорослих показує, як культурні норми працюють поза законами та офіційними інститутами.",
+            body = buildString {
+                append("У державі $civilization зафіксовано $practice серед повнолітніх учасників.")
+                participants?.let { append(" У центрі цієї історії — $it.") }
+                append(" Для хроніки важлива не назва практики сама по собі, а те, що вона повторює і закріплює прийняті в суспільстві моделі близькості, довіри та статусу.")
+            },
+            significance = "Такі епізоди поступово формують репутацію покоління і показують, чи залишаються проголошені культурні норми абстракцією, чи справді стають способом життя.",
+            changes = participants?.let { listOf("Учасники: $it", "Соціальна практика: $practice") }
+                ?: listOf("Соціальна практика: $practice"),
+        )
+    }
+
+    private fun socialPracticeName(code: String?): String = when (code?.lowercase()) {
+        "bondage_rite", "bondage rite" -> "обряд довіри та символічного зв’язування"
+        "union" -> "формування приватного союзу"
+        "orgy" -> "груповий обряд близькості"
+        "anal_union", "anal union" -> "інтимний союз двох дорослих"
+        "cum_rite", "cum rite" -> "тілесний ритуал близькості"
+        "fertility_rite", "fertility rite" -> "обряд родючості"
+        "public_union", "public union" -> "публічне підтвердження союзу"
+        "dominance_rite", "dominance rite" -> "ритуал статусу та підпорядкування"
+        null, "" -> "приватний соціальний обряд"
+        else -> "локальний обряд близькості"
+    }
+}
 
 /**
  * Builds a deterministic story arc from real simulation events. It never invents people, places,
@@ -50,7 +88,11 @@ internal object ChronicleStoryComposer {
 
         val deduped = focused.fold(mutableListOf<SimulationEvent>()) { acc, event ->
             val previous = acc.lastOrNull()
-            if (previous != null && previous.code == event.code && previous.tick == event.tick) {
+            val sameBurst = previous != null &&
+                previous.code == event.code &&
+                (previous.tick == event.tick ||
+                    event.code == "ADULT_SOCIAL_EVENT" && event.tick - previous.tick <= 12L)
+            if (sameBurst) {
                 acc[acc.lastIndex] = event
             } else {
                 acc += event
@@ -60,7 +102,7 @@ internal object ChronicleStoryComposer {
 
         val selected = selectTurningPoints(deduped, 7)
         if (selected.isEmpty()) return null
-        val narratives = selected.map { event -> event to textGenerator.narrative(event) }
+        val narratives = selected.map { event -> event to ChroniclePresentation.narrative(event, textGenerator) }
         val first = narratives.first()
         val last = narratives.last()
         val span = (last.first.tick - first.first.tick).coerceAtLeast(0L)
