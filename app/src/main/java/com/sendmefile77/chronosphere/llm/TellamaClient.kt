@@ -6,8 +6,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -98,7 +96,7 @@ internal class TellamaClient(
         return try {
             val code = connection.responseCode
             if (code !in 200..299) error("Tellama /api/tags: HTTP $code")
-            val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
             val models = JSONObject(body).optJSONArray("models") ?: return null
             (0 until models.length())
                 .asSequence()
@@ -121,7 +119,7 @@ internal class TellamaClient(
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
                 if (code == 401 || code == 403) error("Tellama Local Only очікується без API-ключа; перевірте режим сервера")
                 error("Tellama /api/chat: HTTP $code ${text.take(100)}")
