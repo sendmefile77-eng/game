@@ -12,6 +12,7 @@ import com.sendmefile77.chronosphere.horde.HordeAdultScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeResolvedScenePromptFactory
 import com.sendmefile77.chronosphere.horde.HordeSceneView
 import com.sendmefile77.chronosphere.scene.ResolvedScene
+import com.sendmefile77.chronosphere.scene.WardrobeState
 
 /**
  * Character-scene image surface.
@@ -28,8 +29,14 @@ internal fun OfflineSceneView(
     visualNumeric: Map<String, Double> = emptyMap(),
     technologyEra: TechnologyEra? = null,
     adultVisual: AdultVisualSceneDescriptor? = null,
+    actionPlan: AdultActionPlan? = null,
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
+    val adultFullBody = ageYears >= 18 && (
+        actionPlan != null ||
+            scene.wardrobeState == WardrobeState.UNDRESSED ||
+            adultVisual != null
+        )
     val request = remember(
         scene,
         characterKey,
@@ -38,9 +45,18 @@ internal fun OfflineSceneView(
         visualNumeric,
         technologyEra,
         adultVisual,
+        actionPlan,
     ) {
-        if (adultVisual != null) {
-            HordeAdultScenePromptFactory.createCharacter(
+        when {
+            actionPlan != null && ageYears >= 18 -> HordeAdultScenePromptFactory.createAction(
+                scene = scene,
+                plan = actionPlan,
+                visualTags = visualTags,
+                visualNumeric = visualNumeric,
+                technologyEra = technologyEra,
+                adultVisual = adultVisual,
+            )
+            adultVisual != null -> HordeAdultScenePromptFactory.createCharacter(
                 scene = scene,
                 descriptor = adultVisual,
                 characterKey = characterKey,
@@ -49,8 +65,7 @@ internal fun OfflineSceneView(
                 visualNumeric = visualNumeric,
                 technologyEra = technologyEra,
             )
-        } else {
-            HordeResolvedScenePromptFactory.create(
+            else -> HordeResolvedScenePromptFactory.create(
                 scene = scene,
                 characterKey = characterKey,
                 ageYears = ageYears,
@@ -65,6 +80,7 @@ internal fun OfflineSceneView(
         fallbackScene = scene,
         characterKey = characterKey,
         ageYears = ageYears,
+        fitFullBody = adultFullBody,
         modifier = modifier,
     )
 }
