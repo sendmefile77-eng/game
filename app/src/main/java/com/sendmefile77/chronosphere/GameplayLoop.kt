@@ -53,6 +53,20 @@ internal data class GameplayTurnReport(
         }
 }
 
+internal object GameplayTurnReportStore {
+    @Volatile private var reports: Map<String, GameplayTurnReport> = emptyMap()
+
+    fun replace(value: Map<String, GameplayTurnReport>) {
+        reports = value
+    }
+
+    fun latestFor(civilizationId: String): GameplayTurnReport? = reports[civilizationId]
+
+    fun clear() {
+        reports = emptyMap()
+    }
+}
+
 internal object GameplayLoop {
     private val diplomaticKinds = setOf(
         InterventionKind.WAR_RAID,
@@ -62,9 +76,41 @@ internal object GameplayLoop {
         InterventionKind.EMBASSY,
     )
 
+    fun turnSourceId(tick: Long): String = "player-turn-$tick"
+
     /** One direct player command globally per current simulation tick. Switching states cannot reset it. */
     fun actionSpent(state: LivingPlanetState): Boolean = state.recentEvents.any { event ->
         event.tick == state.tick && event.id.startsWith("player-")
+    }
+
+    fun queuedAction(state: LivingPlanetState): PendingChronicleDecision? =
+        ChronicleDecisionMailbox.pendingFor(turnSourceId(state.tick))
+
+    fun cancelQueuedAction(state: LivingPlanetState): PendingChronicleDecision? =
+        ChronicleDecisionMailbox.remove(turnSourceId(state.tick))
+
+    fun queueAction(
+        state: LivingPlanetState,
+        civilizationId: String,
+        kind: InterventionKind,
+        titleUk: String,
+        effectUk: String,
+        riskUk: String,
+        counterpartCivilizationId: String? = null,
+    ) {
+        ChronicleDecisionMailbox.enqueue(
+            ChronicleDecisionOption(
+                id = kind.name.lowercase(),
+                sourceEventId = turnSourceId(state.tick),
+                titleUk = titleUk,
+                effectUk = effectUk,
+                riskUk = riskUk,
+                kind = kind,
+                targetCivilizationId = civilizationId,
+                strength = DIRECT_ACTION_STRENGTH,
+                counterpartCivilizationId = counterpartCivilizationId,
+            ),
+        )
     }
 
     fun treasuryCost(kind: InterventionKind, strength: Double = DIRECT_ACTION_STRENGTH): Double = when (kind) {
@@ -126,6 +172,7 @@ internal object GameplayLoop {
         val cost = treasuryCost(kind)
         if (hasPendingDecision) return GameplayActionGate(false, "Спочатку прийміть рішення у Хроніці", cost)
         if (actionSpent(state)) return GameplayActionGate(false, "Команду цього ходу вже використано", cost)
+        if (queuedAction(state) != null) return GameplayActionGate(false, "Команду вже заплановано — прокрутіть час або скасуйте її", cost)
         if (actor.treasury + 1e-9 < cost) {
             return GameplayActionGate(false, "Потрібно ${cost.toInt()} казни", cost)
         }
@@ -169,6 +216,7 @@ internal object GameplayLoop {
         return when {
             hasPendingDecision -> GameplayActionGate(false, "Спочатку прийміть рішення у Хроніці", EVOLUTION_ACTION_COST)
             actionSpent(state) -> GameplayActionGate(false, "Команду цього ходу вже використано", EVOLUTION_ACTION_COST)
+            queuedAction(state) != null -> GameplayActionGate(false, "Спочатку завершіть заплановану команду", EVOLUTION_ACTION_COST)
             actor.treasury < EVOLUTION_ACTION_COST -> GameplayActionGate(false, "Потрібно ${EVOLUTION_ACTION_COST.toInt()} казни", EVOLUTION_ACTION_COST)
             else -> GameplayActionGate(true, treasuryCost = EVOLUTION_ACTION_COST)
         }
