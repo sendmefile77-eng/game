@@ -139,12 +139,17 @@ data class PeopleState(
 
     fun profile(civilizationId: String): SocialProfile? = socialProfiles.firstOrNull { it.civilizationId == civilizationId }
 
+    /** Active playable cast used by the People screen. */
     fun livingPeople(civilizationId: String): List<NotablePerson> =
+        featuredPeople(civilizationId, tick)
+
+    /** Full living roster retained for simulation/history code that needs older people too. */
+    fun allLivingPeople(civilizationId: String): List<NotablePerson> =
         persons.filter { it.civilizationId == civilizationId && it.isAlive }
 
     /**
      * Main playable character pool. Older people remain in the simulation, dynasties and history,
-     * but the People screen focuses on adult characters who are at most 40 years old.
+     * but character browsing focuses on adults who are at most 40 years old.
      */
     fun featuredPeople(civilizationId: String, atTick: Long = tick): List<NotablePerson> =
         persons.filter {
