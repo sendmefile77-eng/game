@@ -33,6 +33,30 @@ class AdultPackRegistryTest {
     }
 
     @Test
+    fun worldSetupPublicSexTagSelectsOpenAdultPack() {
+        val request = sample(
+            requestId = "setup-public",
+            tags = setOf("public_sex"),
+            numeric = mapOf("privacy" to 0.2, "body_openness" to 0.85, "lust" to 0.75),
+        )
+        assertEquals(AdultPackRegistry.PACK_HARDCORE, module.selectedPackId(request))
+    }
+
+    @Test
+    fun worldSetupBondageTagRaisesBondageRiteWeight() {
+        val event = registry.pack(AdultPackRegistry.PACK_HARDCORE).events.first { it.code == "BONDAGE_RITE" }
+        val ordinary = registry.eventWeight(event, sample(tags = setOf("open"), numeric = mapOf("lust" to 0.6)))
+        val configured = registry.eventWeight(event, sample(tags = setOf("open", "bondage_culture"), numeric = mapOf("lust" to 0.6)))
+        assertTrue(configured > ordinary)
+    }
+
+    @Test
+    fun worldSetupStatusBondsSelectDynasticPack() {
+        val request = sample(requestId = "setup-status", tags = setOf("status_bonds"))
+        assertEquals(AdultPackRegistry.PACK_DYNASTIC, module.selectedPackId(request))
+    }
+
+    @Test
     fun packSelectionIgnoresCultureTagOrder() {
         val a = sample(tags = setOf("royal", "devout", "open"))
         val b = sample(tags = setOf("open", "royal", "devout"))
