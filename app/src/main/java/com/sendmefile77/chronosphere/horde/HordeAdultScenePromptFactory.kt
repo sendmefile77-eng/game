@@ -39,13 +39,14 @@ object HordeAdultScenePromptFactory {
         )
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-character-v1",
+                "horde-adult-character-v2",
                 base.cacheKey,
                 descriptorSignature(descriptor),
             ).joinToString("|"),
             positivePrompt = listOf(
                 base.positivePrompt,
                 semanticPrompt(descriptor, technologyEra),
+                "high-frequency skin detail, natural pores, crisp eyes, realistic hair strands and sharp body contours",
                 "the selected adult-module pose, setting, camera and lighting are visually dominant",
                 "one coherent adult scene rather than a generic studio nude",
             ).joinToString(", "),
@@ -58,8 +59,13 @@ object HordeAdultScenePromptFactory {
                 "wrong camera angle",
             ).joinToString(", "),
             nsfw = true,
+            width = 768,
+            height = 1152,
+            steps = 34,
+            cfgScale = 7.0,
             seed = "${base.seed}:adult:${descriptor.recipeId}:${descriptor.poseKey}",
             preferredModels = nsfwModels,
+            qualityPriority = true,
             // Use the safe canonical portrait only as an identity source. Never replace it with NSFW output.
             referenceCacheKey = base.referenceCacheKey,
             saveResultAsReference = false,
@@ -116,6 +122,7 @@ object HordeAdultScenePromptFactory {
             add("each participant keeps their own specified limb count, eye count, covering, posture and tail state")
             add("do not copy one participant's body plan onto another participant")
             add("clear readable interaction between the specified participants")
+            add("high-frequency skin and material detail, crisp faces, sharp eyes, natural hair strands and realistic surface texture")
             add("environment, clothing remnants, props and architecture strictly match the stated era")
             add("single continuous scene, believable spatial relationship, cinematic realism")
             add("no text in image")
@@ -146,14 +153,14 @@ object HordeAdultScenePromptFactory {
             addAll(eraNegative(era))
         }.joinToString(", ")
 
-        val width = if (refs.size == 1) 512 else 768
-        val height = if (refs.size == 1) 768 else 512
+        val width = if (refs.size == 1) 768 else 1152
+        val height = if (refs.size == 1) 1152 else 768
         val explicit = descriptor.explicitness.lowercase() != "implied" ||
             descriptor.effectTags.any(::isExplicitEffect)
 
         return HordeImageRequest(
             cacheKey = listOf(
-                "horde-adult-event-v2",
+                "horde-adult-event-v3",
                 event.id,
                 event.tick.toString(),
                 descriptorSignature(descriptor),
@@ -166,10 +173,11 @@ object HordeAdultScenePromptFactory {
             ageYears = refs.minOf { it.ageYears },
             width = width,
             height = height,
-            steps = 26,
-            cfgScale = 6.5,
+            steps = 32,
+            cfgScale = 6.8,
             seed = "chronosphere:adult-event:${event.id}:${descriptor.recipeId}",
             preferredModels = nsfwModels,
+            qualityPriority = true,
             referenceCacheKey = null,
             saveResultAsReference = false,
             referenceDenoisingStrength = 0.72,
