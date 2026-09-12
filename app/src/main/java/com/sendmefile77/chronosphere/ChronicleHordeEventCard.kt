@@ -41,16 +41,21 @@ internal fun ChronicleHordeEventCard(
     textGenerator: ChronicleTextGenerator,
     civilizationNames: Map<String, String> = emptyMap(),
 ) {
-    val storyEra = remember(events, civilizationNames, economyState) {
-        ChronicleEraVoice.infer(events, economyState)
+    val storyEra = remember(events, economyState) {
+        val eraByCivilization = economyState.civilizations.associate { it.civilizationId to it.era }
+        events.asReversed()
+            .asSequence()
+            .flatMap { event -> event.actorIds.asSequence() }
+            .mapNotNull { actorId -> eraByCivilization[actorId] }
+            .firstOrNull()
+            ?: economyState.civilizations.maxByOrNull { it.era.ordinal }?.era
     }
-    val story = remember(events, civilizationNames, storyEra, economyState) {
+    val story = remember(events, civilizationNames, storyEra) {
         ChronicleStoryComposer.compose(
             events = events,
             civilizationNames = civilizationNames,
             textGenerator = textGenerator,
             era = storyEra,
-            economyState = economyState,
         )
     }
     val causalBridge = remember(events, civilizationNames) {
