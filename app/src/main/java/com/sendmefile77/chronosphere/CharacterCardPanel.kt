@@ -108,6 +108,15 @@ fun CharacterCardPanel(
             val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
             "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
         }
+    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, tick, actionPlan?.cacheToken) {
+        GalleryCapture(
+            worldSeed = people.worldSeed,
+            civilizationIds = listOf(person.civilizationId),
+            kind = GalleryImageKind.PERSON,
+            subject = person.name,
+            tick = tick,
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -149,6 +158,7 @@ fun CharacterCardPanel(
                 technologyEra = technologyEra,
                 adultVisual = effectiveAdultVisual,
                 actionPlan = actionPlan,
+                galleryCapture = galleryCapture,
                 modifier = Modifier.fillMaxWidth().height(if (age >= 18) 420.dp else 220.dp),
             )
 
