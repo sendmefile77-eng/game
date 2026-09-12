@@ -53,7 +53,7 @@ object HordeAdultActionPromptFactory {
 
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-action-v3",
+                "horde-adult-action-v4",
                 plan.cacheToken,
                 identity.signature,
                 morphology.signature,
@@ -100,9 +100,9 @@ object HordeAdultActionPromptFactory {
             nsfw = true,
             width = if (plan.solo) 768 else 832,
             height = if (plan.solo) 1152 else 1216,
-            steps = 36,
-            cfgScale = 7.2,
-            seed = "${base.seed}:action-v3:${plan.cacheToken}",
+            steps = 20,
+            cfgScale = 5.2,
+            seed = "${base.seed}:action-v4:${plan.cacheToken}",
             preferredModels = nsfwModels,
             qualityPriority = true,
             referenceCacheKey = base.referenceCacheKey,
