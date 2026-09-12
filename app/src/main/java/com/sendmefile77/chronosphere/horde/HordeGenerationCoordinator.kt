@@ -14,14 +14,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal const val GENERATED_IMAGE_CACHE_DIRECTORY = "generated-images-v2"
 
-/**
- * Process-level owner for generated image jobs.
- *
- * Compose screens are only observers: leaving a tab must not cancel an already submitted request.
- * Local Dream is preferred when its on-device backend is reachable; AI Horde remains the automatic
- * network fallback. A caller may provide a Local-Dream-specific request profile without changing
- * the Horde request; this is useful for distilled on-device models which need far fewer steps.
- */
 internal object HordeGenerationCoordinator {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val hordeClient = HordeClient()
@@ -63,6 +55,7 @@ internal object HordeGenerationCoordinator {
         val localProfile = localDreamRequest ?: LocalDreamFastProfile.apply(request)
         val jobKey = listOf(
             request.cacheKey,
+            localProfile.cacheKey,
             request.seed,
             request.width.toString(),
             request.height.toString(),
@@ -149,6 +142,8 @@ internal object HordeGenerationCoordinator {
 
         val references = HordeCharacterReferenceStore(File(filesDir, "horde-character-references"))
         val reference = request.referenceCacheKey?.let(references::read)
+        val localReferenceBytes =
+            if (localDreamRequest.referenceCacheKey != null) reference?.imageBytes else null
 
         var localDreamFallbackNote: String? = null
         val localStatus = localDreamClient.status()
@@ -172,7 +167,7 @@ internal object HordeGenerationCoordinator {
                 )
                 localDreamClient.generate(
                     request = localDreamRequest,
-                    sourceImageBytes = reference?.imageBytes,
+                    sourceImageBytes = localReferenceBytes,
                     timeoutMillis = (localDreamTimeoutMillis ?: timeoutMillis).coerceAtLeast(5_000L),
                     onProgress = { step ->
                         publish(request.cacheKey, ImageJobProgress.fromLocalDream(step))
@@ -201,7 +196,7 @@ internal object HordeGenerationCoordinator {
             return HordePreparedImage(
                 bytes = localResult.imageBytes,
                 model = null,
-                usedReference = reference != null,
+                usedReference = localReferenceBytes != null,
                 provider = ImageGenerationProvider.LOCAL_DREAM,
                 actualWidth = localResult.width,
                 actualHeight = localResult.height,
