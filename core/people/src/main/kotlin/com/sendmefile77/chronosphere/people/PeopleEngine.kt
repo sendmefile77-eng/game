@@ -84,12 +84,24 @@ class PeopleEngine {
 
         world.civilizations.forEach { civilization ->
             val rulerId = rulers[civilization.id]
-            val rulerAlive = rulerId?.let { id -> persons.firstOrNull { it.id == id }?.isAlive } == true
-            if (!rulerAlive) {
+            val currentRuler = rulerId?.let { id -> persons.firstOrNull { it.id == id } }
+            val rulerActive = currentRuler?.isAlive == true &&
+                currentRuler.ageYearsAt(tick) <= PeopleState.FEATURED_MAX_AGE
+            if (!rulerActive) {
+                val retiringRuler = currentRuler?.takeIf {
+                    it.isAlive && it.ageYearsAt(tick) > PeopleState.FEATURED_MAX_AGE
+                }
                 var successor = chooseSuccessor(civilization.id, rulerId, persons, tick)
                 if (successor == null) {
                     successor = emergencySuccessor(state.worldSeed, civilization, capital(world, civilization.id), tick)
                     persons += successor
+                }
+
+                if (retiringRuler != null) {
+                    val retiringIndex = persons.indexOfFirst { it.id == retiringRuler.id }
+                    if (retiringIndex >= 0) {
+                        persons[retiringIndex] = retiringRuler.copy(role = PersonRole.DYNAST)
+                    }
                 }
 
                 var successorDynastyId = successor.dynastyId
@@ -123,7 +135,11 @@ class PeopleEngine {
                     code = "RULER_SUCCEEDED",
                     actorIds = listOf(crowned.id, civilization.id),
                     locationId = crowned.settlementId,
-                    facts = mapOf("person" to crowned.name, "civilization" to civilization.name),
+                    facts = buildMap {
+                        put("person", crowned.name)
+                        put("civilization", civilization.name)
+                        if (retiringRuler != null) put("reason", "age_transition")
+                    },
                 )
             }
 
@@ -228,7 +244,7 @@ class PeopleEngine {
 
         val existing = persons.asSequence()
             .filter { it.civilizationId == civilization.id && it.isAlive && it.id != ruler.id }
-            .filter { it.ageYearsAt(tick) in 18..40 }
+            .filter { it.ageYearsAt(tick) in PeopleState.FEATURED_MIN_AGE..PeopleState.FEATURED_MAX_AGE }
             .filter { candidate -> relationships.none { it.kind == RelationshipKind.PARTNER && it.involves(candidate.id) } }
             .maxByOrNull { it.prestige + it.aptitude * 0.25 }
 
@@ -366,7 +382,11 @@ class PeopleEngine {
             .filter { it.civilizationId == civilizationId && it.isAlive && it.id != ruler.id }
             .filter { it.dynastyId != null && it.dynastyId == ruler.dynastyId }
             .sortedWith(
-                compareByDescending<NotablePerson> { if (it.ageYearsAt(tick) in 18..40) 2 else if (it.ageYearsAt(tick) >= 18) 1 else 0 }
+                compareByDescending<NotablePerson> {
+                    if (it.ageYearsAt(tick) in PeopleState.FEATURED_MIN_AGE..PeopleState.FEATURED_MAX_AGE) 2
+                    else if (it.ageYearsAt(tick) >= PeopleState.FEATURED_MIN_AGE) 1
+                    else 0
+                }
                     .thenByDescending { it.prestige }
                     .thenBy { it.id },
             )
@@ -449,7 +469,7 @@ class PeopleEngine {
         role: PersonRole,
         prestigeBase: Double,
     ): NotablePerson {
-        require(age in 0..40) { "New notable characters must be 40 or younger" }
+        require(age in 0..PeopleState.FEATURED_MAX_AGE) { "New notable characters must be 40 or younger" }
         return NotablePerson(
             id = id,
             name = personName(rng.nextLong()),
@@ -517,9 +537,12 @@ class PeopleEngine {
         val oldRuler = oldRulerId?.let { id -> persons.firstOrNull { it.id == id } }
         val dynastyId = oldRuler?.dynastyId
         val adults = persons.filter {
-            it.civilizationId == civilizationId && it.isAlive && it.ageYearsAt(tick) >= 18 && it.id != oldRulerId
+            it.civilizationId == civilizationId &&
+                it.isAlive &&
+                it.ageYearsAt(tick) >= PeopleState.FEATURED_MIN_AGE &&
+                it.id != oldRulerId
         }
-        val preferred = adults.filter { it.ageYearsAt(tick) <= 40 }
+        val preferred = adults.filter { it.ageYearsAt(tick) <= PeopleState.FEATURED_MAX_AGE }
         fun choose(pool: List<NotablePerson>): NotablePerson? =
             pool.filter { it.role == PersonRole.HEIR }.maxByOrNull { it.prestige }
                 ?: pool.filter { dynastyId != null && it.dynastyId == dynastyId }.maxByOrNull { it.prestige }
