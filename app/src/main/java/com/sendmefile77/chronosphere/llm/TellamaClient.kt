@@ -33,9 +33,9 @@ internal object TellamaRuntime {
 /**
  * Same-device client for Tellama's authenticated Ollama-compatible server.
  *
- * Chronosphere only talks to 127.0.0.1:11434. Tellama requires an API key even in same-phone mode;
- * every request therefore carries Authorization: Bearer <key>. The key is injected at runtime from
- * Chronosphere's private preferences and is never stored in game saves or source code.
+ * Chronosphere only talks to 127.0.0.1:11434. Tellama requires an API key for the server;
+ * every request carries Authorization: Bearer <key>. /api/chat is streaming-only in current
+ * Tellama releases, so responses are consumed as NDJSON until done=true.
  */
 internal class TellamaClient(
     private val baseUrl: String = "http://127.0.0.1:11434",
@@ -92,8 +92,7 @@ internal class TellamaClient(
             val model = status().model ?: return@withContext null
             val request = JSONObject()
                 .put("model", model)
-                .put("stream", false)
-                .put("format", "json")
+                .put("stream", true)
                 .put(
                     "messages",
                     JSONArray()
@@ -103,17 +102,13 @@ internal class TellamaClient(
                 .put(
                     "options",
                     JSONObject()
-                        .put("temperature", temperature.coerceIn(0.0, 1.2))
+                        .put("temperature", temperature.coerceIn(0.0, 2.0))
                         .put("num_predict", maxTokens.coerceIn(128, 900))
-                        .put("num_ctx", 4096),
+                        .put("top_p", 0.86),
                 )
 
             val started = System.currentTimeMillis()
-            val response = postJson("/api/chat", request, timeoutMillis) ?: return@withContext null
-            val content = response.optJSONObject("message")
-                ?.optString("content")
-                ?.trim()
-                .orEmpty()
+            val content = postChatNdjson("/api/chat", request, timeoutMillis).trim()
             if (content.isBlank()) return@withContext null
             TellamaCompletion(model, content, System.currentTimeMillis() - started)
         }
@@ -143,25 +138,49 @@ internal class TellamaClient(
         }
     }
 
-    private fun postJson(path: String, payload: JSONObject, timeoutMillis: Int): JSONObject? {
+    private fun postChatNdjson(path: String, payload: JSONObject, timeoutMillis: Int): String {
         val connection = open(path, "POST", timeoutMillis)
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         connection.doOutput = true
         return try {
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throwHttpError(path, code, text)
-            if (text.isBlank()) null else JSONObject(text)
+            if (code !in 200..299) {
+                val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throwHttpError(path, code, text)
+            }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).useLines(::collectChatNdjson)
         } finally {
             connection.disconnect()
         }
     }
 
+    internal fun collectChatNdjson(lines: Sequence<String>): String {
+        val content = StringBuilder()
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isBlank()) continue
+            val event = JSONObject(trimmed)
+            val error = event.optJSONObject("error")
+            if (error != null) {
+                val message = error.optString("message").ifBlank { "Tellama generation error" }
+                error(message)
+            }
+            event.optJSONObject("message")
+                ?.optString("content")
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(content::append)
+            if (event.optBoolean("done", false)) break
+        }
+        return content.toString()
+    }
+
     private fun throwHttpError(path: String, code: Int, body: String): Nothing {
         if (code == 401 || code == 403) {
             error("Tellama відхилила API-ключ. Створіть новий ключ у Tellama → Server і збережіть його в Хроносфері")
+        }
+        if (code == 503) {
+            error("Tellama runtime зайнятий або модель ще завантажується")
         }
         error("Tellama $path: HTTP $code ${body.take(120)}")
     }
