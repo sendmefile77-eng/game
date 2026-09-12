@@ -65,8 +65,6 @@ fun WorldMapView(
 
         drawRect(Color(0xFF06131D))
 
-        // Base terrain. Elevation, moisture and temperature tint each cell so the map reads as
-        // geography first and a simulation overlay second.
         world.tiles.forEach { tile ->
             drawRect(
                 color = tile.renderColor(),
@@ -75,8 +73,6 @@ fun WorldMapView(
             )
         }
 
-        // Relief shading. A small highlight/shadow on meaningful height changes gives mountain
-        // chains and plateaus volume without adding raster assets or slowing the simulation.
         world.tiles.forEachIndexed { index, tile ->
             if (!tile.biome.isLand()) return@forEachIndexed
             if (tile.x + 1 < world.width) {
@@ -109,8 +105,6 @@ fun WorldMapView(
             }
         }
 
-        // Two-tone coastline: a dark ocean-side edge plus a pale land edge. It remains legible
-        // under territory tinting and avoids the old raw-pixel look.
         world.tiles.forEachIndexed { index, tile ->
             val land = tile.biome.isLand()
             fun coastSegment(start: Offset, end: Offset) {
@@ -170,8 +164,6 @@ fun WorldMapView(
             }
         }
 
-        // Geographic grid is intentionally very faint; it provides scale without looking like a
-        // debug overlay.
         for (x in 12 until world.width step 12) {
             drawLine(Color.White.copy(alpha = 0.025f), Offset(x * cellW, 0f), Offset(x * cellW, size.height), 0.55f)
         }
@@ -179,7 +171,6 @@ fun WorldMapView(
             drawLine(Color.White.copy(alpha = 0.025f), Offset(0f, y * cellH), Offset(size.width, y * cellH), 0.55f)
         }
 
-        // Rivers are connected centre-to-centre rather than painted as blue square cells.
         if (rivers.isNotEmpty()) {
             val riverSet = rivers.toHashSet()
             val directions = listOf(1 to 0, 0 to 1)
@@ -216,12 +207,21 @@ fun WorldMapView(
             drawCircle(Color.White.copy(alpha = 0.90f), (radius * 0.28f).coerceAtLeast(1f), center)
 
             if (radius >= 5.2f) {
-                drawLine(Color.White.copy(alpha = 0.58f), center.copy(x = center.x - radius * 0.55f), center.copy(x = center.x + radius * 0.55f), 0.75f)
-                drawLine(Color.White.copy(alpha = 0.58f), center.copy(y = center.y - radius * 0.55f), center.copy(y = center.y + radius * 0.55f), 0.75f)
+                drawLine(
+                    Color.White.copy(alpha = 0.58f),
+                    Offset(center.x - radius * 0.55f, center.y),
+                    Offset(center.x + radius * 0.55f, center.y),
+                    0.75f,
+                )
+                drawLine(
+                    Color.White.copy(alpha = 0.58f),
+                    Offset(center.x, center.y - radius * 0.55f),
+                    Offset(center.x, center.y + radius * 0.55f),
+                    0.75f,
+                )
             }
         }
 
-        // Inner and outer frame make the map feel like an intentional game surface.
         drawRect(Color.Black.copy(alpha = 0.46f), style = Stroke(width = 3f))
         drawRect(Color.White.copy(alpha = 0.14f), style = Stroke(width = 1f))
     }
