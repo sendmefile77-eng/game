@@ -76,7 +76,7 @@ class HistoryTimeline {
                     historicalMemory = initialMemory,
                 ),
             ),
-        )
+        ).also(::publishActiveContext)
     }
 
     fun syncActive(
@@ -112,7 +112,7 @@ class HistoryTimeline {
                     )
                 } else branch
             },
-        )
+        ).also(::publishActiveContext)
     }
 
     fun checkpoint(workspace: HistoryWorkspace, label: String? = null): HistoryWorkspace {
@@ -131,7 +131,7 @@ class HistoryTimeline {
             historicalMemory = branch.historicalMemory,
             pendingInterventions = branch.pendingInterventions,
         )
-        return synced.copy(checkpoints = synced.checkpoints + checkpoint)
+        return synced.copy(checkpoints = synced.checkpoints + checkpoint).also(::publishActiveContext)
     }
 
     fun fork(workspace: HistoryWorkspace, name: String? = null): HistoryWorkspace {
@@ -152,7 +152,7 @@ class HistoryTimeline {
             pendingInterventions = parent.pendingInterventions,
         )
         PendingInterventionRegistry.activate(branch.state.worldSeed, id, branch.pendingInterventions)
-        return synced.copy(activeBranchId = id, branches = synced.branches + branch)
+        return synced.copy(activeBranchId = id, branches = synced.branches + branch).also(::publishActiveContext)
     }
 
     fun switchTo(workspace: HistoryWorkspace, branchId: String): HistoryWorkspace {
@@ -160,7 +160,7 @@ class HistoryTimeline {
         val synced = capturePending(workspace)
         val target = synced.branches.first { it.id == branchId }
         PendingInterventionRegistry.activate(target.state.worldSeed, target.id, target.pendingInterventions)
-        return synced.copy(activeBranchId = branchId)
+        return synced.copy(activeBranchId = branchId).also(::publishActiveContext)
     }
 
     fun restoreCheckpoint(workspace: HistoryWorkspace, checkpointId: String): HistoryWorkspace {
@@ -189,6 +189,7 @@ class HistoryTimeline {
             synced.activeBranchId,
             checkpoint.pendingInterventions,
         )
+        publishActiveContext(restored)
         return restored
     }
 
@@ -209,6 +210,10 @@ class HistoryTimeline {
                 if (current.id == branch.id) current.copy(pendingInterventions = pending) else current
             },
         )
+    }
+
+    private fun publishActiveContext(workspace: HistoryWorkspace) {
+        ActiveHistoricalContextRegistry.activate(workspace.activeBranch)
     }
 
     companion object { const val ROOT_BRANCH_ID = "branch-0" }
