@@ -27,6 +27,9 @@ internal data class PlayableSimulationState(
     val evolution: EvolutionState,
 )
 
+internal class PendingChronicleDecisionException(val titleUk: String) :
+    IllegalStateException("Спочатку прийміть рішення у Хроніці: $titleUk")
+
 /** Runs the causal playable simulation slice without any Compose/UI dependency. */
 internal class PlayableSimulationRunner(
     private val worldMap: WorldMap,
@@ -43,6 +46,17 @@ internal class PlayableSimulationRunner(
     ): PlayableSimulationState {
         require(months > 0)
 
+        ChronicleDecisionCatalog.latestUnresolved(
+            currentWorld.recentEvents,
+            currentPeople,
+            currentEconomy,
+        )?.let { decision ->
+            throw PendingChronicleDecisionException(decision.titleUk)
+        }
+
+        val beforeSnapshots = currentWorld.civilizations.mapNotNull { civilization ->
+            GameplayLoop.snapshot(currentWorld, civilization.id)
+        }
         val civilizationEngine = CivilizationEngine(worldMap, resources)
         val economyEngine = EconomyEngine(worldMap, resources)
         val evolutionEngine = EvolutionEngine(worldMap)
@@ -59,8 +73,18 @@ internal class PlayableSimulationRunner(
                 if (option.sourceEventId in alreadyResolved || state.civilizations.none { it.id == option.targetCivilizationId }) {
                     state
                 } else {
+                    val paidState = if (option.sourceEventId.startsWith("player-turn-")) {
+                        GameplayLoop.chargeDomesticCost(
+                            state = state,
+                            civilizationId = option.targetCivilizationId,
+                            kind = option.kind,
+                            strength = option.strength,
+                        )
+                    } else {
+                        state
+                    }
                     interventionEngine.apply(
-                        state,
+                        paidState,
                         InterventionCommand(
                             id = pending.commandId,
                             kind = option.kind,
@@ -69,6 +93,7 @@ internal class PlayableSimulationRunner(
                             sourceEventId = option.sourceEventId,
                             choiceId = option.id,
                             choiceLabel = option.titleUk,
+                            targetCivilizationId = option.counterpartCivilizationId,
                         ),
                     )
                 }
@@ -130,7 +155,24 @@ internal class PlayableSimulationRunner(
                 economy = economyAtTick
                 evolution = evolutionAtTick.copy(tick = worldState.tick)
                 remaining -= step
+
+                // Long fast-forward automatically pauses on the first new meaningful decision.
+                if (remaining > 0 && ChronicleDecisionCatalog.latestUnresolved(
+                        worldState.recentEvents,
+                        people,
+                        economy,
+                    ) != null
+                ) {
+                    remaining = 0
+                }
             }
+
+            val actualMonths = (worldState.tick - currentWorld.tick).toInt().coerceAtLeast(1)
+            GameplayTurnReportStore.replace(
+                beforeSnapshots.associate { snapshot ->
+                    snapshot.civilizationId to GameplayLoop.report(snapshot, worldState, actualMonths)
+                },
+            )
 
             return PlayableSimulationState(
                 world = worldState,
