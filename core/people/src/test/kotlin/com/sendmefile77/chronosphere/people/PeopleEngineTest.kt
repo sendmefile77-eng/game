@@ -18,14 +18,38 @@ class PeopleEngineTest {
     }
 
     @Test
-    fun initializeAtLateTickKeepsIntendedAdultAges() {
+    fun initializeAtLateTickKeepsNewCharactersAtOrBelowForty() {
         val world = sampleWorld(2_400L)
         val state = engine.initialize(world)
         state.persons.forEach { person ->
-            assertTrue(person.ageYearsAt(world.tick) in 0..90)
+            assertTrue(person.ageYearsAt(world.tick) in 0..40)
         }
         assertTrue(state.dynasties.all { it.foundedTick == world.tick })
         assertTrue(state.relationships.all { it.startedTick == world.tick })
+    }
+
+    @Test
+    fun stableSexAssignmentIsApproximatelyNinetyPercentFemale() {
+        val sample = (0 until 1_000).map { BiologicalSex.fromStableKey("person-$it") }
+        val femaleShare = sample.count { it == BiologicalSex.FEMALE } / sample.size.toDouble()
+        assertTrue(femaleShare in 0.88..0.92)
+        assertEquals(
+            BiologicalSex.fromStableKey("person-77"),
+            BiologicalSex.fromStableKey("person-77"),
+        )
+    }
+
+    @Test
+    fun featuredPeopleAreAdultsNoOlderThanForty() {
+        val initialWorld = sampleWorld(0L)
+        val initial = engine.initialize(initialWorld)
+        val result = engine.advance(initial, sampleWorld(3_600L)).state
+
+        result.civilizationsOrIdsFromTest().forEach { civilizationId ->
+            result.featuredPeople(civilizationId, result.tick).forEach { person ->
+                assertTrue(person.ageYearsAt(result.tick) in 18..40)
+            }
+        }
     }
 
     @Test
@@ -74,6 +98,9 @@ class PeopleEngineTest {
             }
         }
     }
+
+    private fun PeopleState.civilizationsOrIdsFromTest(): List<String> =
+        persons.map { it.civilizationId }.distinct()
 
     private fun sampleWorld(tick: Long): LivingPlanetState {
         val a = Civilization("civ-a", "Ардан", 2_000L, 0.68, 0.15, 80.0, setOf("coastal", "warm-climate"))
