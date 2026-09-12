@@ -65,10 +65,13 @@ internal fun HordeSceneView(
                 bytes = prepared.bytes,
                 model = prepared.model,
                 usedReference = prepared.usedReference,
+                provider = prepared.provider,
+                width = prepared.actualWidth ?: request.width,
+                height = prepared.actualHeight ?: request.height,
             )
         } catch (cancelled: CancellationException) {
-            // The screen observer may be cancelled when the user changes tabs. The generation itself
-            // is owned by HordeGenerationCoordinator and intentionally keeps running in background.
+            // The screen observer may be cancelled when the user changes tabs. The process-level
+            // coordinator intentionally keeps the Local Dream/Horde job running in background.
             throw cancelled
         } catch (error: Throwable) {
             state = HordeUiState.Failed(error.message ?: "невідома помилка")
@@ -90,9 +93,9 @@ internal fun HordeSceneView(
                     )
                     Text(
                         text = if (request.qualityPriority) {
-                            "AI Horde · якісний кадр генерується у фоні…"
+                            "Local Dream → AI Horde · якісний кадр генерується у фоні…"
                         } else {
-                            "AI Horde · генерується у фоні…"
+                            "Local Dream → AI Horde · генерується у фоні…"
                         },
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -145,7 +148,8 @@ internal fun HordeSceneView(
                     ) {
                         Text(
                             text = buildString {
-                                append("AI Horde · ${request.width}×${request.height}")
+                                append(current.provider.displayNameUk)
+                                append(" · ${current.width}×${current.height}")
                                 current.model?.let { append(" · $it") }
                                 if (current.usedReference) append(" · ref")
                                 append(" · торкніться для перегляду")
@@ -222,7 +226,7 @@ private fun FailureRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "AI Horde · ${message.take(110)}",
+            text = "Генерація · ${message.take(110)}",
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -237,6 +241,9 @@ private sealed interface HordeUiState {
         val bytes: ByteArray,
         val model: String?,
         val usedReference: Boolean,
+        val provider: ImageGenerationProvider,
+        val width: Int,
+        val height: Int,
     ) : HordeUiState
     data class Failed(val message: String) : HordeUiState
 }
