@@ -49,6 +49,7 @@ internal fun HordeSceneView(
     val references = remember(context) { HordeCharacterReferenceStore(File(context.filesDir, "horde-character-references")) }
     val client = remember { HordeClient() }
     var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
+    var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
     var state by remember(request.cacheKey) { mutableStateOf<HordeUiState>(HordeUiState.Loading) }
 
     LaunchedEffect(request.cacheKey, retryNonce) {
@@ -168,7 +169,7 @@ internal fun HordeSceneView(
                     )
                 } else {
                     Surface(
-                        modifier = modifier,
+                        modifier = modifier.clickable { showFullscreen = true },
                         shape = RoundedCornerShape(14.dp),
                         tonalElevation = 2.dp,
                     ) {
@@ -189,6 +190,7 @@ internal fun HordeSceneView(
                                 append("AI Horde")
                                 current.model?.let { append(" · $it") }
                                 if (current.usedReference) append(" · ref")
+                                append(" · торкніться для перегляду")
                             },
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
@@ -207,6 +209,13 @@ internal fun HordeSceneView(
                                 retryNonce += 1
                             }
                         }
+                    }
+                    if (showFullscreen) {
+                        HordeFullscreenImageDialog(
+                            bitmap = bitmap,
+                            contentDescription = "Згенерований портрет персонажа",
+                            onDismiss = { showFullscreen = false },
+                        )
                     }
                 }
             }
