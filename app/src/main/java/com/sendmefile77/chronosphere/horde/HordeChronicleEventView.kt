@@ -54,10 +54,16 @@ internal fun HordeChronicleEventView(
                 timeoutMillis = timeout,
                 pollIntervalMillis = 3_000L,
             )
-            state = ChronicleHordeUiState.Ready(prepared.bytes, prepared.model)
+            state = ChronicleHordeUiState.Ready(
+                bytes = prepared.bytes,
+                model = prepared.model,
+                provider = prepared.provider,
+                width = prepared.actualWidth ?: request.width,
+                height = prepared.actualHeight ?: request.height,
+            )
         } catch (cancelled: CancellationException) {
             // Changing tabs only detaches this observer; the process-level coordinator keeps the
-            // Horde job alive and stores its result in cache for the next visit.
+            // Local Dream/Horde job alive and stores its result in cache for the next visit.
             throw cancelled
         } catch (error: Throwable) {
             state = ChronicleHordeUiState.Failed(error.message ?: "невідома помилка")
@@ -78,9 +84,9 @@ internal fun HordeChronicleEventView(
                     ) {
                         Text(
                             if (request.qualityPriority) {
-                                "AI Horde · якісний кадр події генерується у фоні…"
+                                "Local Dream → AI Horde · якісний кадр події генерується у фоні…"
                             } else {
-                                "AI Horde · ілюстрація події генерується у фоні…"
+                                "Local Dream → AI Horde · ілюстрація події генерується у фоні…"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -122,7 +128,8 @@ internal fun HordeChronicleEventView(
                     ) {
                         Text(
                             text = buildString {
-                                append("AI Horde · ${request.width}×${request.height}")
+                                append(current.provider.displayNameUk)
+                                append(" · ${current.width}×${current.height}")
                                 current.model?.let { append(" · $it") }
                                 append(" · торкніться для перегляду")
                             },
@@ -182,7 +189,7 @@ private fun ChronicleFailure(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    "AI Horde · ${message.take(100)}",
+                    "Генерація · ${message.take(100)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -199,6 +206,12 @@ private fun ChronicleFailure(
 
 private sealed interface ChronicleHordeUiState {
     data object Loading : ChronicleHordeUiState
-    data class Ready(val bytes: ByteArray, val model: String?) : ChronicleHordeUiState
+    data class Ready(
+        val bytes: ByteArray,
+        val model: String?,
+        val provider: ImageGenerationProvider,
+        val width: Int,
+        val height: Int,
+    ) : ChronicleHordeUiState
     data class Failed(val message: String) : ChronicleHordeUiState
 }
