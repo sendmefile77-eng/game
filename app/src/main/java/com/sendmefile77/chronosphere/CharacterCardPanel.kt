@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -38,7 +39,8 @@ fun CharacterCardPanel(
     adultVisual: AdultVisualSceneDescriptor? = null,
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
-    onToggleWardrobe: () -> Unit,
+    adultActionSequence: Int = 0,
+    onAdultAction: () -> Unit,
     controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
@@ -70,6 +72,18 @@ fun CharacterCardPanel(
             )?.let { request ->
                 adultSceneRuntime.resolveCharacterVisual(request, undressed = true)
             }
+        } else {
+            null
+        }
+    }
+    val actionPlan = remember(person.id, tick, people, adultActionSequence, age) {
+        if (age >= 18 && adultActionSequence > 0) {
+            AdultActionPlanner.plan(
+                person = person,
+                tick = tick,
+                people = people,
+                sequence = adultActionSequence,
+            )
         } else {
             null
         }
@@ -123,6 +137,8 @@ fun CharacterCardPanel(
                 visualNumeric = descriptor?.numeric ?: emptyMap(),
                 technologyEra = technologyEra,
                 adultVisual = effectiveAdultVisual,
+                actionPlan = actionPlan,
+                modifier = Modifier.fillMaxWidth().height(if (age >= 18) 420.dp else 220.dp),
             )
 
             if (dynasty != null) {
@@ -176,8 +192,8 @@ fun CharacterCardPanel(
             }
 
             if (age >= 18) {
-                Button(onClick = onToggleWardrobe, enabled = controlsEnabled) {
-                    Text(if (scene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Змінити вигляд")
+                Button(onClick = onAdultAction, enabled = controlsEnabled) {
+                    Text("Дія")
                 }
             }
         }
