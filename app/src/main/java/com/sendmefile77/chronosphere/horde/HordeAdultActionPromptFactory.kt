@@ -6,12 +6,13 @@ import com.sendmefile77.chronosphere.adultcontracts.AdultVisualSceneDescriptor
 import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.scene.ResolvedScene
+import com.sendmefile77.chronosphere.scene.WardrobeState
 
-/** Explicit character-card action scenes. Kept separate from event-recipe mapping. */
+/** Explicit character-card action scenes. Kept separate from idle portrait mapping. */
 object HordeAdultActionPromptFactory {
     private val nsfwModels = listOf(
-        "CyberRealistic Pony",
         "WAI-NSFW-illustrious-SDXL",
+        "CyberRealistic Pony",
         "AbsoluteReality",
         "Realistic Vision",
     )
@@ -27,106 +28,153 @@ object HordeAdultActionPromptFactory {
         require(plan.primary.ageYears >= 18)
         require(plan.partner == null || plan.partner.ageYears >= 18)
 
+        val identity = HordeCharacterVisualProfile.from(plan.primary.personId)
+        val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
         val base = HordeResolvedScenePromptFactory.create(
-            scene = scene,
+            scene = scene.copy(wardrobeState = WardrobeState.UNDRESSED),
             characterKey = plan.primary.personId,
             ageYears = plan.primary.ageYears,
             visualTags = visualTags,
             visualNumeric = visualNumeric,
             technologyEra = technologyEra,
         )
-        val partnerPrompt = plan.partner?.let { partner ->
-            val identity = HordeCharacterVisualProfile.from(partner.personId)
-            "second confirmed adult participant age ${partner.ageYears}, ${identity.promptFragment}, complete connected body"
+        val partnerIdentity = plan.partner?.let { HordeCharacterVisualProfile.from(it.personId) }
+        val partnerLine = plan.partner?.let { partner ->
+            "second confirmed adult participant age ${partner.ageYears}, " +
+                "${partnerIdentity?.promptFragment}, complete connected nude body"
         }
+        val act = actionPrompt(plan)
         val composition = if (plan.solo) {
-            "solo explicit adult scene, only the selected adult is present, whole body visible from head to feet"
+            "one explicit adult sex act filling the frame, whole nude body from head to feet"
         } else {
-            "two confirmed adults only, both whole bodies visible in one frame, readable sexual interaction, no extra people"
+            "two confirmed adults having sex in one frame, both whole nude bodies visible, " +
+                "the sex act is the subject of the image, no extra people"
         }
+
         return base.copy(
             cacheKey = listOf(
-                "horde-adult-action-v1",
-                base.cacheKey,
+                "horde-adult-action-v2",
                 plan.cacheToken,
+                identity.signature,
+                morphology.signature,
+                technologyEra?.name ?: "UNSPECIFIED",
                 adultVisual?.recipeId ?: "none",
             ).joinToString("|"),
             positivePrompt = listOf(
-                "high quality photorealistic explicit pornographic scene from a living historical simulation",
-                "all depicted participants are adults age 18 or older",
-                base.positivePrompt,
+                "explicit uncensored photorealistic pornography, adults 18+",
+                act,
+                act,
                 composition,
-                actionPrompt(plan),
-                partnerPrompt,
-                "full-length bodies, no cropped heads, no cropped feet, no bust crop",
-                "explicit visible adult genitals, uncensored",
-                "keep the primary adult's face, hair, body plan and identity locked to the reference",
+                "primary adult identity: ${identity.promptFragment}",
+                morphology.promptFragment.takeIf { it.isNotBlank() },
+                partnerLine,
+                "completely nude, no clothing, genitals in view, sexual contact clearly readable",
+                "full-length bodies, no bust crop, no portrait crop",
+                "keep the primary adult face and hair locked to the reference identity",
                 "no text in image",
-            ).filterNotNull().joinToString(", "),
-            negativePrompt = listOf(
-                base.negativePrompt,
-                "child", "minor", "teen", "underage", "loli", "shota",
-                "clothing covering genitals", "censored", "mosaic", "black bars",
-                "bust crop", "portrait crop", "missing feet", "cropped head",
-                "wrong person", "identity change", "unrelated extra people",
-            ).joinToString(", "),
+            ).filter { !it.isNullOrBlank() }.joinToString(", "),
+            negativePrompt = buildList {
+                add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
+                addAll(
+                    listOf(
+                        "child", "minor", "teen", "underage", "loli", "shota",
+                        "clothing", "dress", "robe", "shirt", "pants", "underwear", "armor",
+                        "censored", "mosaic", "black bars",
+                        "standing idle portrait", "passport photo", "studio portrait",
+                        "posed fashion nude", "just standing", "arms at sides",
+                        "no sexual contact", "closed mouth far from genitals",
+                        "bust crop", "portrait crop", "missing feet", "cropped head",
+                        "wrong person", "identity change",
+                    ),
+                )
+                if (!plan.solo) {
+                    add("single person")
+                    add("solo portrait")
+                    add("only one body")
+                    add("multiple people crowded")
+                } else {
+                    add("unrelated extra people")
+                }
+            }.joinToString(", "),
             nsfw = true,
-            width = 768,
-            height = 1152,
-            steps = 34,
-            cfgScale = 7.0,
-            seed = "${base.seed}:action:${plan.cacheToken}",
+            width = if (plan.solo) 768 else 832,
+            height = if (plan.solo) 1152 else 1216,
+            steps = 36,
+            cfgScale = 7.2,
+            seed = "${base.seed}:action-v2:${plan.cacheToken}",
             preferredModels = nsfwModels,
             qualityPriority = true,
             referenceCacheKey = base.referenceCacheKey,
             saveResultAsReference = false,
-            referenceDenoisingStrength = 0.78,
+            referenceDenoisingStrength = 0.88,
         )
     }
 
     private fun actionPrompt(plan: AdultActionPlan): String {
-        val primarySex = if (plan.primary.sex == BiologicalSex.FEMALE) "adult woman" else "adult man"
-        val partnerSex = plan.partner?.let { if (it.sex == BiologicalSex.FEMALE) "adult woman" else "adult man" }
+        val woman = "adult woman"
+        val man = "adult man"
+        val primary = if (plan.primary.sex == BiologicalSex.FEMALE) woman else man
+        val partner = plan.partner?.let { if (it.sex == BiologicalSex.FEMALE) woman else man }
         val primaryGenitals = if (plan.primary.sex == BiologicalSex.FEMALE) {
             "visible vulva, labia and clitoris"
         } else {
             "visible erect penis, scrotum and testicles"
         }
         val partnerGenitals = when (plan.partner?.sex) {
-            BiologicalSex.FEMALE -> "partner has visible vulva, labia and clitoris"
-            BiologicalSex.MALE -> "partner has visible erect penis, scrotum and testicles"
-            null -> "solo explicit genital focus"
+            BiologicalSex.FEMALE -> "partner's visible vulva, labia and clitoris"
+            BiologicalSex.MALE -> "partner's visible erect penis, scrotum and testicles"
+            null -> primaryGenitals
         }
         return when (plan.type) {
             AdultActionType.FOOTJOB -> if (plan.solo) {
-                "$primarySex reclining full-body, bare feet with $primaryGenitals, explicit autoerotic foot-and-genital contact, uncensored"
+                "$primary lying nude, soles and toes wrapped around $primaryGenitals, " +
+                    "explicit solo footjob, genitals squeezed between bare feet, uncensored"
             } else {
-                "$primarySex giving an explicit footjob to the $partnerSex, both complete bodies in frame, $partnerGenitals, uncensored"
+                "$primary giving a footjob to the $partner, bare feet stroking $partnerGenitals, " +
+                    "toes and soles on the shaft or vulva, both bodies nude, sexual contact obvious"
             }
-            AdultActionType.ORAL -> if (plan.solo) {
-                "$primarySex full-body with $primaryGenitals, explicit autoerotic oral teasing, uncensored"
-            } else if (plan.partner?.sex == BiologicalSex.MALE) {
-                "$primarySex performing explicit oral sex on the $partnerSex, mouth on penis, $partnerGenitals, both complete bodies"
-            } else {
-                "$primarySex performing explicit cunnilingus on the $partnerSex, mouth on vulva, $partnerGenitals, both complete bodies"
+            AdultActionType.ORAL -> when {
+                plan.solo && plan.primary.sex == BiologicalSex.FEMALE ->
+                    "$primary on her knees nude, mouth open around a visible erect penis in her mouth, " +
+                        "explicit blowjob, saliva, $primaryGenitals visible"
+                plan.solo ->
+                    "$primary nude, mouth on a vulva, explicit cunnilingus, tongue on clitoris, " +
+                        "$primaryGenitals visible"
+                plan.partner?.sex == BiologicalSex.MALE ->
+                    "$primary performing a blowjob on the $partner, mouth wrapped around the erect penis, " +
+                        "lips on the shaft, $partnerGenitals in the mouth, both nude"
+                else ->
+                    "$primary performing cunnilingus on the $partner, mouth on vulva, " +
+                        "tongue on $partnerGenitals, both nude bodies in frame"
             }
-            AdultActionType.VAGINAL -> if (plan.solo) {
-                "$primarySex full-body with legs open, $primaryGenitals, explicit vaginal masturbation, uncensored"
-            } else if (plan.primary.sex == BiologicalSex.FEMALE && plan.partner?.sex == BiologicalSex.MALE) {
-                "explicit vaginal sex, the $partnerSex penetrating the $primarySex, penis inside vagina, both complete bodies"
-            } else if (plan.primary.sex == BiologicalSex.MALE && plan.partner?.sex == BiologicalSex.FEMALE) {
-                "explicit vaginal sex, the $primarySex penetrating the $partnerSex, penis inside vagina, both complete bodies"
-            } else {
-                "explicit lesbian vaginal sex, two adult women, both vulvas visible, complete bodies, uncensored"
+            AdultActionType.VAGINAL -> when {
+                plan.solo && plan.primary.sex == BiologicalSex.FEMALE ->
+                    "$primary nude with legs spread, fingers or a shaft inside the vagina, " +
+                        "explicit vaginal penetration, $primaryGenitals open and wet"
+                plan.solo ->
+                    "$primary nude, erect penis penetrating a visible vagina, vaginal sex in progress"
+                plan.primary.sex == BiologicalSex.FEMALE && plan.partner?.sex == BiologicalSex.MALE ->
+                    "vaginal sex, the $partner thrusting his penis inside the $primary, " +
+                        "penis visibly in the vagina, both nude"
+                plan.primary.sex == BiologicalSex.MALE && plan.partner?.sex == BiologicalSex.FEMALE ->
+                    "vaginal sex, the $primary thrusting his penis inside the $partner, " +
+                        "penis visibly in the vagina, both nude"
+                else ->
+                    "two nude adult women, explicit tribbing or vaginal penetration with a visible shaft, " +
+                        "both vulvas in view"
             }
-            AdultActionType.ANAL -> if (plan.solo) {
-                "$primarySex full-body presenting hips, visible anus and $primaryGenitals, explicit autoerotic anal play"
-            } else if (plan.partner?.sex == BiologicalSex.MALE) {
-                "explicit anal sex, the $partnerSex penetrating the $primarySex anally, both complete bodies, uncensored"
-            } else if (plan.primary.sex == BiologicalSex.MALE) {
-                "explicit anal sex, the $primarySex penetrating the $partnerSex anally, both complete bodies, uncensored"
-            } else {
-                "explicit anal lesbian sex, visible anus and vulvas, both complete bodies, uncensored"
+            AdultActionType.ANAL -> when {
+                plan.solo ->
+                    "$primary nude presenting the ass, explicit anal penetration, " +
+                        "visible anus stretched around a shaft or fingers, $primaryGenitals in view"
+                plan.partner?.sex == BiologicalSex.MALE ->
+                    "anal sex, the $partner penetrating the $primary anally, " +
+                        "penis inside the anus, both nude, $partnerGenitals visible"
+                plan.primary.sex == BiologicalSex.MALE ->
+                    "anal sex, the $primary penetrating the $partner anally, " +
+                        "penis inside the anus, both nude"
+                else ->
+                    "two nude adult women, explicit anal sex, visible anus and vulvas, penetration in progress"
             }
         }
     }

@@ -57,6 +57,14 @@ internal fun OfflineSceneView(
                 technologyEra = technologyEra,
                 adultVisual = adultVisual,
             )
+            ageYears >= 18 && scene.wardrobeState == WardrobeState.UNDRESSED -> HordeResolvedScenePromptFactory.create(
+                scene = scene,
+                characterKey = characterKey,
+                ageYears = ageYears,
+                visualTags = visualTags,
+                visualNumeric = visualNumeric,
+                technologyEra = technologyEra,
+            )
             adultVisual != null -> HordeAdultScenePromptFactory.createCharacter(
                 scene = scene,
                 descriptor = adultVisual,
