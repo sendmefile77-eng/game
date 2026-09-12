@@ -111,7 +111,8 @@ internal object HordeGenerationCoordinator {
 
     fun retryNonce(cacheKey: String): Int = retryNonceByCacheKey[cacheKey] ?: 0
 
-    fun nextRetryNonce(cacheKey: String): Int = retryNonceByCacheKey.merge(cacheKey, 1, Int::plus) ?: 1
+    fun nextRetryNonce(cacheKey: String): Int =
+        retryNonceByCacheKey.merge(cacheKey, 1) { oldValue, increment -> oldValue + increment } ?: 1
 
     fun invalidate(filesDir: File, cacheKey: String) {
         preparedByCacheKey.remove(cacheKey)
