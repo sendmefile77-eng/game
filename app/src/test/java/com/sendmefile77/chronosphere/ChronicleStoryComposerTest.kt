@@ -3,7 +3,6 @@ package com.sendmefile77.chronosphere
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.textgen.ChronicleTextGenerator
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,15 +39,16 @@ class ChronicleStoryComposerTest {
             ),
         )
 
-        val story = ChronicleStoryComposer.compose(
-            events = events,
-            civilizationNames = mapOf("civ-1" to "Нері"),
-            textGenerator = textGenerator,
+        val story = requireNotNull(
+            ChronicleStoryComposer.compose(
+                events = events,
+                civilizationNames = mapOf("civ-1" to "Нері"),
+                textGenerator = textGenerator,
+            ),
         )
 
-        assertNotNull(story)
         val text = buildString {
-            append(story!!.title).append(' ')
+            append(story.title).append(' ')
             append(story.lead).append(' ')
             append(story.paragraphs.joinToString(" ")).append(' ')
             append(story.beats.joinToString(" ") { it.title + " " + it.summary })
@@ -67,11 +67,13 @@ class ChronicleStoryComposerTest {
             socialEvent("social-2", 120L, "orgy"),
             socialEvent("social-3", 126L, "bondage_rite"),
         )
-        val story = ChronicleStoryComposer.compose(
-            events = events,
-            civilizationNames = mapOf("civ-1" to "Нері"),
-            textGenerator = textGenerator,
-        )!!
+        val story = requireNotNull(
+            ChronicleStoryComposer.compose(
+                events = events,
+                civilizationNames = mapOf("civ-1" to "Нері"),
+                textGenerator = textGenerator,
+            ),
+        )
 
         assertTrue("burst should be summarized rather than spammed", story.beats.size <= 2)
     }
