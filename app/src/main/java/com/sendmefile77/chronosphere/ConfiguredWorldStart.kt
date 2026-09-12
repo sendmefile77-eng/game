@@ -56,13 +56,46 @@ internal fun createConfiguredWorldStart(
     )
     val people = WorldSetupApplier.applyPeople(peopleEngine.initialize(configuredWorld), setup)
     val economy = EconomyEngine(map, resources).initialize(configuredWorld)
-    val evolution = WorldSetupApplier.applyEvolution(
+    val configuredEvolution = WorldSetupApplier.applyEvolution(
         EvolutionEngine(map).initialize(configuredWorld),
         configuredWorld,
         setup,
     )
+    val evolution = makeDistinctConfiguredRacesIndependent(configuredEvolution, configuredWorld, setup)
     return ConfiguredWorldStart(setup, session, people, economy, evolution)
 }
+
+private fun makeDistinctConfiguredRacesIndependent(
+    state: EvolutionState,
+    world: com.sendmefile77.chronosphere.civilization.LivingPlanetState,
+    setup: WorldSetup,
+): EvolutionState {
+    val civs = world.civilizations.sortedBy { civilizationOrdinal(it.id) }
+    val tribeByCiv = civs.mapIndexed { index, civ -> civ.id to setup.tribes[index] }.toMap()
+    val independentLineages = state.populations.mapNotNull { population ->
+        val settlement = world.settlements.firstOrNull { it.id == population.settlementId } ?: return@mapNotNull null
+        val tribe = tribeByCiv[settlement.civilizationId] ?: return@mapNotNull null
+        if (tribe.race !in INDEPENDENT_START_RACES) return@mapNotNull null
+        population.lineageId
+    }.toSet()
+    if (independentLineages.isEmpty()) return state
+    return state.copy(
+        lineages = state.lineages.map { lineage ->
+            if (lineage.id !in independentLineages) lineage else lineage.copy(
+                parentLineageId = null,
+                generation = 0,
+                tags = (lineage.tags - "human_derived") + "independent_origin",
+            )
+        },
+    )
+}
+
+private val INDEPENDENT_START_RACES = setOf(
+    TribeRace.FURRED,
+    TribeRace.TAILED,
+    TribeRace.FOUR_ARMED,
+    TribeRace.SCALED,
+)
 
 private fun repositionStartingSettlements(
     settlements: List<Settlement>,
