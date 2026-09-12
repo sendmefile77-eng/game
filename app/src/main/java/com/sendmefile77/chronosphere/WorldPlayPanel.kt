@@ -1,16 +1,20 @@
 package com.sendmefile77.chronosphere
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,7 +66,41 @@ internal fun WorldPlayPanel(
         economy = economyState,
         pendingDecisionTitle = pendingDecisionTitle,
     )
+    val neighbors = briefing.neighbors
     var showEvolution by remember(civilization.id) { mutableStateOf(false) }
+    var actionNonce by remember(session.state.tick) { mutableIntStateOf(0) }
+    var selectedCounterpartId by remember(civilization.id, session.state.tick, civilizationCount) {
+        mutableStateOf(GameSituation.defaultCounterpartId(session.state, civilization.id))
+    }
+    val queuedAction = remember(session.state.tick, actionNonce) { GameplayLoop.queuedAction(session.state) }
+    val directActionSpent = GameplayLoop.actionSpent(session.state)
+    val storyChoiceQueued = session.state.recentEvents.any { ChronicleDecisionMailbox.contains(it.id) }
+    val hasPendingDecision = pendingDecisionTitle != null
+    val turnReport = GameplayTurnReportStore.latestFor(civilization.id)
+    val selectedCounterpart = neighbors.firstOrNull { it.civilizationId == selectedCounterpartId }
+        ?: neighbors.firstOrNull()
+    if (selectedCounterpart != null && selectedCounterpartId != selectedCounterpart.civilizationId) {
+        selectedCounterpartId = selectedCounterpart.civilizationId
+    }
+
+    fun queueAction(
+        kind: InterventionKind,
+        title: String,
+        effect: String,
+        risk: String,
+        counterpartId: String? = null,
+    ) {
+        GameplayLoop.queueAction(
+            state = session.state,
+            civilizationId = civilization.id,
+            kind = kind,
+            titleUk = title,
+            effectUk = effect,
+            riskUk = risk,
+            counterpartCivilizationId = counterpartId,
+        )
+        actionNonce += 1
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -88,6 +126,25 @@ internal fun WorldPlayPanel(
                 Text("Наступна")
             }
         }
+    }
+
+    TurnStateCard(
+        state = session.state,
+        civilization = civilization,
+        queuedAction = queuedAction,
+        directActionSpent = directActionSpent,
+        storyChoiceQueued = storyChoiceQueued,
+        pendingDecisionTitle = pendingDecisionTitle,
+        isAdvancing = isAdvancing,
+        onCancelQueued = {
+            GameplayLoop.cancelQueuedAction(session.state)
+            actionNonce += 1
+        },
+        onOpenChronicle = onOpenChronicle,
+    )
+
+    if (turnReport != null) {
+        TurnReportCard(turnReport)
     }
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
@@ -119,13 +176,8 @@ internal fun WorldPlayPanel(
             Text(briefing.objective.detail, style = MaterialTheme.typography.bodySmall)
             StatusPill(briefing.objective.meter, color = MaterialTheme.colorScheme.secondary)
             if (pendingDecisionTitle != null) {
-                Text(
-                    pendingDecisionTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
-                    Text("Прийняти рішення у хроніці")
+                    Text("Прийняти рішення у Хроніці")
                 }
             }
         }
@@ -141,6 +193,102 @@ internal fun WorldPlayPanel(
             MetricTile("Казна", compactNumber(civilization.treasury), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
             MetricTile("Ресурси", shortageBand(economy.shortageIndex), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
             MetricTile("Торгівля", tradeBand(economy.tradeBalance), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+        }
+    }
+
+    SectionHeader(title = "Внутрішня політика", eyebrow = "Одна команда на хід")
+    PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Команда спрацює на початку наступного кроку часу. Після неї світ сам розіграє наслідки.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DomesticActionRow(
+                session = session,
+                civilization = civilization,
+                hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                isAdvancing = isAdvancing,
+                firstKind = InterventionKind.HARVEST_AID,
+                firstTitle = "Резерви",
+                firstEffect = "поповнити їжу",
+                firstRisk = "казна зменшиться",
+                secondKind = InterventionKind.TECHNOLOGY_BOOST,
+                secondTitle = "Дослідження",
+                secondEffect = "прискорити розвиток",
+                secondRisk = "дороге вкладення",
+                onQueue = ::queueAction,
+            )
+            DomesticActionRow(
+                session = session,
+                civilization = civilization,
+                hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                isAdvancing = isAdvancing,
+                firstKind = InterventionKind.STABILITY_SUPPORT,
+                firstTitle = "Порядок",
+                firstEffect = "підняти стабільність",
+                firstRisk = "витрати з казни",
+                secondKind = InterventionKind.FESTIVAL,
+                secondTitle = "Свято",
+                secondEffect = "стабільність + їжа",
+                secondRisk = "помітні витрати",
+                onQueue = ::queueAction,
+            )
+        }
+    }
+
+    if (neighbors.isNotEmpty()) {
+        SectionHeader(title = "Дипломатія", eyebrow = "Оберіть ціль")
+        PanelCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    neighbors.forEach { neighbor ->
+                        FilterChip(
+                            selected = neighbor.civilizationId == selectedCounterpart?.civilizationId,
+                            onClick = { selectedCounterpartId = neighbor.civilizationId },
+                            label = { Text(neighbor.name) },
+                        )
+                    }
+                }
+
+                selectedCounterpart?.let { target ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(target.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Відносини ${String.format("%+.0f", target.relation * 100)} · ${target.status}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        StatusPill(
+                            target.status,
+                            color = when {
+                                target.atWar -> MaterialTheme.colorScheme.error
+                                target.allied -> MaterialTheme.colorScheme.secondary
+                                target.relation < -0.30 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                        )
+                    }
+
+                    DiplomacyActions(
+                        session = session,
+                        civilization = civilization,
+                        target = target,
+                        hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                        isAdvancing = isAdvancing,
+                        onQueue = ::queueAction,
+                    )
+                }
+            }
         }
     }
 
@@ -168,29 +316,6 @@ internal fun WorldPlayPanel(
         }
     }
 
-    SectionHeader(title = "Втручання", eyebrow = "Ваші дії")
-    PanelCard(accent = MaterialTheme.colorScheme.secondary) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Оберіть дію для ${civilization.name}. Наслідки проявляться після руху часу.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile("Врожай", "їжа ↑ · запас міцності", !isAdvancing, { onIntervene(InterventionKind.HARVEST_AID) }, MaterialTheme.colorScheme.secondary)
-                ActionTile("Посуха", "їжа ↓ · населення під тиском", !isAdvancing, { onIntervene(InterventionKind.DROUGHT) }, MaterialTheme.colorScheme.error)
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile("Прорив", "технологічний розвиток ↑", !isAdvancing, { onIntervene(InterventionKind.TECHNOLOGY_BOOST) }, MaterialTheme.colorScheme.primary)
-                ActionTile("Порядок", "стабільність ↑", !isAdvancing, { onIntervene(InterventionKind.STABILITY_SUPPORT) }, MaterialTheme.colorScheme.secondary)
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile("Набіг", "удар по сусіду або ворогу", !isAdvancing, { onIntervene(InterventionKind.WAR_RAID) }, MaterialTheme.colorScheme.error)
-                ActionTile("Свято", "стабільність ↑ · казна ↓", !isAdvancing, { onIntervene(InterventionKind.FESTIVAL) }, MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-
     if (representativeSettlement != null && representativePopulation != null && representativeLineage != null) {
         PanelCard {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -213,6 +338,8 @@ internal fun WorldPlayPanel(
                 }
                 if (showEvolution) {
                     val bodyPlan = representativeLineage.bodyPlan
+                    val evolutionEnabled = !isAdvancing && !hasPendingDecision && !storyChoiceQueued &&
+                        queuedAction == null && !directActionSpent
                     InfoLine(
                         "Активна лінія",
                         "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · мутації ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
@@ -232,15 +359,15 @@ internal fun WorldPlayPanel(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionTile(
                             "Розходження",
-                            "відокремити нову лінію",
-                            !isAdvancing,
+                            "велика біологічна зміна",
+                            evolutionEnabled,
                             { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.DIVERGE, representativeSettlement.id) },
                             MaterialTheme.colorScheme.secondary,
                         )
                         ActionTile(
                             "Мутація",
                             "змінити план тіла",
-                            !isAdvancing,
+                            evolutionEnabled,
                             { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.MUTATE, representativeSettlement.id) },
                             MaterialTheme.colorScheme.primary,
                         )
@@ -248,16 +375,9 @@ internal fun WorldPlayPanel(
                     ActionTileFullWidth(
                         title = "Гібридизація",
                         subtitle = hybridCandidate?.let { "поєднати з ${it.lineageLabel}" } ?: "потрібна відмінна друга лінія",
-                        enabled = !isAdvancing && hybridCandidate != null,
+                        enabled = evolutionEnabled && hybridCandidate != null,
                         onClick = { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE, representativeSettlement.id) },
                     )
-                    if (hybridCandidate == null) {
-                        Text(
-                            "Спочатку розведіть різні лінії окремими втручаннями, а потім поверніться до гібридизації.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
         }
@@ -270,6 +390,219 @@ internal fun WorldPlayPanel(
         briefing = briefing,
         enabled = !isAdvancing,
     )
+}
+
+@Composable
+private fun TurnStateCard(
+    state: com.sendmefile77.chronosphere.civilization.LivingPlanetState,
+    civilization: Civilization,
+    queuedAction: PendingChronicleDecision?,
+    directActionSpent: Boolean,
+    storyChoiceQueued: Boolean,
+    pendingDecisionTitle: String?,
+    isAdvancing: Boolean,
+    onCancelQueued: () -> Unit,
+    onOpenChronicle: () -> Unit,
+) {
+    val accent = when {
+        pendingDecisionTitle != null -> MaterialTheme.colorScheme.error
+        queuedAction != null || storyChoiceQueued -> MaterialTheme.colorScheme.secondary
+        directActionSpent -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.secondary
+    }
+    PanelCard(accent = accent) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("ХІД", style = MaterialTheme.typography.labelSmall, color = accent, fontWeight = FontWeight.Bold)
+                StatusPill(
+                    text = when {
+                        pendingDecisionTitle != null -> "потрібне рішення"
+                        storyChoiceQueued -> "рішення обрано"
+                        queuedAction != null -> "команду заплановано"
+                        directActionSpent -> "команду використано"
+                        else -> "1 команда доступна"
+                    },
+                    color = accent,
+                )
+            }
+            when {
+                pendingDecisionTitle != null -> {
+                    Text(pendingDecisionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Історія зупинилася на важливій розвилці. Спочатку вирішіть її.", style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth()) {
+                        Text("Перейти до рішення")
+                    }
+                }
+                storyChoiceQueued -> {
+                    Text("Рішення Хроніки готове", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Натисніть +1, +10 або +100. Рішення застосують на початку ходу, а швидка прокрутка зупиниться на наступній важливій розвилці.", style = MaterialTheme.typography.bodySmall)
+                }
+                queuedAction != null -> {
+                    Text(queuedAction.option.titleUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(queuedAction.option.effectUk, style = MaterialTheme.typography.bodySmall)
+                    Text("Ризик · ${queuedAction.option.riskUk}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Запустіть час, щоб виконати команду", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                        TextButton(onClick = onCancelQueued, enabled = !isAdvancing) { Text("Скасувати") }
+                    }
+                }
+                directActionSpent -> {
+                    Text("Команду цього року вже виконано", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Прокрутіть час, щоб отримати нову команду і побачити наслідки.", style = MaterialTheme.typography.bodySmall)
+                }
+                else -> {
+                    Text("Оберіть одну дію", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Можна втрутитися у внутрішню політику, дипломатію або просто пропустити хід і дати світу розвиватися самому.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TurnReportCard(report: GameplayTurnReport) {
+    PanelCard(accent = if (report.survived) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ПІДСУМКИ · ${report.yearsAdvanced} р.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+            Text(report.headlineUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricTile("Люди", GameplayLoop.signedLong(report.populationDelta), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                MetricTile("Порядок", GameplayLoop.signedDouble(report.stabilityDelta * 100.0, " п.п."), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                MetricTile("Розвиток", GameplayLoop.signedDouble(report.technologyDelta * 100.0, " п.п."), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricTile("Казна", GameplayLoop.signedDouble(report.treasuryDelta), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                MetricTile("Запаси", GameplayLoop.signedDouble(report.foodDelta), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+            }
+            if (report.warsAfter != report.warsBefore) {
+                Text("Війни: ${report.warsBefore} → ${report.warsAfter}", style = MaterialTheme.typography.bodySmall)
+            }
+            report.highlights.take(4).forEach { highlight ->
+                Text("• $highlight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DomesticActionRow(
+    session: GameSession,
+    civilization: Civilization,
+    hasPendingDecision: Boolean,
+    isAdvancing: Boolean,
+    firstKind: InterventionKind,
+    firstTitle: String,
+    firstEffect: String,
+    firstRisk: String,
+    secondKind: InterventionKind,
+    secondTitle: String,
+    secondEffect: String,
+    secondRisk: String,
+    onQueue: (InterventionKind, String, String, String, String?) -> Unit,
+) {
+    val firstGate = GameplayLoop.gate(session.state, civilization.id, firstKind, null, hasPendingDecision)
+    val secondGate = GameplayLoop.gate(session.state, civilization.id, secondKind, null, hasPendingDecision)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ActionTile(
+            firstTitle,
+            "$firstEffect · ${firstGate.treasuryCost.toInt()} казни",
+            !isAdvancing && firstGate.enabled,
+            { onQueue(firstKind, firstTitle, firstEffect, firstRisk, null) },
+            if (firstKind == InterventionKind.STABILITY_SUPPORT) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+        )
+        ActionTile(
+            secondTitle,
+            "$secondEffect · ${secondGate.treasuryCost.toInt()} казни",
+            !isAdvancing && secondGate.enabled,
+            { onQueue(secondKind, secondTitle, secondEffect, secondRisk, null) },
+            MaterialTheme.colorScheme.secondary,
+        )
+    }
+    val reason = listOfNotNull(firstGate.reasonUk, secondGate.reasonUk).distinct().firstOrNull()
+    if (reason != null && !firstGate.enabled && !secondGate.enabled) {
+        Text(reason, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DiplomacyActions(
+    session: GameSession,
+    civilization: Civilization,
+    target: NeighborStanding,
+    hasPendingDecision: Boolean,
+    isAdvancing: Boolean,
+    onQueue: (InterventionKind, String, String, String, String?) -> Unit,
+) {
+    fun gate(kind: InterventionKind) = GameplayLoop.gate(
+        state = session.state,
+        civilizationId = civilization.id,
+        kind = kind,
+        targetCivilizationId = target.civilizationId,
+        hasPendingDecision = hasPendingDecision,
+    )
+    val embassy = gate(InterventionKind.EMBASSY)
+    val alliance = gate(InterventionKind.FORM_ALLIANCE)
+    val war = gate(InterventionKind.DECLARE_WAR)
+    val peace = gate(InterventionKind.MAKE_PEACE)
+    val raid = gate(InterventionKind.WAR_RAID)
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ActionTile(
+            "Посольство",
+            "відносини ↑ · ${embassy.treasuryCost.toInt()} казни",
+            !isAdvancing && embassy.enabled,
+            { onQueue(InterventionKind.EMBASSY, "Посольство до ${target.name}", "Покращити відносини з ${target.name}.", "Казна зменшиться; результат не гарантує союзу.", target.civilizationId) },
+            MaterialTheme.colorScheme.secondary,
+        )
+        ActionTile(
+            "Союз",
+            "потрібні відносини +30 · ${alliance.treasuryCost.toInt()} казни",
+            !isAdvancing && alliance.enabled,
+            { onQueue(InterventionKind.FORM_ALLIANCE, "Союз із ${target.name}", "Закріпити військово-політичний союз.", "Союз коштує ресурсів і впливає на майбутні конфлікти.", target.civilizationId) },
+            MaterialTheme.colorScheme.primary,
+        )
+    }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (target.atWar) {
+            ActionTile(
+                "Мир",
+                "завершити війну · ${peace.treasuryCost.toInt()} казни",
+                !isAdvancing && peace.enabled,
+                { onQueue(InterventionKind.MAKE_PEACE, "Мир із ${target.name}", "Завершити поточну війну.", "Відносини залишаться прохолодними.", target.civilizationId) },
+                MaterialTheme.colorScheme.secondary,
+            )
+            ActionTile(
+                "Набіг",
+                "вдарити по запасах · ${raid.treasuryCost.toInt()} казни",
+                !isAdvancing && raid.enabled,
+                { onQueue(InterventionKind.WAR_RAID, "Набіг на ${target.name}", "Виснажити продовольчі запаси противника.", "Погіршить відносини і коштуватиме казни.", target.civilizationId) },
+                MaterialTheme.colorScheme.error,
+            )
+        } else {
+            ActionTile(
+                "Війна",
+                "відкрити фронт · ${war.treasuryCost.toInt()} казни",
+                !isAdvancing && war.enabled,
+                { onQueue(InterventionKind.DECLARE_WAR, "Війна з ${target.name}", "Оголосити війну і відкрити фронт.", "Стабільність і казна впадуть; конфлікт може стати довгим.", target.civilizationId) },
+                MaterialTheme.colorScheme.error,
+            )
+            ActionTile(
+                "Тиск",
+                "спершу посольство або війна",
+                false,
+                {},
+                MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+    val reasons = listOf(embassy, alliance, war, peace, raid).mapNotNull { it.reasonUk }.distinct()
+    if (reasons.isNotEmpty()) {
+        Text(reasons.take(2).joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 @Composable
