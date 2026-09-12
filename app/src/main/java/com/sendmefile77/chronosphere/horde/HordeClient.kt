@@ -20,6 +20,8 @@ class HordeClient(
     @Volatile
     private var modelCache: ModelCache? = null
 
+    private val censoredWorkers = linkedMapOf<String, Long>()
+
     suspend fun generate(
         request: HordeImageRequest,
         sourceImageBytes: ByteArray? = null,
@@ -31,9 +33,56 @@ class HordeClient(
         require(sourceImageBytes == null || sourceImageBytes.isNotEmpty())
 
         val selectedModels = resolvePreferredModels(request.preferredModels)
+        val startedAt = System.nanoTime()
+        var censorshipRetries = 0
+
+        while (true) {
+            val remainingMillis = timeoutMillis - elapsedMillis(startedAt)
+            if (remainingMillis < 5_000L) {
+                throw HordeGenerationException("AI Horde не встигла завершити генерацію за ${timeoutMillis / 1000} с")
+            }
+
+            try {
+                return generateOnce(
+                    request = request,
+                    selectedModels = selectedModels,
+                    sourceImageBytes = sourceImageBytes,
+                    blockedWorkerIds = recentCensoredWorkerIds(),
+                    timeoutMillis = remainingMillis,
+                    pollIntervalMillis = pollIntervalMillis,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (censored: HordeCensoredGenerationException) {
+                if (request.ageYears < 18) {
+                    throw HordeGenerationException("AI Horde відхилила зображення захисним фільтром")
+                }
+
+                censored.workerId?.let(::rememberCensoredWorker)
+                censorshipRetries += 1
+                if (censorshipRetries > MAX_CENSORSHIP_RETRIES) {
+                    throw HordeGenerationException(
+                        "AI Horde кілька разів повернула цензурований кадр. Спробуйте ще раз пізніше.",
+                    )
+                }
+                delay(CENSORSHIP_RETRY_DELAY_MILLIS)
+            }
+        }
+    }
+
+    private suspend fun generateOnce(
+        request: HordeImageRequest,
+        selectedModels: List<String>,
+        sourceImageBytes: ByteArray?,
+        blockedWorkerIds: List<String>,
+        timeoutMillis: Long,
+        pollIntervalMillis: Long,
+    ): HordeGenerationResult {
         var jobId: String? = null
         try {
-            jobId = withContext(Dispatchers.IO) { submit(request, selectedModels, sourceImageBytes) }
+            jobId = withContext(Dispatchers.IO) {
+                submit(request, selectedModels, sourceImageBytes, blockedWorkerIds)
+            }
             val startedAt = System.nanoTime()
             while (elapsedMillis(startedAt) < timeoutMillis) {
                 val check = withContext(Dispatchers.IO) { getJson("$baseUrl/generate/check/$jobId") }
@@ -57,13 +106,25 @@ class HordeClient(
 
             val generation = generations.getJSONObject(0)
             val generationState = generation.optString("state", "ok")
+            val censored = generation.optBoolean("censored", false) || generationState == "censored"
+            val censorshipReason = censorshipReason(generation)
+
+            if (censorshipReason == "csam") {
+                throw HordeGenerationException("AI Horde відхилила запит через захисний фільтр. Генерацію зупинено.")
+            }
+            if (censored) {
+                throw HordeCensoredGenerationException(
+                    workerId = generation.optString("worker_id").takeIf { it.isNotBlank() },
+                    workerName = generation.optString("worker_name").takeIf { it.isNotBlank() },
+                    model = generation.optString("model").takeIf { it.isNotBlank() },
+                )
+            }
             if (generationState.isNotBlank() && generationState != "ok") {
                 throw HordeGenerationException("AI Horde rejected the generated image: $generationState")
             }
+
             val imageRef = generation.optString("img").trim()
             if (imageRef.isBlank()) throw HordeGenerationException("AI Horde returned an empty image reference")
-            val censored = generation.optBoolean("censored", false)
-            if (censored) throw HordeGenerationException("AI Horde worker censored the generated image")
 
             val bytes = withContext(Dispatchers.IO) { readImageBytes(imageRef) }
             return HordeGenerationResult(
@@ -79,6 +140,8 @@ class HordeClient(
                 withContext(NonCancellable + Dispatchers.IO) { runCatching { cancel(id) } }
             }
             throw cancelled
+        } catch (censored: HordeCensoredGenerationException) {
+            throw censored
         } catch (error: HordeGenerationException) {
             jobId?.let { id -> withContext(Dispatchers.IO) { runCatching { cancel(id) } } }
             throw error
@@ -92,6 +155,7 @@ class HordeClient(
         request: HordeImageRequest,
         models: List<String>,
         sourceImageBytes: ByteArray?,
+        blockedWorkerIds: List<String>,
     ): String {
         val params = JSONObject()
             .put("sampler_name", request.samplerName)
@@ -117,6 +181,10 @@ class HordeClient(
             .put("allow_downgrade", true)
 
         if (models.isNotEmpty()) payload.put("models", JSONArray(models))
+        if (blockedWorkerIds.isNotEmpty()) {
+            payload.put("workers", JSONArray(blockedWorkerIds.take(MAX_WORKER_BLACKLIST_SIZE)))
+            payload.put("worker_blacklist", true)
+        }
         if (sourceImageBytes != null) {
             params.put("denoising_strength", request.referenceDenoisingStrength)
             payload.put("source_image", Base64.encodeToString(sourceImageBytes, Base64.NO_WRAP))
@@ -130,6 +198,44 @@ class HordeClient(
             throw HordeGenerationException(message ?: "AI Horde did not return a request id")
         }
         return id
+    }
+
+    private fun censorshipReason(generation: JSONObject): String? {
+        val metadata = generation.optJSONArray("gen_metadata") ?: return null
+        for (index in 0 until metadata.length()) {
+            val entry = metadata.optJSONObject(index) ?: continue
+            if (entry.optString("type") == "censorship") {
+                return entry.optString("value").takeIf { it.isNotBlank() }
+            }
+        }
+        return null
+    }
+
+    @Synchronized
+    private fun rememberCensoredWorker(workerId: String) {
+        if (workerId.isBlank()) return
+        pruneCensoredWorkersLocked()
+        censoredWorkers.remove(workerId)
+        censoredWorkers[workerId] = System.nanoTime()
+        while (censoredWorkers.size > MAX_REMEMBERED_CENSORED_WORKERS) {
+            val oldest = censoredWorkers.keys.firstOrNull() ?: break
+            censoredWorkers.remove(oldest)
+        }
+    }
+
+    @Synchronized
+    private fun recentCensoredWorkerIds(): List<String> {
+        pruneCensoredWorkersLocked()
+        return censoredWorkers.keys.toList().takeLast(MAX_WORKER_BLACKLIST_SIZE)
+    }
+
+    private fun pruneCensoredWorkersLocked() {
+        val now = System.nanoTime()
+        val iterator = censoredWorkers.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, seenAt) = iterator.next()
+            if ((now - seenAt) / 1_000_000L >= CENSORED_WORKER_TTL_MILLIS) iterator.remove()
+        }
     }
 
     private fun resolvePreferredModels(preferredModels: List<String>): List<String> {
@@ -232,10 +338,21 @@ class HordeClient(
 
     private data class ModelCache(val createdAtNanos: Long, val names: Set<String>)
 
+    private class HordeCensoredGenerationException(
+        val workerId: String?,
+        val workerName: String?,
+        val model: String?,
+    ) : Exception("AI Horde worker censored the generated image")
+
     companion object {
         const val ANONYMOUS_API_KEY = "0000000000"
         private const val DEFAULT_BASE_URL = "https://aihorde.net/api/v2"
         private const val DEFAULT_CLIENT_AGENT = "Chronosphere:0.1.0:https://github.com/sendmefile77-eng/game"
         private const val MODEL_CACHE_TTL_MILLIS = 60_000L
+        private const val MAX_CENSORSHIP_RETRIES = 2
+        private const val CENSORSHIP_RETRY_DELAY_MILLIS = 750L
+        private const val MAX_WORKER_BLACKLIST_SIZE = 5
+        private const val MAX_REMEMBERED_CENSORED_WORKERS = 12
+        private const val CENSORED_WORKER_TTL_MILLIS = 30 * 60 * 1000L
     }
 }
