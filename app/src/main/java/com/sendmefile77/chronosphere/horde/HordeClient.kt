@@ -178,7 +178,7 @@ class HordeClient(
             .put("extra_slow_workers", false)
             .put("r2", true)
             .put("shared", false)
-            .put("allow_downgrade", true)
+            .put("allow_downgrade", !request.qualityPriority)
 
         if (models.isNotEmpty()) payload.put("models", JSONArray(models))
         if (blockedWorkerIds.isNotEmpty()) {
