@@ -35,7 +35,7 @@ import java.io.File
 @Composable
 internal fun HordeChronicleEventView(
     request: HordeImageRequest,
-    modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(12f / 7f),
+    modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
 ) {
     val context = LocalContext.current.applicationContext
     val cache = remember(context) { HordeImageCache(File(context.filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)) }
@@ -46,13 +46,20 @@ internal fun HordeChronicleEventView(
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = ChronicleHordeUiState.Loading
         val attempt = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
-        val timeout = if (request.qualityPriority) 135_000L else 75_000L
+        val localDreamAttempt = attempt.copy(
+            steps = LOCAL_DREAM_DMD2_STEPS,
+            cfgScale = LOCAL_DREAM_DMD2_CFG,
+            samplerName = "lcm",
+        )
+        val timeout = if (request.qualityPriority) 120_000L else 75_000L
         try {
             val prepared = HordeGenerationCoordinator.load(
                 filesDir = context.filesDir,
                 request = attempt,
                 timeoutMillis = timeout,
                 pollIntervalMillis = 3_000L,
+                localDreamRequest = localDreamAttempt,
+                localDreamTimeoutMillis = LOCAL_DREAM_CHRONICLE_TIMEOUT_MS,
             )
             state = ChronicleHordeUiState.Ready(
                 bytes = prepared.bytes,
@@ -84,11 +91,8 @@ internal fun HordeChronicleEventView(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (request.qualityPriority) {
-                                "Local Dream → AI Horde · якісний кадр події генерується у фоні…"
-                            } else {
-                                "Local Dream → AI Horde · ілюстрація події генерується у фоні…"
-                            },
+                            "Local Dream · швидкий кадр DMD2 → AI Horde за потреби…",
+                            modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -226,3 +230,7 @@ private sealed interface ChronicleHordeUiState {
     ) : ChronicleHordeUiState
     data class Failed(val message: String) : ChronicleHordeUiState
 }
+
+private const val LOCAL_DREAM_DMD2_STEPS = 10
+private const val LOCAL_DREAM_DMD2_CFG = 1.5
+private const val LOCAL_DREAM_CHRONICLE_TIMEOUT_MS = 60_000L
