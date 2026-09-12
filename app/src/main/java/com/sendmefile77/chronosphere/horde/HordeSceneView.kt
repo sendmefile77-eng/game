@@ -55,6 +55,8 @@ internal fun HordeSceneView(
     LaunchedEffect(request.cacheKey, retryNonce) {
         state = HordeUiState.Loading
         val attemptRequest = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
+        val primaryTimeout = if (request.qualityPriority) 120_000L else 60_000L
+        val fallbackTimeout = if (request.qualityPriority) 135_000L else 75_000L
 
         val cached = withContext(Dispatchers.IO) { cache.read(request.cacheKey) }
         if (cached != null) {
@@ -83,7 +85,7 @@ internal fun HordeSceneView(
                     client.generate(
                         request = effectiveRequest,
                         sourceImageBytes = reference.imageBytes,
-                        timeoutMillis = 60_000L,
+                        timeoutMillis = primaryTimeout,
                         pollIntervalMillis = 3_000L,
                     )
                 } catch (cancelled: CancellationException) {
@@ -92,7 +94,7 @@ internal fun HordeSceneView(
                     client.generate(
                         request = attemptRequest,
                         sourceImageBytes = null,
-                        timeoutMillis = 75_000L,
+                        timeoutMillis = fallbackTimeout,
                         pollIntervalMillis = 3_000L,
                     )
                 }
@@ -100,7 +102,7 @@ internal fun HordeSceneView(
                 client.generate(
                     request = attemptRequest,
                     sourceImageBytes = null,
-                    timeoutMillis = 75_000L,
+                    timeoutMillis = fallbackTimeout,
                     pollIntervalMillis = 3_000L,
                 )
             }
@@ -135,7 +137,7 @@ internal fun HordeSceneView(
                         modifier = modifier,
                     )
                     Text(
-                        text = "AI Horde · генерується…",
+                        text = if (request.qualityPriority) "AI Horde · якісний кадр генерується…" else "AI Horde · генерується…",
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .background(
@@ -187,7 +189,7 @@ internal fun HordeSceneView(
                     ) {
                         Text(
                             text = buildString {
-                                append("AI Horde")
+                                append("AI Horde · ${request.width}×${request.height}")
                                 current.model?.let { append(" · $it") }
                                 if (current.usedReference) append(" · ref")
                                 append(" · торкніться для перегляду")
