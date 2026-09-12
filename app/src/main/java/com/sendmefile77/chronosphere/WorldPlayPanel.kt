@@ -240,8 +240,79 @@ internal fun WorldPlayPanel(
     Text("Набіг палить запаси ворога або сусіда. Свято піднімає порядок ціною казни.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+private fun humanizeTag(tag: String): String = when (tag.lowercase()) {
+    "dynastic" -> "династична традиція"
+    "fertility_cult" -> "культ родючості"
+    "highland" -> "гірська культура"
+    "sacred" -> "сакральні звичаї"
+    "temperate-climate" -> "помірний клімат"
+    "maritime" -> "морська культура"
+    "agrarian" -> "землеробська культура"
+    "urban" -> "міська культура"
+    "nomadic" -> "кочова культура"
+    "mercantile" -> "торгова культура"
+    "warlike" -> "войовничі"
+    "isolationist" -> "ізоляціоністи"
+    "technological" -> "винахідники"
+    "rapid_mutation" -> "швидка мутація"
+    "hybrid_friendly" -> "відкриті до гібридів"
+    "body_cult" -> "культ тіла"
+    "matriarchal" -> "матріархальні"
+    else -> tag.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() }
+}
+
+private fun rankDisplayName(rank: String): String = when (rank.lowercase()) {
+    "population" -> "популяція"
+    "morph" -> "морф"
+    "subspecies" -> "підвид"
+    "species" -> "вид"
+    else -> rank.lowercase()
+}
+
+private fun qualityBand(value: Double): String = when {
+    value >= 0.82 -> "дуже висока"
+    value >= 0.64 -> "висока"
+    value >= 0.45 -> "середня"
+    value >= 0.25 -> "низька"
+    else -> "критична"
+}
+
+private fun shortageBand(value: Double): String = when {
+    value < 0.08 -> "достатньо"
+    value < 0.20 -> "напружено"
+    value < 0.40 -> "дефіцит"
+    else -> "криза"
+}
+
+private fun tradeBand(value: Double): String = when {
+    value > 10.0 -> "профіцит"
+    value < -10.0 -> "збиткова"
+    else -> "збалансована"
+}
+
+private fun tensionBand(value: Double): String = when {
+    value < 0.20 -> "спокійне"
+    value < 0.45 -> "стабільне"
+    value < 0.70 -> "напружене"
+    else -> "на межі кризи"
+}
+
+private fun compactNumber(value: Long): String = when {
+    kotlin.math.abs(value) >= 1_000_000_000L -> String.format("%.1f млрд", value / 1_000_000_000.0)
+    kotlin.math.abs(value) >= 1_000_000L -> String.format("%.1f млн", value / 1_000_000.0)
+    kotlin.math.abs(value) >= 1_000L -> String.format("%.1f тис.", value / 1_000.0)
+    else -> value.toString()
+}
+
+private fun compactNumber(value: Double): String = when {
+    kotlin.math.abs(value) >= 1_000_000_000.0 -> String.format("%.1f млрд", value / 1_000_000_000.0)
+    kotlin.math.abs(value) >= 1_000_000.0 -> String.format("%.1f млн", value / 1_000_000.0)
+    kotlin.math.abs(value) >= 1_000.0 -> String.format("%.1f тис.", value / 1_000.0)
+    else -> String.format("%.1f", value)
+}
+
 @Composable
-internal fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
+private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -255,7 +326,7 @@ internal fun MetricCard(label: String, value: String, modifier: Modifier = Modif
 }
 
 @Composable
-internal fun InfoLine(label: String, value: String) {
+private fun InfoLine(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -263,6 +334,6 @@ internal fun InfoLine(label: String, value: String) {
 }
 
 @Composable
-internal fun InterventionButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
+private fun InterventionButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
     OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) { Text(label, maxLines = 1) }
 }
