@@ -536,18 +536,17 @@ class PeopleEngine {
     ): NotablePerson? {
         val oldRuler = oldRulerId?.let { id -> persons.firstOrNull { it.id == id } }
         val dynastyId = oldRuler?.dynastyId
-        val adults = persons.filter {
+        val preferred = persons.filter {
             it.civilizationId == civilizationId &&
                 it.isAlive &&
-                it.ageYearsAt(tick) >= PeopleState.FEATURED_MIN_AGE &&
+                it.ageYearsAt(tick) in PeopleState.FEATURED_MIN_AGE..PeopleState.FEATURED_MAX_AGE &&
                 it.id != oldRulerId
         }
-        val preferred = adults.filter { it.ageYearsAt(tick) <= PeopleState.FEATURED_MAX_AGE }
         fun choose(pool: List<NotablePerson>): NotablePerson? =
             pool.filter { it.role == PersonRole.HEIR }.maxByOrNull { it.prestige }
                 ?: pool.filter { dynastyId != null && it.dynastyId == dynastyId }.maxByOrNull { it.prestige }
                 ?: pool.maxByOrNull { it.prestige + it.aptitude * 0.25 }
-        return choose(preferred) ?: choose(adults)
+        return choose(preferred)
     }
 
     private fun createSocialProfile(civilization: Civilization, rng: DeterministicRng): SocialProfile {
