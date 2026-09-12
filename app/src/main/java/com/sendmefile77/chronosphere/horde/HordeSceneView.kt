@@ -49,17 +49,26 @@ internal fun HordeSceneView(
     modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     val context = LocalContext.current.applicationContext
-    val cache = remember(context) { HordeImageCache(File(context.filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)) }
     val references = remember(context) { HordeCharacterReferenceStore(File(context.filesDir, "horde-character-references")) }
-    var retryNonce by remember(request.cacheKey) { mutableStateOf(0) }
+    var retryNonce by remember(request.cacheKey) {
+        mutableStateOf(HordeGenerationCoordinator.retryNonce(request.cacheKey))
+    }
     var showFullscreen by remember(request.cacheKey) { mutableStateOf(false) }
-    var state by remember(request.cacheKey) { mutableStateOf<HordeUiState>(HordeUiState.Loading) }
+    var state by remember(request.cacheKey) {
+        mutableStateOf(
+            HordeGenerationCoordinator.peekPrepared(request.cacheKey)
+                ?.toPortraitUiState(request)
+                ?: HordeUiState.Loading,
+        )
+    }
     val jobProgress by remember(request.cacheKey) {
         HordeGenerationCoordinator.observeProgress(request.cacheKey)
     }.collectAsState()
 
     LaunchedEffect(request.cacheKey, retryNonce, galleryCapture) {
-        state = HordeUiState.Loading
+        if (HordeGenerationCoordinator.peekPrepared(request.cacheKey) == null) {
+            state = HordeUiState.Loading
+        }
         val attemptRequest = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
         val timeout = if (request.qualityPriority) 135_000L else 75_000L
 
@@ -80,15 +89,7 @@ internal fun HordeSceneView(
                 width = width,
                 height = height,
             )
-            state = HordeUiState.Ready(
-                bytes = prepared.bytes,
-                model = prepared.model,
-                usedReference = prepared.usedReference,
-                provider = prepared.provider,
-                width = width,
-                height = height,
-                fallbackNote = prepared.fallbackNote,
-            )
+            state = prepared.toPortraitUiState(request)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -130,8 +131,8 @@ internal fun HordeSceneView(
                     FailureRow(
                         message = "отримано пошкоджене зображення",
                         onRetry = {
-                            cache.remove(request.cacheKey)
-                            retryNonce += 1
+                            HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                            retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                         },
                     )
                 } else {
@@ -195,8 +196,8 @@ internal fun HordeSceneView(
                             ) {
                                 OutlinedButton(
                                     onClick = {
-                                        cache.remove(request.cacheKey)
-                                        retryNonce += 1
+                                        HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                                        retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                                     },
                                     modifier = Modifier.weight(1f),
                                     shape = ChronosphereSmallShape,
@@ -204,9 +205,9 @@ internal fun HordeSceneView(
                                 if (request.saveResultAsReference && request.referenceCacheKey != null) {
                                     OutlinedButton(
                                         onClick = {
-                                            cache.remove(request.cacheKey)
+                                            HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
                                             references.remove(request.referenceCacheKey)
-                                            retryNonce += 1
+                                            retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                                         },
                                         modifier = Modifier.weight(1f),
                                         shape = ChronosphereSmallShape,
@@ -245,14 +246,25 @@ internal fun HordeSceneView(
                 FailureRow(
                     message = current.message,
                     onRetry = {
-                        cache.remove(request.cacheKey)
-                        retryNonce += 1
+                        HordeGenerationCoordinator.invalidate(context.filesDir, request.cacheKey)
+                        retryNonce = HordeGenerationCoordinator.nextRetryNonce(request.cacheKey)
                     },
                 )
             }
         }
     }
 }
+
+private fun HordePreparedImage.toPortraitUiState(request: HordeImageRequest): HordeUiState.Ready =
+    HordeUiState.Ready(
+        bytes = bytes,
+        model = model,
+        usedReference = usedReference,
+        provider = provider,
+        width = actualWidth ?: request.width,
+        height = actualHeight ?: request.height,
+        fallbackNote = fallbackNote,
+    )
 
 @Composable
 private fun FailureRow(
