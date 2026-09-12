@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,33 @@ fun CharacterCardPanel(
     }
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
+    val adultSceneRuntime = remember { AdultSceneRuntime.load() }
+    val effectiveAdultVisual = remember(
+        adultVisual,
+        person.id,
+        tick,
+        people,
+        evolution,
+        scene.wardrobeState,
+        adultSceneRuntime.hasStructuredVisuals,
+    ) {
+        adultVisual ?: if (
+            scene.wardrobeState == WardrobeState.UNDRESSED &&
+            age >= 18 &&
+            adultSceneRuntime.hasStructuredVisuals
+        ) {
+            CharacterSceneFactory.adultRequest(
+                person = person,
+                tick = tick,
+                people = people,
+                evolution = evolution,
+            )?.let { request ->
+                adultSceneRuntime.resolveCharacterVisual(request, undressed = true)
+            }
+        } else {
+            null
+        }
+    }
     val relationships = people.relationships
         .filter { it.involves(person.id) }
         .sortedByDescending { kotlin.math.abs(it.strength) }
@@ -94,7 +122,7 @@ fun CharacterCardPanel(
                 visualTags = descriptor?.tags ?: emptySet(),
                 visualNumeric = descriptor?.numeric ?: emptyMap(),
                 technologyEra = technologyEra,
-                adultVisual = adultVisual,
+                adultVisual = effectiveAdultVisual,
             )
 
             if (dynasty != null) {
