@@ -22,6 +22,7 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.evolution.PlayerEvolutionInterventionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
+import com.sendmefile77.chronosphere.llm.LocalLlmWorldAdvisorCard
 import com.sendmefile77.chronosphere.people.PeopleState
 
 @Composable
@@ -86,6 +87,14 @@ internal fun WorldPlayPanel(
             }
         }
     }
+
+    LocalLlmWorldAdvisorCard(
+        state = session.state,
+        civilization = civilization,
+        economyState = economyState,
+        briefing = briefing,
+        enabled = !isAdvancing,
+    )
 
     Card(
         modifier = Modifier.fillMaxWidth(),
