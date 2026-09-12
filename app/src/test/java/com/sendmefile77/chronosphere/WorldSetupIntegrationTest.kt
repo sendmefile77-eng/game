@@ -6,6 +6,7 @@ import com.sendmefile77.chronosphere.worldgen.WorldGenerator
 import com.sendmefile77.chronosphere.worldgen.WorldHydrology
 import com.sendmefile77.chronosphere.worldgen.WorldResourceGenerator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
@@ -32,6 +33,9 @@ class WorldSetupIntegrationTest {
         val firstProfile = start.people.profile(firstCiv.id)!!
 
         assertEquals(2, firstLineage.bodyPlan.armPairs)
+        assertNull(firstLineage.parentLineageId)
+        assertTrue("independent_origin" in firstLineage.tags)
+        assertTrue("human_derived" !in firstLineage.tags)
         assertTrue("race_four_armed" in firstLineage.tags)
         assertTrue("group_sex" in firstProfile.tags)
         assertTrue("public_sex" in firstProfile.tags)
@@ -57,12 +61,7 @@ class WorldSetupIntegrationTest {
         val start = createConfiguredWorldStart(sampleSetup(StartSpacing.NORMAL), generator, hydrology, resources, peopleEngine)
         val firstCiv = start.session.state.civilizations.sortedBy { it.id }.first()
         val firstSettlement = start.session.state.settlements.first { it.civilizationId == firstCiv.id }
-        val runner = PlayableSimulationRunner(
-            worldMap = start.session.world,
-            resources = start.session.resources,
-            peopleEngine = peopleEngine,
-            adultModule = NoOpAdultModule,
-        )
+        val runner = runner(start)
 
         val advanced = runner.advance(
             currentWorld = start.session.state,
@@ -78,6 +77,36 @@ class WorldSetupIntegrationTest {
         assertTrue("rapid_mutation" in lineage.tags)
         assertTrue("hybrid_friendly" in lineage.tags)
     }
+
+    @Test
+    fun longRunKeepsOnlyDevelopmentAppropriateMajorCenters() {
+        val start = createConfiguredWorldStart(sampleSetup(StartSpacing.NORMAL), generator, hydrology, resources, peopleEngine)
+        val advanced = runner(start).advance(
+            currentWorld = start.session.state,
+            currentPeople = start.people,
+            currentEconomy = start.economy,
+            currentEvolution = start.evolution,
+            months = 2_400,
+        )
+
+        advanced.world.civilizations.forEach { civilization ->
+            val expectedCap = when {
+                civilization.technology < 0.10 -> 3
+                civilization.technology < 0.30 -> 4
+                civilization.technology < 0.55 -> 5
+                else -> 7
+            }
+            val actual = advanced.world.settlements.count { it.civilizationId == civilization.id }
+            assertTrue("${civilization.id}: $actual > $expectedCap", actual <= expectedCap)
+        }
+    }
+
+    private fun runner(start: ConfiguredWorldStart): PlayableSimulationRunner = PlayableSimulationRunner(
+        worldMap = start.session.world,
+        resources = start.session.resources,
+        peopleEngine = peopleEngine,
+        adultModule = NoOpAdultModule,
+    )
 
     private fun sampleSetup(spacing: StartSpacing): WorldSetup = WorldSetup(
         seed = 424242L,
