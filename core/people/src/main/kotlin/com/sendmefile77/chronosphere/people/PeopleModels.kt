@@ -17,8 +17,9 @@ enum class BiologicalSex {
 
     companion object {
         /**
-         * Existing saves predate an explicit sex field. Deriving it from the immutable person id
-         * gives every old and new character a stable value without changing the save format.
+         * Sex remains derived from the immutable person id so old saves stay compatible.
+         * The playable cast is intentionally female-skewed: roughly nine deterministic buckets
+         * out of ten resolve to FEMALE and one bucket resolves to MALE.
          */
         fun fromStableKey(key: String): BiologicalSex {
             require(key.isNotBlank())
@@ -26,7 +27,8 @@ enum class BiologicalSex {
             key.forEach { char ->
                 hash = (hash xor char.code.toLong()) * 1099511628211L
             }
-            return if ((hash and 1L) == 0L) FEMALE else MALE
+            val bucket = ((hash xor (hash ushr 32)) and Long.MAX_VALUE) % 10L
+            return if (bucket == 0L) MALE else FEMALE
         }
     }
 }
@@ -139,4 +141,20 @@ data class PeopleState(
 
     fun livingPeople(civilizationId: String): List<NotablePerson> =
         persons.filter { it.civilizationId == civilizationId && it.isAlive }
+
+    /**
+     * Main playable character pool. Older people remain in the simulation, dynasties and history,
+     * but the People screen focuses on adult characters who are at most 40 years old.
+     */
+    fun featuredPeople(civilizationId: String, atTick: Long = tick): List<NotablePerson> =
+        persons.filter {
+            it.civilizationId == civilizationId &&
+                it.isAlive &&
+                it.ageYearsAt(atTick) in FEATURED_MIN_AGE..FEATURED_MAX_AGE
+        }
+
+    companion object {
+        const val FEATURED_MIN_AGE = 18
+        const val FEATURED_MAX_AGE = 40
+    }
 }
