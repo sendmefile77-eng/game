@@ -39,8 +39,9 @@ fun CharacterCardPanel(
     adultVisual: AdultVisualSceneDescriptor? = null,
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
+    onToggleWardrobe: () -> Unit = {},
     adultActionSequence: Int = 0,
-    onAdultAction: () -> Unit,
+    onAdultAction: () -> Unit = onToggleWardrobe,
     controlsEnabled: Boolean = true,
 ) {
     val age = person.ageYearsAt(tick)
