@@ -148,7 +148,9 @@ internal object GeneratedImageGalleryStore {
     }.getOrNull()
 
     private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { byte ->
+            "%02x".format(byte.toInt() and 0xff)
+        }
 }
 
 @Composable
@@ -199,13 +201,14 @@ internal fun GeneratedImageGalleryPanel(
                     FilterChip(
                         selected = selectedCivilizationId == null,
                         onClick = { selectedCivilizationId = null },
-                        label = { Text("Усі") },
+                        label = { Text("Усі (${items.size})") },
                     )
                     civilizations.forEach { civilization ->
+                        val count = items.count { civilization.id in it.civilizationIds }
                         FilterChip(
                             selected = selectedCivilizationId == civilization.id,
                             onClick = { selectedCivilizationId = civilization.id },
-                            label = { Text(civilization.name) },
+                            label = { Text("${civilization.name} ($count)") },
                         )
                     }
                 }
@@ -249,8 +252,6 @@ internal fun GeneratedImageGalleryPanel(
                 contentDescription = item.subject,
                 onDismiss = { fullscreen = null },
             )
-        } else {
-            fullscreen = null
         }
     }
 }
@@ -263,7 +264,10 @@ private fun GalleryThumbnail(
     onClick: () -> Unit,
 ) {
     val bitmap = remember(item.id, item.imageFile.lastModified()) {
-        BitmapFactory.decodeFile(item.imageFile.absolutePath)?.asImageBitmap()
+        BitmapFactory.decodeFile(
+            item.imageFile.absolutePath,
+            BitmapFactory.Options().apply { inSampleSize = 4 },
+        )?.asImageBitmap()
     }
     Surface(
         modifier = modifier.clickable(onClick = onClick),
@@ -282,7 +286,7 @@ private fun GalleryThumbnail(
             Column(modifier = Modifier.padding(7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.subject, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${item.kind.displayNameUk} · $year · ${item.provider.lowercase()}",
+                    "${item.kind.displayNameUk} · $year · ${providerLabel(item.provider)}",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelSmall,
@@ -291,4 +295,11 @@ private fun GalleryThumbnail(
             }
         }
     }
+}
+
+private fun providerLabel(provider: String): String = when (provider) {
+    "LOCAL_DREAM" -> "Local Dream"
+    "AI_HORDE" -> "AI Horde"
+    "CACHE" -> "кеш"
+    else -> provider.replace('_', ' ').lowercase().ifBlank { "генератор" }
 }
