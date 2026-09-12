@@ -50,6 +50,21 @@ class AdultActionPlannerTest {
     }
 
     @Test
+    fun preferredTypeIsHonoredWhenAnatomyAllows() {
+        val adult = person("adult-a", birthTick = 0L)
+        val other = person("adult-b", birthTick = 0L)
+        val plan = AdultActionPlanner.plan(
+            person = adult,
+            tick = 360L,
+            people = people(adult, other),
+            sequence = 1,
+            preferredType = AdultActionType.ORAL,
+        )
+        requireNotNull(plan)
+        assertEquals(AdultActionType.ORAL, plan.type)
+    }
+
+    @Test
     fun partnerIsARealAdultFromTheSameCivilization() {
         val primary = person("adult-a", birthTick = 0L)
         val lover = person("adult-lover", birthTick = 0L)
