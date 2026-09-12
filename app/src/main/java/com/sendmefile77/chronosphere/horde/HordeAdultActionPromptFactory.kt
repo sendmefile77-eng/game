@@ -92,7 +92,7 @@ object HordeAdultActionPromptFactory {
                     add("single person")
                     add("solo portrait")
                     add("only one body")
-                    add("multiple people crowded")
+                    add("crowded group of three or more people")
                 } else {
                     add("unrelated extra people")
                 }
