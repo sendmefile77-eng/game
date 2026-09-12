@@ -86,6 +86,8 @@ object HordeAdultActionPromptFactory {
                         "no sexual contact", "closed mouth far from genitals",
                         "bust crop", "portrait crop", "missing feet", "cropped head",
                         "wrong person", "identity change",
+                        "oversaturated", "overexposed", "burnt colors", "overcooked",
+                        "high contrast", "oversharpened",
                     ),
                 )
                 if (!plan.solo) {

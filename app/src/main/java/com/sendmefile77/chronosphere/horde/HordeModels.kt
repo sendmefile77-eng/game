@@ -44,7 +44,7 @@ data class HordeImageRequest(
     companion object {
         const val DEFAULT_NEGATIVE_PROMPT =
             "low quality, worst quality, blurry, lowres, pixelated, jpeg artifacts, compression artifacts, " +
-                "muddy details, oversmoothed skin, deformed, disfigured, bad anatomy, bad proportions, " +
+                "muddy details, oversmoothed skin, oversaturated, overexposed, burnt colors, overcooked, oversharpened, deformed, disfigured, bad anatomy, bad proportions, " +
                 "extra limbs, extra fingers, fused fingers, duplicate body parts, poorly drawn hands, " +
                 "poorly drawn face, text, watermark, logo, collage"
     }
