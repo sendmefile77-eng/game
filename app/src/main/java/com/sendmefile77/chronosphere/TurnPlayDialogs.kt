@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 internal fun TurnDecisionDialog(
     decision: ChronicleDecision,
     onSelect: (ChronicleDecisionOption) -> Unit,
+    onDismiss: () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = {},
