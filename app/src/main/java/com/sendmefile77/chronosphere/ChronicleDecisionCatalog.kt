@@ -14,6 +14,7 @@ internal data class ChronicleDecisionOption(
     val kind: InterventionKind,
     val targetCivilizationId: String,
     val strength: Double,
+    val counterpartCivilizationId: String? = null,
 )
 
 internal data class ChronicleDecision(
@@ -47,6 +48,12 @@ internal object ChronicleDecisionMailbox {
 
     @Synchronized
     fun contains(sourceEventId: String): Boolean = sourceEventId in pending
+
+    @Synchronized
+    fun pendingFor(sourceEventId: String): PendingChronicleDecision? = pending[sourceEventId]
+
+    @Synchronized
+    fun remove(sourceEventId: String): PendingChronicleDecision? = pending.remove(sourceEventId)
 
     @Synchronized
     fun drain(): List<PendingChronicleDecision> = pending.values.toList().also { pending.clear() }
