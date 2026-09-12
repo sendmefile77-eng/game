@@ -87,16 +87,22 @@ fun ChronosphereGameApp() {
     val adultModuleActive = remember(adultModule) { AdultModuleRuntime.isActive(adultModule) }
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
 
-    val initialSession = remember { createGameSession(424242L, generator, hydrology, resourceGenerator) }
-    val initialPeople = remember(initialSession) { peopleEngine.initialize(initialSession.state) }
-    val initialEconomy = remember(initialSession) {
-        EconomyEngine(initialSession.world, initialSession.resources).initialize(initialSession.state)
+    val initialSetup = remember { WorldSetup.default(seed = 424242L, tribeCount = 3) }
+    val initialStart = remember {
+        createConfiguredWorldStart(
+            setup = initialSetup,
+            generator = generator,
+            hydrology = hydrology,
+            resourceGenerator = resourceGenerator,
+            peopleEngine = peopleEngine,
+        )
     }
-    val initialEvolution = remember(initialSession) {
-        EvolutionEngine(initialSession.world).initialize(initialSession.state)
-    }
+    val initialSession = initialStart.session
+    val initialPeople = initialStart.people
+    val initialEconomy = initialStart.economy
+    val initialEvolution = initialStart.evolution
 
-    var seedText by remember { mutableStateOf("424242") }
+    var worldSetup by remember { mutableStateOf(initialSetup) }
     var showNewWorldDialog by remember { mutableStateOf(false) }
     var session by remember { mutableStateOf(initialSession) }
     var peopleState by remember { mutableStateOf(initialPeople) }
@@ -108,7 +114,11 @@ fun ChronosphereGameApp() {
     var selectedCivilizationId by remember { mutableStateOf(initialSession.state.civilizations.first().id) }
     var selectedPersonId by remember {
         val civilizationId = initialSession.state.civilizations.first().id
-        mutableStateOf(initialPeople.ruler(civilizationId)?.id ?: initialPeople.livingPeople(civilizationId).firstOrNull()?.id)
+        val featured = initialPeople.featuredPeople(civilizationId, initialSession.state.tick)
+        mutableStateOf(
+            featured.maxByOrNull { it.prestige }?.id
+                ?: initialPeople.ruler(civilizationId)?.takeIf { it.ageYearsAt(initialSession.state.tick) <= 40 }?.id,
+        )
     }
     var characterUndressed by remember { mutableStateOf(false) }
     var interventionSequence by remember { mutableStateOf(0L) }
@@ -119,8 +129,9 @@ fun ChronosphereGameApp() {
     }
 
     fun resetCharacterSelection(civilizationId: String, people: PeopleState) {
-        selectedPersonId = people.ruler(civilizationId)?.id
-            ?: people.livingPeople(civilizationId).maxByOrNull { it.prestige }?.id
+        selectedPersonId = people.featuredPeople(civilizationId, people.tick)
+            .maxByOrNull { it.prestige }
+            ?.id
         characterUndressed = false
     }
 
@@ -143,28 +154,38 @@ fun ChronosphereGameApp() {
         resetCharacterSelection(civilizationId, peopleState)
     }
 
-    fun newWorld() {
+    fun newWorld(setup: WorldSetup) {
         if (isAdvancing) return
-        val seed = seedText.toLongOrNull() ?: run {
-            saveStatus = "Seed має бути цілим числом"
+        val created = runCatching {
+            createConfiguredWorldStart(
+                setup = setup,
+                generator = generator,
+                hydrology = hydrology,
+                resourceGenerator = resourceGenerator,
+                peopleEngine = peopleEngine,
+            )
+        }.getOrElse { error ->
+            saveStatus = "Не вдалося створити світ: ${error.message ?: "невідома помилка"}"
             return
         }
-        val created = createGameSession(seed, generator, hydrology, resourceGenerator)
-        val createdPeople = peopleEngine.initialize(created.state)
-        val createdEconomy = EconomyEngine(created.world, created.resources).initialize(created.state)
-        val createdEvolution = EvolutionEngine(created.world).initialize(created.state)
-        session = created
-        peopleState = createdPeople
-        economyState = createdEconomy
-        evolutionState = createdEvolution
-        workspace = historyTimeline.create(created.state, createdPeople, createdEconomy, createdEvolution)
-        selectedCivilizationId = created.state.civilizations.first().id
-        resetCharacterSelection(selectedCivilizationId, createdPeople)
+        worldSetup = setup
+        session = created.session
+        peopleState = created.people
+        economyState = created.economy
+        evolutionState = created.evolution
+        workspace = historyTimeline.create(
+            created.session.state,
+            created.people,
+            created.economy,
+            created.evolution,
+        )
+        selectedCivilizationId = created.session.state.civilizations.first().id
+        resetCharacterSelection(selectedCivilizationId, created.people)
         interventionSequence = 0L
         characterUndressed = false
         selectedPanel = GamePanel.WORLD
         showNewWorldDialog = false
-        saveStatus = "Створено новий світ · seed $seed"
+        saveStatus = "Створено світ · ${setup.tribes.size} племені · seed ${setup.seed}"
     }
 
     fun advanceMonths(months: Int) {
@@ -204,7 +225,7 @@ fun ChronosphereGameApp() {
                     result.world.civilizations.first().id
                 }
                 selectedCivilizationId = validCivilizationId
-                if (result.people.livingPeople(validCivilizationId).none { it.id == targetPersonId }) {
+                if (result.people.featuredPeople(validCivilizationId, result.world.tick).none { it.id == targetPersonId }) {
                     resetCharacterSelection(validCivilizationId, result.people)
                 }
                 saveStatus = "Світ змодельовано до ${clock.at(result.world.tick).year} року"
@@ -330,7 +351,10 @@ fun ChronosphereGameApp() {
             }
             selectedCivilizationId = loadedSession.state.civilizations.first().id
             resetCharacterSelection(selectedCivilizationId, loadedPeople)
-            seedText = loadedState.worldSeed.toString()
+            worldSetup = WorldSetup.default(
+                seed = loadedState.worldSeed,
+                tribeCount = loadedState.civilizations.size.coerceIn(WorldSetup.MIN_TRIBES, WorldSetup.MAX_TRIBES),
+            )
             interventionSequence = loadedState.recentEvents.asSequence()
                 .map { it.id }
                 .filter { it.startsWith("player-") }
@@ -457,14 +481,14 @@ fun ChronosphereGameApp() {
                                 )
 
                                 GamePanel.PERSON -> {
-                                    val livingCharacters = peopleState.livingPeople(selectedCivilization.id)
-                                        .sortedByDescending { it.prestige }
-                                    val ruler = peopleState.ruler(selectedCivilization.id)
+                                    val livingCharacters = peopleState.featuredPeople(
+                                        selectedCivilization.id,
+                                        session.state.tick,
+                                    ).sortedByDescending { it.prestige }
                                     val selectedPerson = livingCharacters.firstOrNull { it.id == selectedPersonId }
-                                        ?: ruler
                                         ?: livingCharacters.firstOrNull()
                                     if (selectedPerson == null) {
-                                        EmptyPanel("У цій державі зараз немає живих визначних осіб")
+                                        EmptyPanel("У цій державі зараз немає активних визначних осіб віком 18–40 років")
                                     } else {
                                         val age = selectedPerson.ageYearsAt(session.state.tick)
                                         val effectiveUndressed = characterUndressed && age >= 18
@@ -615,26 +639,11 @@ fun ChronosphereGameApp() {
         }
 
         if (showNewWorldDialog) {
-            AlertDialog(
-                onDismissRequest = { if (!isAdvancing) showNewWorldDialog = false },
-                title = { Text("Новий світ") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Seed визначає світ. Однаковий seed створює той самий початковий світ.")
-                        OutlinedTextField(
-                            value = seedText,
-                            onValueChange = { seedText = it.filter { character -> character == '-' || character.isDigit() } },
-                            label = { Text("Seed") },
-                            singleLine = true,
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = { newWorld() }, enabled = !isAdvancing) { Text("Створити") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNewWorldDialog = false }) { Text("Скасувати") }
-                },
+            NewWorldSetupDialog(
+                initial = worldSetup,
+                enabled = !isAdvancing,
+                onDismiss = { showNewWorldDialog = false },
+                onCreate = ::newWorld,
             )
         }
     }
@@ -868,7 +877,7 @@ private fun WorldPanel(
         )
     }
     if (profile != null) {
-        val culture = profile.tags.sorted().take(6).joinToString(separator = " · ", transform = ::humanizeTag)
+        val culture = profile.tags.sorted().take(8).joinToString(separator = " · ", transform = ::humanizeTag)
         InfoLine("Культура", culture.ifBlank { "Без виразної домінантної традиції" })
         InfoLine("Суспільство", tensionBand(profile.socialTension))
     }
@@ -1098,6 +1107,32 @@ private fun humanizeTag(tag: String): String = when (tag.lowercase()) {
     "urban" -> "міська культура"
     "nomadic" -> "кочова культура"
     "mercantile" -> "торгова культура"
+    "nudity_culture" -> "культура наготи"
+    "public_sex" -> "публічна сексуальність"
+    "ritual_sex" -> "ритуальна сексуальність"
+    "dominance_culture" -> "домінування"
+    "submission_culture" -> "підкорення"
+    "bondage_culture" -> "бондаж"
+    "group_sex" -> "групові практики"
+    "voyeurism_culture" -> "вуайєризм"
+    "status_bonds" -> "статусні зв’язки"
+    "plural_bonding" -> "полігамія"
+    "monogamous" -> "моногамія"
+    "warlike" -> "войовничі"
+    "isolationist" -> "ізоляціоністи"
+    "technological" -> "винахідники"
+    "rapid_mutation" -> "швидка мутація"
+    "hybrid_friendly" -> "відкриті до гібридів"
+    "body_cult" -> "культ тіла"
+    "matriarchal" -> "матріархальні"
+    "race_human" -> "люди"
+    "race_tall_slender" -> "високі й стрункі"
+    "race_robust" -> "масивні"
+    "race_furred" -> "хутряні"
+    "race_tailed" -> "хвостаті"
+    "race_large_eyed" -> "великоокі"
+    "race_four_armed" -> "чотирирукі"
+    "race_scaled" -> "лускаті"
     else -> tag.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() }
 }
 
