@@ -7,6 +7,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,6 +27,7 @@ internal object HordeGenerationCoordinator {
     private val hordeClient = HordeClient()
     private val localDreamClient = LocalDreamClient()
     private val inFlight = ConcurrentHashMap<String, Deferred<HordePreparedImage>>()
+    private val progressByCacheKey = ConcurrentHashMap<String, MutableStateFlow<ImageJobProgress>>()
 
     suspend fun load(
         filesDir: File,
@@ -97,6 +100,16 @@ internal object HordeGenerationCoordinator {
         return inFlight.keys.any { it.startsWith(prefix) }
     }
 
+    fun observeProgress(cacheKey: String): StateFlow<ImageJobProgress> =
+        progressFlow(cacheKey)
+
+    private fun progressFlow(cacheKey: String): MutableStateFlow<ImageJobProgress> =
+        progressByCacheKey.getOrPut(cacheKey) { MutableStateFlow(ImageJobProgress.idle()) }
+
+    private fun publish(cacheKey: String, progress: ImageJobProgress) {
+        progressFlow(cacheKey).value = progress
+    }
+
     private suspend fun generateAndCache(
         filesDir: File,
         request: HordeImageRequest,
@@ -122,12 +135,31 @@ internal object HordeGenerationCoordinator {
 
         var localDreamFallbackNote: String? = null
         val localStatus = localDreamClient.status()
+        publish(
+            request.cacheKey,
+            if (localStatus.available) {
+                ImageJobProgress.connecting(localStatus)
+            } else {
+                ImageJobProgress.unavailable(localStatus)
+            },
+        )
         val localResult = if (localStatus.available) {
             try {
+                publish(
+                    request.cacheKey,
+                    ImageJobProgress(
+                        phase = ImageJobPhase.LOCAL_DREAM,
+                        step = 0,
+                        totalSteps = localDreamRequest.steps.coerceAtLeast(1),
+                    ),
+                )
                 localDreamClient.generate(
                     request = localDreamRequest,
                     sourceImageBytes = reference?.imageBytes,
                     timeoutMillis = (localDreamTimeoutMillis ?: timeoutMillis).coerceAtLeast(5_000L),
+                    onProgress = { step ->
+                        publish(request.cacheKey, ImageJobProgress.fromLocalDream(step))
+                    },
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -158,6 +190,11 @@ internal object HordeGenerationCoordinator {
                 actualHeight = localResult.height,
             )
         }
+
+        publish(
+            request.cacheKey,
+            ImageJobProgress.horde(localDreamFallbackNote),
+        )
 
         val effectiveRequest = reference?.model
             ?.takeUnless { it == LOCAL_DREAM_REFERENCE_MODEL }
@@ -235,3 +272,62 @@ internal data class HordePreparedImage(
     val actualHeight: Int? = null,
     val fallbackNote: String? = null,
 )
+
+internal enum class ImageJobPhase {
+    IDLE,
+    CONNECTING,
+    LOCAL_DREAM,
+    UNAVAILABLE,
+    HORDE,
+}
+
+internal data class ImageJobProgress(
+    val phase: ImageJobPhase = ImageJobPhase.IDLE,
+    val step: Int = 0,
+    val totalSteps: Int = 0,
+    val detail: String? = null,
+) {
+    val determinate: Boolean
+        get() = phase == ImageJobPhase.LOCAL_DREAM && totalSteps > 0
+
+    val fraction: Float
+        get() = if (totalSteps <= 0) 0f else (step.toFloat() / totalSteps.toFloat()).coerceIn(0f, 1f)
+
+    val captionUk: String
+        get() = when (phase) {
+            ImageJobPhase.IDLE -> "очікування…"
+            ImageJobPhase.CONNECTING -> "Local Dream відповідає · запускаємо генерацію…"
+            ImageJobPhase.LOCAL_DREAM -> if (totalSteps > 0) {
+                "Local Dream · крок $step/$totalSteps"
+            } else {
+                "Local Dream · дифузія…"
+            }
+            ImageJobPhase.UNAVAILABLE -> detail ?: "Local Dream недоступний · перехід на AI Horde…"
+            ImageJobPhase.HORDE -> detail?.let { "AI Horde · $it" } ?: "AI Horde · чекаємо чергу…"
+        }
+
+    companion object {
+        fun idle(): ImageJobProgress = ImageJobProgress()
+
+        fun connecting(status: LocalDreamStatus): ImageJobProgress = ImageJobProgress(
+            phase = ImageJobPhase.CONNECTING,
+            detail = status.detail,
+        )
+
+        fun fromLocalDream(progress: LocalDreamProgress): ImageJobProgress = ImageJobProgress(
+            phase = ImageJobPhase.LOCAL_DREAM,
+            step = progress.step,
+            totalSteps = progress.totalSteps,
+        )
+
+        fun unavailable(status: LocalDreamStatus): ImageJobProgress = ImageJobProgress(
+            phase = ImageJobPhase.UNAVAILABLE,
+            detail = status.detail?.take(180),
+        )
+
+        fun horde(reason: String?): ImageJobProgress = ImageJobProgress(
+            phase = ImageJobPhase.HORDE,
+            detail = reason?.take(180),
+        )
+    }
+}
