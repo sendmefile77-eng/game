@@ -144,19 +144,21 @@ internal object LlmNarrativeWriter {
         return LlmCharacterVoice(quote, note, completion.model, completion.elapsedMs).also { characterCache[key] = it }
     }
 
-    private suspend fun complete(system: String, user: String, maxTokens: Int): TellamaCompletion? = try {
+    private suspend fun complete(system: String, user: String, maxTokens: Int): TellamaCompletion? {
         if (!client.hasApiKey() || !client.status().available) return null
-        client.completeJson(
-            systemPrompt = system,
-            userPrompt = user,
-            maxTokens = maxTokens,
-            temperature = 0.66,
-            timeoutMillis = 35_000,
-        )
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Throwable) {
-        null
+        return try {
+            client.completeJson(
+                systemPrompt = system,
+                userPrompt = user,
+                maxTokens = maxTokens,
+                temperature = 0.66,
+                timeoutMillis = 35_000,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun parseJson(raw: String): JSONObject? = runCatching {
