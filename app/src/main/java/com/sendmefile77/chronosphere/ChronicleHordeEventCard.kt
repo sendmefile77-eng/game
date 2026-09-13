@@ -4,14 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -140,8 +137,7 @@ internal fun ChronicleHordeEventCard(
     val baseNarrative = remember(event, storyEra) {
         ChroniclePresentation.narrative(event, textGenerator, storyEra)
     }
-    var decisionNonce by remember { mutableIntStateOf(0) }
-    val baseDecision = remember(events, peopleState, economyState, decisionNonce) {
+    val baseDecision = remember(events, peopleState, economyState) {
         ChronicleDecisionCatalog.latestUnresolved(events, peopleState, economyState)
     }
     val decisionForLlm = baseDecision?.takeIf { it.eventId == event.id }
@@ -247,8 +243,8 @@ internal fun ChronicleHordeEventCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Рішення", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    StatusPill("потрібна дія", color = MaterialTheme.colorScheme.primary)
+                    Text("Майбутня розвилка", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    StatusPill("на наступний хід", color = MaterialTheme.colorScheme.primary)
                 }
                 Text(decision.titleUk, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
@@ -256,8 +252,13 @@ internal fun ChronicleHordeEventCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                decision.options.forEachIndexed { index, option ->
-                    PanelCard(accent = if (index == 0) MaterialTheme.colorScheme.secondary else null) {
+                Text(
+                    "Це попередній перегляд. Натисніть «Хід»: ця розвилка з’явиться разом із напрямами епохи, а «Прожити 100 років» одразу застосує вибір і запустить симуляцію.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+                decision.options.forEach { option ->
+                    PanelCard {
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(option.titleUk, fontWeight = FontWeight.SemiBold)
                             Text("Наслідок · ${option.effectUk}", style = MaterialTheme.typography.bodySmall)
@@ -266,33 +267,9 @@ internal fun ChronicleHordeEventCard(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (index == 0) {
-                                Button(
-                                    onClick = {
-                                        ChronicleDecisionMailbox.enqueue(option)
-                                        decisionNonce += 1
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = ChronosphereSmallShape,
-                                ) { Text("Обрати") }
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        ChronicleDecisionMailbox.enqueue(option)
-                                        decisionNonce += 1
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = ChronosphereSmallShape,
-                                ) { Text("Обрати") }
-                            }
                         }
                     }
                 }
-                Text(
-                    "Вибір буде застосовано на наступному кроці часу.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
             }
         }
     }
