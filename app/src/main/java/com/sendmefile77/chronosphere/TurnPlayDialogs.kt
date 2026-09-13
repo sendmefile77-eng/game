@@ -1,15 +1,22 @@
 package com.sendmefile77.chronosphere
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,8 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 internal fun TurnDecisionDialog(
@@ -47,14 +56,57 @@ internal fun TurnDecisionDialog(
 
     AlertDialog(
         onDismissRequest = {},
+        shape = RoundedCornerShape(24.dp),
+        containerColor = ChronosphereVisuals.DeepSpace,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    if (multi) "Вибір століття · до ${TurnChoiceComposer.MAX_ERA_CHOICES} напрямів" else "Історична розвилка",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(decision.titleUk, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(42.dp)
+                            .then(
+                                Modifier.clickable(enabled = false) {},
+                            ),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            if (multi) "СТРАТЕГІЯ СТОЛІТТЯ" else "ІСТОРИЧНА РОЗВИЛКА",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.0.sp),
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Black,
+                        )
+                        Text(
+                            decision.titleUk,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                    if (multi) {
+                        StatusPill(
+                            "${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+                ) {
+                    Text(
+                        if (multi) "Після підтвердження світ без додаткового натискання проживе наступні 100 років."
+                        else "Це рішення одразу змінить подальший хід історії.",
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         text = {
@@ -62,78 +114,73 @@ internal fun TurnDecisionDialog(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(decision.promptUk, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    decision.promptUk,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 if (multi) {
                     Text(
-                        "Відкриття можна накопичувати. Спосіб життя, суспільний курс і мобільність змінюють попередній вибір того ж типу.",
+                        "Відкриття накопичуються. Спосіб життя, суспільний курс і мобільність замінюють попередній вибір тієї ж сім’ї.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
                 var shownHistoricalHeader = false
                 var shownEraHeader = false
                 decision.options.forEach { option ->
                     val eraOption = TurnChoiceComposer.isEraOption(option)
                     if (!eraOption && !shownHistoricalHeader) {
-                        Text(
-                            "ІСТОРИЧНА РОЗВИЛКА · ОБОВ’ЯЗКОВО",
-                            style = MaterialTheme.typography.labelSmall,
+                        DecisionSectionHeader(
+                            title = "Історична розвилка",
+                            subtitle = "обов’язково",
                             color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold,
                         )
                         shownHistoricalHeader = true
                     }
                     if (eraOption && !shownEraHeader) {
-                        Text(
-                            "НАПРЯМИ ЕПОХИ · ОБЕРІТЬ 1–${TurnChoiceComposer.MAX_ERA_CHOICES}",
-                            style = MaterialTheme.typography.labelSmall,
+                        DecisionSectionHeader(
+                            title = "Напрями епохи",
+                            subtitle = "оберіть 1–${TurnChoiceComposer.MAX_ERA_CHOICES}",
                             color = MaterialTheme.colorScheme.secondary,
-                            fontWeight = FontWeight.Bold,
                         )
                         shownEraHeader = true
                     }
-                    val isSelected = option.id in selectedIds
-                    if (isSelected) {
-                        Button(
-                            onClick = { toggle(option) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = ChronosphereSmallShape,
-                        ) { Text("✓ ${option.titleUk}") }
-                    } else {
-                        OutlinedButton(
-                            onClick = { toggle(option) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = ChronosphereSmallShape,
-                        ) { Text(option.titleUk) }
-                    }
-                    Text(
-                        "Наслідок · ${option.effectUk}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "Ризик · ${option.riskUk}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    DecisionOptionCard(
+                        option = option,
+                        selected = option.id in selectedIds,
+                        historical = !eraOption,
+                        onClick = { toggle(option) },
                     )
                 }
+
                 if (multi) {
-                    Row(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        shape = RoundedCornerShape(14.dp),
+                        color = ChronosphereVisuals.PanelSoft,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
                     ) {
-                        Text(
-                            "Напрямів ${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary,
-                        )
-                        if (requiredEventSources.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
-                                if (historicalReady) "Розвилку вирішено" else "Оберіть відповідь на подію",
+                                "Обрано напрямів ${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (historicalReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold,
                             )
+                            if (requiredEventSources.isNotEmpty()) {
+                                Text(
+                                    if (historicalReady) "Подію вирішено" else "Потрібна відповідь",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (historicalReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     }
                 }
@@ -144,12 +191,109 @@ internal fun TurnDecisionDialog(
                 Button(
                     onClick = { onConfirm(selected) },
                     enabled = selectedEra.isNotEmpty() && historicalReady,
-                    shape = ChronosphereSmallShape,
-                ) { Text("Прожити 100 років") }
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text(
+                        "ПРОЖИТИ 100 РОКІВ",
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.6.sp,
+                    )
+                }
             }
         },
         dismissButton = {},
     )
+}
+
+@Composable
+private fun DecisionSectionHeader(title: String, subtitle: String, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(modifier = Modifier.width(22.dp).height(2.dp))
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.7.sp),
+            color = color,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            "· $subtitle",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun DecisionOptionCard(
+    option: ChronicleDecisionOption,
+    selected: Boolean,
+    historical: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = if (historical) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) accent.copy(alpha = 0.15f) else ChronosphereVisuals.PanelSoft,
+        border = BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = if (selected) accent.copy(alpha = 0.88f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.34f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(100.dp),
+                    color = if (selected) accent else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, accent.copy(alpha = if (selected) 0.90f else 0.35f)),
+                ) {
+                    Text(
+                        if (selected) "✓" else "○",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
+                Text(
+                    option.titleUk,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Text(
+                "НАСЛІДОК",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.6.sp),
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                option.effectUk,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "РИЗИК · ${option.riskUk}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.92f),
+            )
+        }
+    }
 }
 
 @Composable
@@ -159,41 +303,92 @@ internal fun TurnConsequenceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        containerColor = ChronosphereVisuals.DeepSpace,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(
-                    "Розвиток світу · ${report.yearsAdvanced} р.",
-                    style = MaterialTheme.typography.labelSmall,
+                    "ПІДСУМОК СТОЛІТТЯ · ${report.yearsAdvanced} РОКІВ",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
                     color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Black,
                 )
-                Text(report.headlineUk, fontWeight = FontWeight.Bold)
+                Text(
+                    report.headlineUk,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Black,
+                )
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricTile(
+                        "Населення",
+                        GameplayLoop.signedLong(report.populationDelta),
+                        Modifier.weight(1f),
+                        MaterialTheme.colorScheme.secondary,
+                    )
+                    MetricTile(
+                        "Стабільність",
+                        GameplayLoop.signedDouble(report.stabilityDelta),
+                        Modifier.weight(1f),
+                        MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricTile(
+                        "Розвиток",
+                        GameplayLoop.signedDouble(report.technologyDelta),
+                        Modifier.weight(1f),
+                        MaterialTheme.colorScheme.primary,
+                    )
+                    MetricTile(
+                        "Казна",
+                        GameplayLoop.signedDouble(report.treasuryDelta),
+                        Modifier.weight(1f),
+                        MaterialTheme.colorScheme.secondary,
+                    )
+                }
                 Text(
-                    "Населення ${GameplayLoop.signedLong(report.populationDelta)} · " +
-                        "стабільність ${GameplayLoop.signedDouble(report.stabilityDelta)} · " +
-                        "розвиток ${GameplayLoop.signedDouble(report.technologyDelta)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    "Казна ${GameplayLoop.signedDouble(report.treasuryDelta)} · " +
-                        "їжа ${GameplayLoop.signedDouble(report.foodDelta)} · " +
-                        "війни ${report.warsBefore} → ${report.warsAfter}",
+                    "Їжа ${GameplayLoop.signedDouble(report.foodDelta)} · війни ${report.warsBefore} → ${report.warsAfter}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (report.highlights.isNotEmpty()) {
-                    Text("Що змінилось", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "ЩО ЗМІНИЛОСЯ",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.7.sp),
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Black,
+                    )
                     report.highlights.forEach { highlight ->
-                        Text("• $highlight", style = MaterialTheme.typography.bodySmall)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = ChronosphereVisuals.PanelSoft,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+                        ) {
+                            Text(
+                                highlight,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss, shape = ChronosphereSmallShape) { Text("Закрити") }
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Text("ЗАКРИТИ", fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+            }
         },
     )
 }
