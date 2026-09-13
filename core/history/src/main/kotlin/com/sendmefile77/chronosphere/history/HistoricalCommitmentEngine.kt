@@ -9,6 +9,7 @@ import com.sendmefile77.chronosphere.civilization.LivingPlanetState
  */
 object HistoricalCommitmentEngine {
     private const val PREFIX = "history_policy:"
+    private const val ERA_CHOICE_PREFIX = "era-choice:"
 
     private val definitions = listOf(
         StructuralCommitmentDefinition(
@@ -135,33 +136,179 @@ object HistoricalCommitmentEngine {
     fun active(civilization: Civilization): List<ActiveStructuralCommitment> =
         civilization.cultureTags.mapNotNull(::parseTag)
 
+    /**
+     * Applies both classic chronicle commitments and the durable material consequences of the
+     * player's era choices. Era-choice tags are part of Civilization itself, so these effects
+     * naturally survive save/load and fork with the timeline instead of living in UI state.
+     */
     fun applyRecurring(state: LivingPlanetState, months: Int): LivingPlanetState {
         if (months <= 0) return state
         val years = months / 12.0
         val activeByCivilization = state.civilizations.associate { civilization ->
             civilization.id to active(civilization)
         }
-        if (activeByCivilization.values.all { it.isEmpty() }) return state
+        val eraEffects = state.civilizations.associate { civilization ->
+            civilization.id to eraChoiceEffect(civilization.cultureTags)
+        }
+        if (
+            activeByCivilization.values.all { it.isEmpty() } &&
+            eraEffects.values.all(EraChoiceRecurringEffect::isZero)
+        ) return state
 
         val civilizations = state.civilizations.map { civilization ->
             val policies = activeByCivilization[civilization.id].orEmpty().map { it.definition }
-            if (policies.isEmpty()) return@map civilization
+            val eraEffect = eraEffects[civilization.id] ?: EraChoiceRecurringEffect()
+            if (policies.isEmpty() && eraEffect.isZero()) return@map civilization
             civilization.copy(
-                technology = (civilization.technology + policies.sumOf { it.annualTechnologyDelta } * years).coerceIn(0.0, 1.0),
-                stability = (civilization.stability + policies.sumOf { it.annualStabilityDelta } * years).coerceIn(0.12, 0.98),
-                treasury = (civilization.treasury + policies.sumOf { it.annualTreasuryDelta } * years).coerceAtLeast(0.0),
+                technology = (
+                    civilization.technology +
+                        (policies.sumOf { it.annualTechnologyDelta } + eraEffect.annualTechnologyDelta) * years
+                    ).coerceIn(0.0, 1.0),
+                stability = (
+                    civilization.stability +
+                        (policies.sumOf { it.annualStabilityDelta } + eraEffect.annualStabilityDelta) * years
+                    ).coerceIn(0.12, 0.98),
+                treasury = (
+                    civilization.treasury +
+                        (policies.sumOf { it.annualTreasuryDelta } + eraEffect.annualTreasuryDelta) * years
+                    ).coerceAtLeast(0.0),
             )
         }
         val settlements = state.settlements.map { settlement ->
-            val foodPerPerson = activeByCivilization[settlement.civilizationId]
+            val policyFood = activeByCivilization[settlement.civilizationId]
                 .orEmpty()
                 .sumOf { it.definition.annualFoodPerPersonDelta }
+            val eraFood = eraEffects[settlement.civilizationId]?.annualFoodPerPersonDelta ?: 0.0
+            val foodPerPerson = policyFood + eraFood
             if (foodPerPerson == 0.0) settlement
             else settlement.copy(
                 foodStock = (settlement.foodStock + settlement.population * foodPerPerson * years).coerceAtLeast(0.0),
             )
         }
-        return state.copy(civilizations = civilizations, settlements = settlements)
+        val relations = state.relations.map { relation ->
+            val drift = (
+                (eraEffects[relation.civilizationA]?.annualRelationDelta ?: 0.0) +
+                    (eraEffects[relation.civilizationB]?.annualRelationDelta ?: 0.0)
+                ) * years
+            if (drift == 0.0) relation else relation.copy(value = (relation.value + drift).coerceIn(-1.0, 1.0))
+        }
+        return state.copy(civilizations = civilizations, settlements = settlements, relations = relations)
+    }
+
+    private fun eraChoiceEffect(tags: Set<String>): EraChoiceRecurringEffect {
+        val choices = tags.asSequence()
+            .filter { it.startsWith(ERA_CHOICE_PREFIX) }
+            .mapNotNull { tag ->
+                val parts = tag.removePrefix(ERA_CHOICE_PREFIX).split(':', limit = 2)
+                if (parts.size == 2 && parts.all(String::isNotBlank)) EraChoice(parts[0], parts[1]) else null
+            }
+            .toList()
+        if (choices.isEmpty()) return EraChoiceRecurringEffect()
+
+        var effect = EraChoiceRecurringEffect()
+        val breakthroughs = choices.count { it.family == "breakthrough" }.coerceAtMost(6)
+        if (breakthroughs > 0) {
+            // Discoveries accumulate forever, but the generic recurring bonus is capped so an old
+            // civilization cannot snowball merely by having a long list of remembered inventions.
+            effect += EraChoiceRecurringEffect(
+                annualTechnologyDelta = breakthroughs * 0.00003,
+                annualTreasuryDelta = breakthroughs * -0.0015,
+            )
+        }
+        if (choices.any { it.family == "society" }) {
+            effect += EraChoiceRecurringEffect(annualStabilityDelta = 0.000025, annualTreasuryDelta = -0.003)
+        }
+        if (choices.any { it.family == "mobility" }) {
+            effect += EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000035)
+        }
+
+        choices.forEach { choice ->
+            effect += when (choice.slug) {
+                "fire" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = 0.000025,
+                    annualFoodPerPersonDelta = 0.000080,
+                )
+                "stone_tools" -> EraChoiceRecurringEffect(
+                    annualTechnologyDelta = 0.000025,
+                    annualFoodPerPersonDelta = 0.000070,
+                )
+                "predator_hunters" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = -0.000020,
+                    annualFoodPerPersonDelta = 0.000300,
+                    annualRelationDelta = -0.000025,
+                )
+                "plant_foragers" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = 0.000025,
+                    annualFoodPerPersonDelta = 0.000235,
+                )
+                "river_fishers" -> EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000275)
+                "animal_taming" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = 0.000020,
+                    annualFoodPerPersonDelta = 0.000115,
+                )
+                "ritual_culture" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = 0.000070,
+                    annualTreasuryDelta = -0.004,
+                )
+                "nomadic_migration" -> EraChoiceRecurringEffect(
+                    annualFoodPerPersonDelta = 0.000120,
+                    annualTreasuryDelta = 0.003,
+                    annualTechnologyDelta = -0.000006,
+                )
+                "permanent_camp" -> EraChoiceRecurringEffect(
+                    annualStabilityDelta = 0.000025,
+                    annualTechnologyDelta = 0.000012,
+                )
+                "plough", "iron_plough", "crop_rotation" -> EraChoiceRecurringEffect(
+                    annualFoodPerPersonDelta = 0.000160,
+                    annualTechnologyDelta = 0.000010,
+                )
+                "irrigation" -> EraChoiceRecurringEffect(
+                    annualFoodPerPersonDelta = 0.000190,
+                    annualTreasuryDelta = -0.004,
+                )
+                "grain_farming", "state_granaries" -> EraChoiceRecurringEffect(
+                    annualFoodPerPersonDelta = 0.000210,
+                    annualStabilityDelta = 0.000012,
+                )
+                "pastoralism" -> EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000175)
+                "seasonal_fairs", "urban_markets", "merchant_guilds", "coinage", "trade_caravans" ->
+                    EraChoiceRecurringEffect(annualTreasuryDelta = 0.012, annualRelationDelta = 0.000018)
+                "village_network", "paved_roads", "turnpikes", "railways", "motorization",
+                "electric_transit", "autonomous_transport", "interplanetary_routes" ->
+                    EraChoiceRecurringEffect(annualTreasuryDelta = 0.008, annualTechnologyDelta = 0.000010)
+                "writing", "manuscript_schools", "mass_schooling", "radio", "computing" ->
+                    EraChoiceRecurringEffect(annualTechnologyDelta = 0.000055, annualTreasuryDelta = -0.004)
+                "iron_tools", "watermills", "steam_power", "mechanized_looms", "steel", "power_grid" ->
+                    EraChoiceRecurringEffect(annualTechnologyDelta = 0.000070, annualTreasuryDelta = 0.004)
+                "metal_weapons", "warrior_elite", "frontier_castles" ->
+                    EraChoiceRecurringEffect(annualStabilityDelta = 0.000018, annualRelationDelta = -0.000030)
+                "sewers", "sanitation", "public_clinics", "public_health" ->
+                    EraChoiceRecurringEffect(annualStabilityDelta = 0.000045, annualTreasuryDelta = -0.006)
+                "industrial_agriculture", "chemical_farming", "precision_farming" ->
+                    EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000260, annualTechnologyDelta = 0.000020)
+                "processed_food", "cold_chain", "synthetic_food" ->
+                    EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000205, annualTreasuryDelta = 0.006)
+                "biotech" -> EraChoiceRecurringEffect(
+                    annualTechnologyDelta = 0.000075,
+                    annualFoodPerPersonDelta = 0.000070,
+                )
+                "open_networks", "global_shipping" ->
+                    EraChoiceRecurringEffect(annualTreasuryDelta = 0.014, annualRelationDelta = 0.000030)
+                "algorithmic_governance", "ai_coordination" ->
+                    EraChoiceRecurringEffect(annualTechnologyDelta = 0.000065, annualStabilityDelta = 0.000025)
+                "fusion" -> EraChoiceRecurringEffect(annualTechnologyDelta = 0.000090, annualTreasuryDelta = 0.010)
+                "asteroid_mining" -> EraChoiceRecurringEffect(annualTechnologyDelta = 0.000045, annualTreasuryDelta = 0.018)
+                "closed_ecologies", "engineered_food" ->
+                    EraChoiceRecurringEffect(annualFoodPerPersonDelta = 0.000320, annualTechnologyDelta = 0.000035)
+                "orbital_habitats" -> EraChoiceRecurringEffect(
+                    annualTechnologyDelta = 0.000050,
+                    annualStabilityDelta = 0.000020,
+                )
+                else -> EraChoiceRecurringEffect()
+            }
+        }
+        return effect
     }
 
     private fun parseTag(tag: String): ActiveStructuralCommitment? {
@@ -173,5 +320,27 @@ object HistoricalCommitmentEngine {
         if (definition.family != family) return null
         val originTick = parts[2].toLongOrNull()?.takeIf { it >= 0L } ?: return null
         return ActiveStructuralCommitment(definition, originTick)
+    }
+
+    private data class EraChoice(val family: String, val slug: String)
+
+    private data class EraChoiceRecurringEffect(
+        val annualTechnologyDelta: Double = 0.0,
+        val annualStabilityDelta: Double = 0.0,
+        val annualTreasuryDelta: Double = 0.0,
+        val annualFoodPerPersonDelta: Double = 0.0,
+        val annualRelationDelta: Double = 0.0,
+    ) {
+        fun isZero(): Boolean =
+            annualTechnologyDelta == 0.0 && annualStabilityDelta == 0.0 && annualTreasuryDelta == 0.0 &&
+                annualFoodPerPersonDelta == 0.0 && annualRelationDelta == 0.0
+
+        operator fun plus(other: EraChoiceRecurringEffect): EraChoiceRecurringEffect = EraChoiceRecurringEffect(
+            annualTechnologyDelta = annualTechnologyDelta + other.annualTechnologyDelta,
+            annualStabilityDelta = annualStabilityDelta + other.annualStabilityDelta,
+            annualTreasuryDelta = annualTreasuryDelta + other.annualTreasuryDelta,
+            annualFoodPerPersonDelta = annualFoodPerPersonDelta + other.annualFoodPerPersonDelta,
+            annualRelationDelta = annualRelationDelta + other.annualRelationDelta,
+        )
     }
 }
