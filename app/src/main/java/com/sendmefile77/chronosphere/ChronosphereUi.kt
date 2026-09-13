@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,22 +11,36 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-internal val ChronosphereCardShape = RoundedCornerShape(18.dp)
-internal val ChronosphereSmallShape = RoundedCornerShape(12.dp)
+internal val ChronosphereCardShape = RoundedCornerShape(20.dp)
+internal val ChronosphereSmallShape = RoundedCornerShape(14.dp)
+
+/** Shared visual language for the playable shell: dark metal, warm chronology and cold simulation light. */
+internal object ChronosphereVisuals {
+    val DeepSpace = Color(0xFF070B10)
+    val PanelTop = Color(0xFF151D26)
+    val PanelBottom = Color(0xFF0B1118)
+    val PanelSoft = Color(0xFF111922)
+    val Hairline = Color(0xFF31404D)
+    val Gold = Color(0xFFE2C46F)
+    val GoldSoft = Color(0xFF9B8142)
+    val Cyan = Color(0xFF75D6D2)
+    val Danger = Color(0xFFE47B79)
+}
 
 @Composable
 internal fun SectionHeader(
@@ -35,33 +50,56 @@ internal fun SectionHeader(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Bottom,
+        modifier = modifier.fillMaxWidth().padding(top = 3.dp, bottom = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(36.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.72f),
+                        ),
+                    ),
+                    shape = RoundedCornerShape(100.dp),
+                ),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             if (!eyebrow.isNullOrBlank()) {
                 Text(
                     eyebrow.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold,
                 )
             }
             Text(
                 title,
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Black,
             )
         }
         if (!trailing.isNullOrBlank()) {
-            Text(
-                trailing,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Surface(
+                shape = RoundedCornerShape(100.dp),
+                color = ChronosphereVisuals.PanelSoft,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)),
+            ) {
+                Text(
+                    trailing,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -72,22 +110,47 @@ internal fun PanelCard(
     accent: Color? = null,
     content: @Composable () -> Unit,
 ) {
-    Card(
+    val lineColor = accent ?: MaterialTheme.colorScheme.outline
+    val top = if (accent == null) {
+        ChronosphereVisuals.PanelTop
+    } else {
+        blend(ChronosphereVisuals.PanelTop, accent, 0.09f)
+    }
+    Surface(
         modifier = modifier.fillMaxWidth(),
         shape = ChronosphereCardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (accent == null) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.76f)
-            } else {
-                accent.copy(alpha = 0.075f)
-            },
-        ),
+        color = Color.Transparent,
         border = BorderStroke(
             width = 1.dp,
-            color = (accent ?: MaterialTheme.colorScheme.outline).copy(alpha = if (accent == null) 0.34f else 0.42f),
+            color = lineColor.copy(alpha = if (accent == null) 0.42f else 0.58f),
         ),
+        shadowElevation = 2.dp,
     ) {
-        Box(modifier = Modifier.fillMaxWidth().padding(14.dp)) { content() }
+        Column(
+            modifier = Modifier.background(
+                Brush.verticalGradient(
+                    colors = listOf(top, ChronosphereVisuals.PanelBottom),
+                ),
+            ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                lineColor.copy(alpha = if (accent == null) 0.38f else 0.95f),
+                                lineColor.copy(alpha = 0.18f),
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 14.dp)) {
+                content()
+            }
+        }
     }
 }
 
@@ -100,18 +163,29 @@ internal fun StatusPill(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(100.dp),
-        color = color.copy(alpha = 0.11f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.30f)),
+        color = blend(ChronosphereVisuals.PanelSoft, color, 0.12f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.48f)),
     ) {
-        Text(
-            text = text,
+        Row(
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .height(5.dp)
+                    .background(color, RoundedCornerShape(100.dp)),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -125,34 +199,41 @@ internal fun MetricTile(
     Surface(
         modifier = modifier,
         shape = ChronosphereSmallShape,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.30f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            blend(ChronosphereVisuals.PanelTop, accent, 0.08f),
+                            ChronosphereVisuals.PanelBottom,
+                        ),
+                    ),
+                )
+                .padding(horizontal = 11.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.30f)
-                    .height(2.dp),
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = accent.copy(alpha = 0.72f),
-                    shape = RoundedCornerShape(100.dp),
-                ) {}
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .width(12.dp)
+                        .height(2.dp)
+                        .background(accent, RoundedCornerShape(100.dp)),
+                )
+                Text(
+                    label.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.45.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
             }
             Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            Text(
                 value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Black,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -168,25 +249,37 @@ internal fun RowScope.ActionTile(
     onClick: () -> Unit,
     accent: Color = MaterialTheme.colorScheme.primary,
 ) {
+    val top = if (enabled) blend(ChronosphereVisuals.PanelTop, accent, 0.13f) else ChronosphereVisuals.PanelSoft
     Surface(
         modifier = Modifier
             .weight(1f)
             .clickable(enabled = enabled, onClick = onClick),
         shape = ChronosphereSmallShape,
-        color = if (enabled) accent.copy(alpha = 0.085f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = Color.Transparent,
         border = BorderStroke(
             1.dp,
-            if (enabled) accent.copy(alpha = 0.36f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f),
+            if (enabled) accent.copy(alpha = 0.48f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f),
         ),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(top, ChronosphereVisuals.PanelBottom)))
+                .padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
+            Box(
+                modifier = Modifier
+                    .width(28.dp)
+                    .height(2.dp)
+                    .background(
+                        if (enabled) accent else MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(100.dp),
+                    ),
+            )
             Text(
                 title,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -200,4 +293,14 @@ internal fun RowScope.ActionTile(
             )
         }
     }
+}
+
+private fun blend(base: Color, accent: Color, amount: Float): Color {
+    val t = amount.coerceIn(0f, 1f)
+    return Color(
+        red = base.red + (accent.red - base.red) * t,
+        green = base.green + (accent.green - base.green) * t,
+        blue = base.blue + (accent.blue - base.blue) * t,
+        alpha = 1f,
+    )
 }
