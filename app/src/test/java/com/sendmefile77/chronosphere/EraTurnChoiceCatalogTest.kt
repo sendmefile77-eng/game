@@ -82,6 +82,26 @@ class EraTurnChoiceCatalogTest {
         assertTrue(activeLifestyleTags.single().endsWith(alternate.substringAfterLast('-')))
     }
 
+    @Test
+    fun discoveriesAccumulateAndAreNotOfferedAgain() {
+        var current = state(tick = 24L)
+        current = EraTurnChoiceCatalog.applyLegacy(current, "civ-a", "era-tribal-breakthrough-fire")
+        current = EraTurnChoiceCatalog.applyLegacy(current, "civ-a", "era-tribal-breakthrough-stone_tools")
+        val tags = current.civilizations.first { it.id == "civ-a" }.cultureTags
+
+        assertTrue("era-choice:breakthrough:fire" in tags)
+        assertTrue("era-choice:breakthrough:stone_tools" in tags)
+        assertTrue("foundation:fire_mastery" in tags)
+        assertTrue("foundation:stone_tools" in tags)
+
+        val next = EraTurnChoiceCatalog.decision(
+            state = current.copy(tick = 1_224L),
+            economy = economy(TechnologyEra.TRIBAL, tick = 1_224L),
+            civilizationId = "civ-a",
+        )
+        assertTrue(next.options.none { EraTurnChoiceCatalog.family(it) == "breakthrough" })
+    }
+
     private fun state(tick: Long): LivingPlanetState = LivingPlanetState(
         worldSeed = 77L,
         tick = tick,
