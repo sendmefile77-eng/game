@@ -14,7 +14,24 @@ class GameSnapshotV1Test {
         val state = LivingPlanetState(
             worldSeed = 42L,
             tick = 120L,
-            civilizations = listOf(Civilization("c1", "Test", 1200, 0.7, 0.1, 55.0, setOf("coastal"))),
+            civilizations = listOf(
+                Civilization(
+                    "c1",
+                    "Test",
+                    1200,
+                    0.7,
+                    0.1,
+                    55.0,
+                    setOf(
+                        "coastal",
+                        "era-choice:breakthrough:fire",
+                        "foundation:fire_mastery",
+                        "era-choice:subsistence:predator_hunters",
+                        "policy:predator_hunters",
+                        "hist:blood_hunt",
+                    ),
+                ),
+            ),
             settlements = listOf(Settlement("s1", "Port", "c1", 3, 4, 1200, 900.0, 44.0, 0)),
             recentEvents = listOf(
                 SimulationEvent(
@@ -28,7 +45,11 @@ class GameSnapshotV1Test {
                 ),
             ),
         )
-        assertEquals(state, GameSnapshotV1.decode(GameSnapshotV1.encode(state)))
+        val decoded = GameSnapshotV1.decode(GameSnapshotV1.encode(state))
+        assertEquals(state, decoded)
+        assertTrue("era-choice:breakthrough:fire" in decoded.civilizations.single().cultureTags)
+        assertTrue("era-choice:subsistence:predator_hunters" in decoded.civilizations.single().cultureTags)
+        assertTrue("hist:blood_hunt" in decoded.civilizations.single().cultureTags)
     }
 
     @Test
