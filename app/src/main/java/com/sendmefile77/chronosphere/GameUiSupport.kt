@@ -54,8 +54,8 @@ internal fun ChronosphereTopBar(year: Int, branchName: String, onNewWorld: () ->
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = ChronosphereVisuals.DeepSpace,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
-        shadowElevation = 3.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+        shadowElevation = 2.dp,
     ) {
         Row(
             modifier = Modifier
@@ -63,54 +63,54 @@ internal fun ChronosphereTopBar(year: Int, branchName: String, onNewWorld: () ->
                 .background(
                     Brush.horizontalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.055f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
                             Color.Transparent,
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.025f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.02f),
                         ),
                     ),
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     "ХРОНОСФЕРА",
-                    style = MaterialTheme.typography.titleLarge.copy(letterSpacing = 1.1.sp),
+                    style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 1.0.sp),
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(100.dp),
-                        color = ChronosphereVisuals.PanelSoft,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)),
-                    ) {
-                        Text(
-                            "$year РІК",
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.55.sp),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Black,
-                        )
-                    }
-                    StatusPill(branchName, color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        "$year рік",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("·", color = MaterialTheme.colorScheme.outline)
+                    Text(
+                        branchName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
-            OutlinedButton(
+            TextButton(
                 onClick = onNewWorld,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.46f)),
-                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 9.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Text(
-                    "НОВИЙ СВІТ",
+                    "Новий світ",
                     maxLines = 1,
-                    style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.4.sp),
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -209,7 +209,7 @@ internal fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
             disabledContainerColor = ChronosphereVisuals.PanelSoft,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
         ),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 13.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp),
     ) {
         Text(
@@ -224,15 +224,15 @@ internal fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 internal fun GameTabs(selectedPanel: GamePanel, enabled: Boolean, onSelect: (GamePanel) -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         color = ChronosphereVisuals.DeepSpace,
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
         shadowElevation = 2.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             GameTab("Світ", GamePanel.WORLD, selectedPanel, enabled, onSelect)
             GameTab("Люди", GamePanel.PERSON, selectedPanel, enabled, onSelect)
@@ -254,34 +254,21 @@ internal fun RowScope.GameTab(
     Surface(
         modifier = Modifier
             .weight(1f)
-            .height(44.dp)
-            .clip(RoundedCornerShape(13.dp))
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled) { onSelect(panel) },
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
-        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)) else null,
-        shape = RoundedCornerShape(13.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.17f) else Color.Transparent,
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.64f)) else null,
+        shape = RoundedCornerShape(12.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
+        Box(contentAlignment = Alignment.Center) {
             Text(
-                label.uppercase(),
+                label,
                 maxLines = 1,
-                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.45.sp),
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 3.dp)
-                        .fillMaxWidth(0.28f)
-                        .height(2.dp)
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(100.dp)),
-                )
-            }
         }
     }
 }
