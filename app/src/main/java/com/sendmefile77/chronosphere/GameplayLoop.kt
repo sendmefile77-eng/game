@@ -259,9 +259,7 @@ internal object GameplayLoop {
         if (hasPendingDecision) return GameplayActionGate(false, "Спочатку прийміть рішення у Хроніці", cost)
         if (actionSpent(state)) return GameplayActionGate(false, "Команду цього ходу вже використано", cost)
         if (queuedAction(state) != null) return GameplayActionGate(false, "Команду вже заплановано — прокрутіть час або скасуйте її", cost)
-        if (actor.treasury + 1e-9 < cost) {
-            return GameplayActionGate(false, "Потрібно ${cost.toInt()} казни", cost)
-        }
+        if (actor.treasury + 1e-9 < cost) return GameplayActionGate(false, "Потрібно ${cost.toInt()} казни", cost)
         if (kind !in diplomaticKinds) return GameplayActionGate(true, treasuryCost = cost)
         val targetId = targetCivilizationId ?: return GameplayActionGate(false, "Оберіть іншу державу", cost)
         if (targetId == civilizationId || state.civilizations.none { it.id == targetId }) {
@@ -361,6 +359,7 @@ internal object GameplayLoop {
     }
 
     private fun eventSummary(event: SimulationEvent): String {
+        event.facts["choiceLabel"]?.takeIf { it.isNotBlank() }?.let { return "Обрано курс: $it" }
         val counterpart = event.facts["b"]
         val place = event.facts["settlement"] ?: ""
         return when (event.code) {
@@ -371,6 +370,8 @@ internal object GameplayLoop {
             "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "Загострився дефіцит ресурсів"
             "ERA_ADVANCED" -> "Держава перейшла до нової епохи"
             "RULER_SUCCEEDED" -> "До влади прийшов новий правитель"
+            "DYNASTIC_BIRTH" -> "У правлячому домі народилося нове покоління"
+            "ADULT_SOCIAL_EVENT" -> "Суспільний звичай став помітною подією століття"
             "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> "Засновано нове поселення"
             "PLAYER_EVOLUTION_DIVERGENCE" -> "Відокремилася нова біологічна лінія"
             "PLAYER_STRUCTURAL_MUTATION" -> "Закріпилася структурна мутація"
