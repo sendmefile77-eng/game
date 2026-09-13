@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,9 +70,7 @@ internal fun TurnDecisionDialog(
                         modifier = Modifier
                             .width(3.dp)
                             .height(42.dp)
-                            .then(
-                                Modifier.clickable(enabled = false) {},
-                            ),
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(100.dp)),
                     )
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
@@ -213,7 +212,12 @@ private fun DecisionSectionHeader(title: String, subtitle: String, color: Color)
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(modifier = Modifier.width(22.dp).height(2.dp))
+        Box(
+            modifier = Modifier
+                .width(22.dp)
+                .height(2.dp)
+                .background(color.copy(alpha = 0.74f), RoundedCornerShape(100.dp)),
+        )
         Text(
             title.uppercase(),
             style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.7.sp),
@@ -263,7 +267,7 @@ private fun DecisionOptionCard(
                     Text(
                         if (selected) "✓" else "○",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) Color(0xFF111318) else MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Black,
                     )
