@@ -258,6 +258,8 @@ internal fun LocalLlmCharacterVoiceCard(
     val scope = rememberCoroutineScope()
     var voice by remember(person.id, tick / 120L) { mutableStateOf<LlmCharacterVoice?>(null) }
     var working by remember(person.id) { mutableStateOf(false) }
+    var failure by remember(person.id, tick / 120L) { mutableStateOf<String?>(null) }
+    var model by remember(person.id) { mutableStateOf<String?>(null) }
 
     PanelCard(accent = MaterialTheme.colorScheme.secondary) {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -271,8 +273,14 @@ internal fun LocalLlmCharacterVoiceCard(
                     Text("Локальна LLM говорить від імені ${person.name}, не змінюючи факти гри.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 StatusPill(
-                    if (TellamaRuntime.client.hasApiKey()) "ЛОКАЛЬНО" else "НЕ НАЛАШТОВАНО",
-                    color = if (TellamaRuntime.client.hasApiKey()) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                    when {
+                        working -> "ПИШЕ"
+                        voice != null -> "ГОТОВО"
+                        failure != null -> "ПОМИЛКА"
+                        TellamaRuntime.client.hasApiKey() -> "ГОТОВА"
+                        else -> "НЕ НАЛАШТОВАНО"
+                    },
+                    color = if (failure == null && TellamaRuntime.client.hasApiKey()) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                 )
             }
 
@@ -281,19 +289,36 @@ internal fun LocalLlmCharacterVoiceCard(
                 voice != null -> {
                     Text("“${voice!!.quoteUk}”", style = MaterialTheme.typography.bodyMedium)
                     if (voice!!.noteUk.isNotBlank()) Text(voice!!.noteUk, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${model ?: voice!!.model} · локально", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                else -> Button(
-                    onClick = {
-                        scope.launch {
-                            working = true
-                            voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
-                            working = false
-                        }
-                    },
-                    enabled = enabled && TellamaRuntime.client.hasApiKey(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Дати слово")
+                else -> {
+                    failure?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                working = true
+                                failure = null
+                                val status = TellamaRuntime.client.status(force = true)
+                                model = status.model
+                                if (!status.available) {
+                                    failure = status.detail ?: "Tellama недоступна"
+                                    working = false
+                                    return@launch
+                                }
+                                voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
+                                if (voice == null) {
+                                    failure = "Qwen відповіла невалідно або не встигла. Натисніть ще раз; механіка гри не постраждала."
+                                }
+                                working = false
+                            }
+                        },
+                        enabled = enabled && TellamaRuntime.client.hasApiKey(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (failure == null) "Дати слово" else "Спробувати ще раз")
+                    }
                 }
             }
         }
