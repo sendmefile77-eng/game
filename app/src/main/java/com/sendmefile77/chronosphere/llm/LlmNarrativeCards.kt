@@ -128,7 +128,8 @@ internal object LlmNarrativeWriter {
                 Ти даєш голос реальній особі з симуляції «Хроносфера». Пиши українською від першої особи.
                 Не вигадуй конкретних воєн, міст, родичів, посад або вчинків, яких немає у вхідних даних.
                 Репліка має передавати роль, характер і епоху, але не змінювати канон.
-                Поверни лише JSON: {"quote":"1-3 короткі речення від першої особи","note":"коротко, що в характері це підкреслює"}
+                Бажаний формат — JSON: {"quote":"1-3 короткі речення від першої особи","note":"коротко, що в характері це підкреслює"}.
+                Якщо не можеш дати JSON, поверни просто саму репліку без пояснень.
             """.trimIndent(),
             user = buildString {
                 appendLine("ім'я=${person.name}; вік=${person.ageYearsAt(tick)}; роль=${person.role.name}")
@@ -138,9 +139,11 @@ internal object LlmNarrativeWriter {
             },
             maxTokens = 240,
         ) ?: return null
-        val json = parseJson(completion.content) ?: return null
-        val quote = json.optString("quote").trim().takeIf { it.length in 8..520 } ?: return null
-        val note = json.optString("note").trim().takeIf { it.length in 3..180 }.orEmpty()
+        val json = parseJson(completion.content)
+        val quote = json?.optString("quote")?.trim()?.takeIf { it.length in 8..520 }
+            ?: plainReply(completion.content).takeIf { it.length in 8..520 }
+            ?: return null
+        val note = json?.optString("note")?.trim()?.takeIf { it.length in 3..180 }.orEmpty()
         return LlmCharacterVoice(quote, note, completion.model, completion.elapsedMs).also { characterCache[key] = it }
     }
 
@@ -161,15 +164,32 @@ internal object LlmNarrativeWriter {
         }
     }
 
-    private fun parseJson(raw: String): JSONObject? = runCatching {
-        JSONObject(
-            raw.trim()
-                .removePrefix("```json")
-                .removePrefix("```")
-                .removeSuffix("```")
-                .trim(),
-        )
-    }.getOrNull()
+    private fun parseJson(raw: String): JSONObject? {
+        val cleaned = raw.trim()
+            .removePrefix("```json")
+            .removePrefix("```")
+            .removeSuffix("```")
+            .trim()
+        runCatching { JSONObject(cleaned) }.getOrNull()?.let { return it }
+        val start = cleaned.indexOf('{')
+        val end = cleaned.lastIndexOf('}')
+        if (start >= 0 && end > start) {
+            runCatching { JSONObject(cleaned.substring(start, end + 1)) }.getOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    private fun plainReply(raw: String): String = raw.trim()
+        .removePrefix("```json")
+        .removePrefix("```")
+        .removeSuffix("```")
+        .trim()
+        .lineSequence()
+        .filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") }
+        .joinToString(" ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(520)
 }
 
 @Composable
@@ -309,7 +329,7 @@ internal fun LocalLlmCharacterVoiceCard(
                                 }
                                 voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
                                 if (voice == null) {
-                                    failure = "Qwen відповіла невалідно або не встигла. Натисніть ще раз; механіка гри не постраждала."
+                                    failure = "Qwen не дала придатної відповіді. Натисніть ще раз; механіка гри не постраждала."
                                 }
                                 working = false
                             }
