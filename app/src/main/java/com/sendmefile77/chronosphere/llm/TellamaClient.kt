@@ -51,15 +51,21 @@ internal class TellamaClient(
     @Volatile
     private var apiKey: String? = null
 
+    @Volatile
+    private var lastGenerationError: String? = null
+
     fun setApiKey(value: String?) {
         val normalized = value?.trim()?.takeIf { it.isNotBlank() }
         if (normalized != apiKey) {
             apiKey = normalized
             cachedModel = null
+            lastGenerationError = null
         }
     }
 
     fun hasApiKey(): Boolean = !apiKey.isNullOrBlank()
+
+    fun lastError(): String? = lastGenerationError
 
     suspend fun status(force: Boolean = false): TellamaStatus = withContext(Dispatchers.IO) {
         if (!hasApiKey()) {
@@ -89,7 +95,7 @@ internal class TellamaClient(
         userPrompt: String,
         maxTokens: Int = 520,
         temperature: Double = 0.62,
-        timeoutMillis: Int = 45_000,
+        timeoutMillis: Int = 60_000,
     ): TellamaCompletion? = generationMutex.withLock {
         withContext(Dispatchers.IO) {
             val model = status().model ?: return@withContext null
@@ -110,10 +116,31 @@ internal class TellamaClient(
                         .put("top_p", 0.86),
                 )
 
-            val started = System.currentTimeMillis()
-            val content = postChatNdjson("/api/chat", request, timeoutMillis).trim()
-            if (content.isBlank()) return@withContext null
-            TellamaCompletion(model, content, System.currentTimeMillis() - started)
+            var lastError: Throwable? = null
+            repeat(3) { attempt ->
+                val started = System.currentTimeMillis()
+                try {
+                    val content = postChatNdjson("/api/chat", request, timeoutMillis).trim()
+                    if (content.isNotBlank()) {
+                        lastGenerationError = null
+                        return@withContext TellamaCompletion(
+                            model = model,
+                            content = content,
+                            elapsedMs = System.currentTimeMillis() - started,
+                        )
+                    }
+                    lastError = IllegalStateException("Tellama повернула порожню відповідь")
+                } catch (error: Throwable) {
+                    lastError = error
+                    if (!isTransientGenerationProblem(error) || attempt == 2) {
+                        lastGenerationError = friendlyGenerationError(error)
+                        throw error
+                    }
+                }
+                delay(450L + attempt * 550L)
+            }
+            lastGenerationError = friendlyGenerationError(lastError ?: IllegalStateException("Tellama не дала відповіді"))
+            null
         }
     }
 
@@ -212,9 +239,31 @@ internal class TellamaClient(
                 raw.contains("Connection refused", ignoreCase = true) ->
                 "Сервер Tellama не працює на 127.0.0.1:11434. У Tellama → Server має бути кнопка «Stop server». Якщо сервер гасне після перемикання в Хроносферу — дозвольте Tellama фонову роботу та режим батареї «Без обмежень»."
             root is SocketTimeoutException || raw.contains("timed out", ignoreCase = true) ->
-                "Tellama запущена, але не відповіла вчасно. Дочекайтеся завантаження моделі й натисніть «Перевірити» ще раз."
+                "Tellama запущена, але не відповіла вчасно. Дочекайтеся завантаження моделі й спробуйте ще раз."
             else -> raw.take(240).ifBlank { "127.0.0.1:11434 не відповідає" }
         }
+    }
+
+    private fun friendlyGenerationError(error: Throwable): String {
+        val raw = error.message.orEmpty()
+        return when {
+            raw.contains("runtime зайнятий", ignoreCase = true) || raw.contains("RUNTIME_008", ignoreCase = true) ->
+                "Qwen зараз зайнята іншим локальним запитом. Хроносфера повторила запит автоматично, але Tellama все ще зайнята."
+            raw.contains("timed out", ignoreCase = true) || generateSequence(error) { it.cause }.last() is SocketTimeoutException ->
+                "Qwen не встигла завершити відповідь за 60 секунд. Модель могла ще завантажуватися або телефон був зайнятий генерацією зображення."
+            raw.contains("порожню відповідь", ignoreCase = true) ->
+                "Tellama відповіла, але не передала текст від Qwen."
+            else -> friendlyConnectionError(error)
+        }
+    }
+
+    private fun isTransientGenerationProblem(error: Throwable): Boolean {
+        val root = generateSequence(error) { it.cause }.last()
+        val raw = error.message.orEmpty()
+        return isConnectionProblem(error) || root is SocketTimeoutException ||
+            raw.contains("runtime зайнятий", ignoreCase = true) ||
+            raw.contains("RUNTIME_008", ignoreCase = true) ||
+            raw.contains("HTTP 503", ignoreCase = true)
     }
 
     private fun isConnectionProblem(error: Throwable): Boolean {
