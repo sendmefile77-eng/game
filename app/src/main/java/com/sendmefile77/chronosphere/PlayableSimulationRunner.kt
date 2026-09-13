@@ -165,16 +165,8 @@ internal class PlayableSimulationRunner(
                 economy = economyAtTick
                 evolution = evolutionAtTick.copy(tick = worldState.tick)
                 remaining -= step
-
-                // Long fast-forward automatically pauses on the first new meaningful decision.
-                if (remaining > 0 && ChronicleDecisionCatalog.latestUnresolved(
-                        worldState.recentEvents,
-                        people,
-                        economy,
-                    ) != null
-                ) {
-                    remaining = 0
-                }
+                // A confirmed turn is atomic: new chronicle forks created during these 100 years
+                // are remembered and offered together with the era choices on the NEXT turn.
             }
 
             val actualMonths = (worldState.tick - currentWorld.tick).toInt().coerceAtLeast(1)
