@@ -13,8 +13,20 @@ import org.junit.Test
 
 class WorldLlmAdvisorTest {
     @Test
-    fun promptUsesCalculatedBriefingAndOnlyVisibleActionVocabulary() {
-        val civilization = Civilization("civ-a", "Нері", 1_200L, 0.34, 0.18, 55.0)
+    fun promptUsesCalculatedBriefingVisibleActionsAndPersistentHistoricalLegacy() {
+        val civilization = Civilization(
+            "civ-a",
+            "Нері",
+            1_200L,
+            0.34,
+            0.18,
+            55.0,
+            cultureTags = setOf(
+                "era-choice:subsistence:predator_hunters",
+                "policy:predator_hunters",
+                "foundation:stone_tools",
+            ),
+        )
         val state = LivingPlanetState(
             worldSeed = 7L,
             tick = 24L,
@@ -60,6 +72,9 @@ class WorldLlmAdvisorTest {
         assertTrue(prompt.contains("Нері"))
         assertTrue(prompt.contains("Втримай державу"))
         assertTrue(prompt.contains("Варки"))
+        assertTrue(prompt.contains("predator hunters"))
+        assertTrue(prompt.contains("stone tools"))
+        assertTrue(prompt.contains("довготривала спадщина"))
         WorldLlmAdvisor.ALLOWED_ACTIONS.forEach { action -> assertTrue(prompt.contains(action)) }
     }
 }
