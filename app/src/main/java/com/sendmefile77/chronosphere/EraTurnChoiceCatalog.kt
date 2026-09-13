@@ -30,14 +30,36 @@ internal object EraTurnChoiceCatalog {
         val era = economy.economy(civilization.id)?.era ?: TechnologyEra.TRIBAL
         val source = "$SOURCE_PREFIX-${state.tick}-${civilization.id}"
         val pool = specs.getValue(era)
+
+        fun activeSlug(family: String): String? = civilization.cultureTags
+            .firstOrNull { it.startsWith("$TAG_PREFIX$family:") }
+            ?.substringAfterLast(':')
+
+        val knownBreakthroughs = civilization.cultureTags.asSequence()
+            .filter { it.startsWith("${TAG_PREFIX}breakthrough:") }
+            .map { it.substringAfterLast(':') }
+            .toSet()
+
         val selected = pool.groupBy { it.family }
             .toSortedMap()
-            .values
-            .map { family -> family.minBy { stableRank(state.worldSeed, state.tick, civilization.id, it.slug) } }
+            .mapNotNull { (familyName, familySpecs) ->
+                val candidates = when (familyName) {
+                    "breakthrough" -> familySpecs.filter { it.slug !in knownBreakthroughs }
+                    else -> {
+                        val current = activeSlug(familyName)
+                        familySpecs.filter { it.slug != current }.ifEmpty { familySpecs }
+                    }
+                }
+                candidates.minByOrNull { stableRank(state.worldSeed, state.tick, civilization.id, it.slug) }
+            }
             .toMutableList()
 
-        val remaining = pool.filter { it !in selected }
+        val remaining = pool.asSequence()
+            .filter { it !in selected }
+            .filterNot { it.family == "breakthrough" && it.slug in knownBreakthroughs }
+            .filterNot { spec -> spec.family != "breakthrough" && spec.slug == activeSlug(spec.family) }
             .sortedBy { stableRank(state.worldSeed xor 0x5F3759DFL, state.tick + 17L, civilization.id, it.slug) }
+            .toList()
         if (remaining.isNotEmpty()) selected += remaining.first()
 
         val options = selected.take(5).map { spec ->
@@ -55,7 +77,7 @@ internal object EraTurnChoiceCatalog {
         return ChronicleDecision(
             eventId = source,
             titleUk = "${era.displayNameUk} доба: що змінити цього століття?",
-            promptUk = "Оберіть до трьох напрямів. Можна поєднати прорив, спосіб життя, суспільний курс і мобільність. Після підтвердження світ одразу проживе наступні 100 років.",
+            promptUk = "Оберіть до трьох напрямів. Відкриття накопичуються назавжди, а спосіб життя, суспільний курс і мобільність можуть змінюватися. Після підтвердження світ одразу проживе наступні 100 років.",
             options = options,
         )
     }
@@ -70,16 +92,22 @@ internal object EraTurnChoiceCatalog {
         choiceId: String,
     ): LivingPlanetState {
         val spec = specFor(choiceId) ?: return state
-        val obsolete = allSpecs.asSequence()
-            .filter { it.family == spec.family }
-            .flatMap { it.legacyTags.asSequence() }
-            .toSet()
+        val familyPrefix = "$TAG_PREFIX${spec.family}:"
+        val obsolete = if (spec.family == "breakthrough") emptySet() else {
+            allSpecs.asSequence()
+                .filter { it.family == spec.family }
+                .flatMap { it.legacyTags.asSequence() }
+                .toSet()
+        }
         return state.copy(
             civilizations = state.civilizations.map { civilization ->
                 if (civilization.id != civilizationId) return@map civilization
+                val retained = civilization.cultureTags
+                    .filterNot { it in obsolete }
+                    .filterNot { spec.family != "breakthrough" && it.startsWith(familyPrefix) }
+                    .toSet()
                 civilization.copy(
-                    cultureTags = (civilization.cultureTags - obsolete) +
-                        spec.legacyTags + "$TAG_PREFIX${spec.family}:${spec.slug}",
+                    cultureTags = retained + spec.legacyTags + "$familyPrefix${spec.slug}",
                 )
             },
         )
