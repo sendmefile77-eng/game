@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere.llm
 import com.sendmefile77.chronosphere.ChronicleDecision
 import com.sendmefile77.chronosphere.ChronicleDecisionOption
 import com.sendmefile77.chronosphere.economy.EconomyState
+import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.textgen.ChronicleNarrative
@@ -35,11 +36,18 @@ internal object ChronicleLlmEnricher {
         baseNarrative: ChronicleNarrative,
         baseDecision: ChronicleDecision?,
     ): LlmChronicleEnrichment? {
+        val legacySignature = ActiveHistoricalContextRegistry.snapshot(people.worldSeed)
+            ?.cultureTagsByCivilization
+            ?.entries
+            ?.sortedBy { it.key }
+            ?.joinToString("|") { (id, tags) -> "$id:${tags.sorted().joinToString(",")}" }
+            .orEmpty()
         val cacheKey = buildString {
             append(event.id).append('|').append(event.tick).append('|').append(event.code)
             append('|').append(event.facts.hashCode()).append('|').append(event.numbers.hashCode())
             append('|').append(baseDecision?.eventId.orEmpty())
             append('|').append(baseDecision?.options?.joinToString(",") { it.id }.orEmpty())
+            append('|').append(legacySignature.hashCode())
         }
         cache[cacheKey]?.let { return it }
 
@@ -86,6 +94,19 @@ internal object ChronicleLlmEnricher {
         val ruler = civilizationId?.let(people::ruler)
         val profile = civilizationId?.let(people::profile)
         val civEconomy = civilizationId?.let(economy::economy)
+        val historicalLegacy = civilizationId?.let { id ->
+            ActiveHistoricalContextRegistry.snapshot(people.worldSeed)
+                ?.cultureTagsByCivilization
+                ?.get(id)
+                .orEmpty()
+                .asSequence()
+                .filter { tag -> HISTORY_PREFIXES.any(tag::startsWith) }
+                .map(::humanizeHistoricalTag)
+                .distinct()
+                .sorted()
+                .take(12)
+                .toList()
+        }.orEmpty()
         val safeFacts = event.facts
             .filterKeys { key -> key !in HIDDEN_FACT_KEYS && !key.startsWith("pmorph:") }
             .entries
@@ -115,6 +136,10 @@ internal object ChronicleLlmEnricher {
             }
             if (ruler != null) appendLine("ruler=${ruler.name}; age=${ruler.ageYearsAt(event.tick)}")
             if (profile != null) appendLine("culture=${profile.tags.sorted().take(8).joinToString(",")}; tension=${"%.2f".format(profile.socialTension)}")
+            if (historicalLegacy.isNotEmpty()) {
+                appendLine("довготривала спадщина виборів=${historicalLegacy.joinToString(", ")}")
+                appendLine("спадщина реально впливає на побут, господарство, інструменти, соціальні звички й образ людей; не описуй її як абстрактний бонус")
+            }
             appendLine("ПОПЕРЕДНІ ПОДІЇ. Використовуй їх, щоб показати передумови й продовження, але не вигадуй причин, яких тут немає:")
             appendLine(previous)
             appendLine()
@@ -198,6 +223,7 @@ internal object ChronicleLlmEnricher {
                 kind = base.kind,
                 targetCivilizationId = base.targetCivilizationId,
                 strength = base.strength,
+                counterpartCivilizationId = base.counterpartCivilizationId,
             )
         }
         return narrative to baseDecision.copy(
@@ -207,8 +233,18 @@ internal object ChronicleLlmEnricher {
         )
     }
 
+    private fun humanizeHistoricalTag(tag: String): String {
+        val parts = tag.split(':')
+        return when {
+            tag.startsWith("era-choice:") && parts.size >= 3 ->
+                "${parts[1].replace('_', ' ')}: ${parts.drop(2).joinToString(" ").replace('_', ' ').replace('-', ' ')}"
+            else -> tag.substringAfter(':', tag).replace('_', ' ').replace('-', ' ')
+        }
+    }
+
     private const val MAX_PROMPT_CHARS = 8_500
     private val HIDDEN_FACT_KEYS = setOf("mediaKey", "mediaTags")
+    private val HISTORY_PREFIXES = listOf("era-choice:", "foundation:", "policy:", "hist:", "history_policy:")
 
     private val SYSTEM_PROMPT = """
         Ти локальний літописець і сценарист гри «Хроносфера». Пиши природною українською як цікаву історію, а не як технічний звіт.
