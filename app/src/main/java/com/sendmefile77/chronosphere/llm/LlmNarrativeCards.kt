@@ -23,6 +23,7 @@ import com.sendmefile77.chronosphere.NeighborStanding
 import com.sendmefile77.chronosphere.PanelCard
 import com.sendmefile77.chronosphere.StatusPill
 import com.sendmefile77.chronosphere.economy.TechnologyEra
+import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import kotlinx.coroutines.CancellationException
@@ -133,13 +134,14 @@ internal object LlmNarrativeWriter {
     ): LlmCharacterVoice? {
         val decade = tick / 120L
         val relationships = people.relationships.count { it.involves(person.id) }
-        val key = "${person.id}|$decade|${person.role}|${person.traits.hashCode()}|$relationships|${era?.name}"
+        val historicalLegacy = historicalLegacy(people.worldSeed, person.civilizationId)
+        val key = "${person.id}|$decade|${person.role}|${person.traits.hashCode()}|$relationships|${era?.name}|${historicalLegacy.hashCode()}"
         characterCache[key]?.let { return it }
         val completion = complete(
             system = """
                 Ти даєш голос реальній особі з симуляції «Хроносфера». Пиши українською від першої особи.
                 Не вигадуй конкретних воєн, міст, родичів, посад або вчинків, яких немає у вхідних даних.
-                Репліка має передавати роль, характер і епоху, але не змінювати канон.
+                Репліка має передавати роль, характер, епоху та наданий усталений спосіб життя, але не змінювати канон.
                 Бажаний формат — JSON: {"quote":"1-3 короткі речення від першої особи","note":"коротко, що в характері це підкреслює"}.
                 Якщо не можеш дати JSON, поверни просто саму репліку без пояснень.
             """.trimIndent(),
@@ -148,6 +150,10 @@ internal object LlmNarrativeWriter {
                 appendLine("риси=${person.traits.joinToString(",").ifBlank { "немає" }}")
                 appendLine("вплив=${"%.2f".format(person.prestige)}; здібності=${"%.2f".format(person.aptitude)}")
                 appendLine("епоха=${era?.displayNameUk ?: "невизначена"}; відомих зв'язків=$relationships")
+                if (historicalLegacy.isNotEmpty()) {
+                    appendLine("усталений спосіб життя й історична спадщина=${historicalLegacy.joinToString(", ")}")
+                    appendLine("репліка може природно відбивати цю спадщину, якщо це доречно, але не перераховуй її як теги")
+                }
             },
             maxTokens = 240,
         ) ?: return null
@@ -222,12 +228,27 @@ internal object LlmNarrativeWriter {
             .take(700)
     }
 
+    private fun historicalLegacy(worldSeed: Long, civilizationId: String): List<String> =
+        ActiveHistoricalContextRegistry.snapshot(worldSeed)
+            ?.cultureTagsByCivilization
+            ?.get(civilizationId)
+            .orEmpty()
+            .asSequence()
+            .filter { tag -> HISTORY_PREFIXES.any(tag::startsWith) }
+            .map { tag -> tag.substringAfter(':', tag).replace('_', ' ').replace('-', ' ') }
+            .distinct()
+            .sorted()
+            .take(10)
+            .toList()
+
     private fun cleanReply(raw: String): String = raw.trim()
         .removePrefix("```json")
         .removePrefix("```JSON")
         .removePrefix("```")
         .removeSuffix("```")
         .trim()
+
+    private val HISTORY_PREFIXES = listOf("era-choice:", "foundation:", "policy:", "hist:", "history_policy:")
 }
 
 @Composable
@@ -358,19 +379,26 @@ internal fun LocalLlmCharacterVoiceCard(
                             scope.launch {
                                 working = true
                                 failure = null
-                                val status = TellamaRuntime.client.status(force = true)
-                                model = status.model
-                                if (!status.available) {
-                                    failure = status.detail ?: "Tellama недоступна"
+                                try {
+                                    val status = TellamaRuntime.client.status(force = true)
+                                    model = status.model
+                                    if (!status.available) {
+                                        failure = status.detail ?: "Tellama недоступна"
+                                        return@launch
+                                    }
+                                    voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
+                                    if (voice == null) {
+                                        failure = TellamaRuntime.client.lastError()
+                                            ?: "Qwen відповіла, але текст не вдалося розібрати. Спробуйте ще раз."
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Throwable) {
+                                    failure = error.message?.take(240)?.takeIf { it.isNotBlank() }
+                                        ?: "Не вдалося отримати репліку Qwen. Спробуйте ще раз."
+                                } finally {
                                     working = false
-                                    return@launch
                                 }
-                                voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
-                                if (voice == null) {
-                                    failure = TellamaRuntime.client.lastError()
-                                        ?: "Qwen відповіла, але текст не вдалося розібрати. Спробуйте ще раз."
-                                }
-                                working = false
                             }
                         },
                         enabled = enabled && TellamaRuntime.client.hasApiKey(),
