@@ -75,7 +75,8 @@ internal object LlmNarrativeWriter {
             system = """
                 Ти літописець гри «Хроносфера». Пиши українською живо, стисло і причинно.
                 Не вигадуй фактів, осіб, причин, чисел чи подій. Використовуй лише надані зміни.
-                Поверни лише JSON: {"summary":"2-4 зв'язні речення про те, як минув хід","outlook":"1 речення: що тепер найбільш важливо"}
+                Бажаний формат JSON: {"summary":"2-4 зв'язні речення про те, як минув хід","outlook":"1 речення: що тепер найбільш важливо"}.
+                Якщо JSON не виходить, поверни просто зв'язний текст без пояснення формату.
             """.trimIndent(),
             user = buildString {
                 appendLine("Держава=${report.civilizationName}; років=${report.yearsAdvanced}; вижила=${report.survived}")
@@ -85,9 +86,14 @@ internal object LlmNarrativeWriter {
             },
             maxTokens = 300,
         ) ?: return null
-        val json = parseJson(completion.content) ?: return null
-        val summary = json.optString("summary").trim().takeIf { it.length in 10..700 } ?: return null
-        val outlook = json.optString("outlook").trim().takeIf { it.length in 5..280 }.orEmpty()
+        val json = parseJson(completion.content)
+        val summary = flexibleField(completion.content, "summary", json)
+            ?.takeIf { it.length in 10..700 }
+            ?: plainReply(completion.content).takeIf { it.length in 10..700 }
+            ?: return null
+        val outlook = flexibleField(completion.content, "outlook", json)
+            ?.takeIf { it.length in 5..280 }
+            .orEmpty()
         return LlmTurnNarrative(summary, outlook, completion.model, completion.elapsedMs).also { turnCache[key] = it }
     }
 
@@ -102,14 +108,20 @@ internal object LlmNarrativeWriter {
             system = """
                 Ти пишеш коротку дипломатичну репліку держави в грі «Хроносфера» українською.
                 Не вигадуй правителів, договорів, воєн або мотивів. Врахуй лише статус і числові відносини.
-                Не приймай рішень за гравця. Поверни лише JSON: {"message":"1-2 речення від імені іншої держави","tone":"2-5 слів про тон"}
+                Не приймай рішень за гравця. Бажаний JSON: {"message":"1-2 речення від імені іншої держави","tone":"2-5 слів про тон"}.
+                Якщо JSON не виходить, поверни лише саму дипломатичну репліку.
             """.trimIndent(),
             user = "Наша держава=$ownName; інша держава=${target.name}; відносини=${"%.2f".format(target.relation)}; статус=${target.status}; війна=${target.atWar}; союз=${target.allied}",
             maxTokens = 220,
         ) ?: return null
-        val json = parseJson(completion.content) ?: return null
-        val message = json.optString("message").trim().takeIf { it.length in 8..420 } ?: return null
-        val tone = json.optString("tone").trim().takeIf { it.length in 2..80 }.orEmpty()
+        val json = parseJson(completion.content)
+        val message = flexibleField(completion.content, "message", json)
+            ?.takeIf { it.length in 8..420 }
+            ?: plainReply(completion.content).takeIf { it.length in 8..420 }
+            ?: return null
+        val tone = flexibleField(completion.content, "tone", json)
+            ?.takeIf { it.length in 2..80 }
+            .orEmpty()
         return LlmDiplomaticVoice(message, tone, completion.model, completion.elapsedMs).also { diplomacyCache[key] = it }
     }
 
@@ -140,22 +152,25 @@ internal object LlmNarrativeWriter {
             maxTokens = 240,
         ) ?: return null
         val json = parseJson(completion.content)
-        val quote = json?.optString("quote")?.trim()?.takeIf { it.length in 8..520 }
+        val quote = flexibleField(completion.content, "quote", json)
+            ?.takeIf { it.length in 8..520 }
             ?: plainReply(completion.content).takeIf { it.length in 8..520 }
             ?: return null
-        val note = json?.optString("note")?.trim()?.takeIf { it.length in 3..180 }.orEmpty()
+        val note = flexibleField(completion.content, "note", json)
+            ?.takeIf { it.length in 3..180 }
+            .orEmpty()
         return LlmCharacterVoice(quote, note, completion.model, completion.elapsedMs).also { characterCache[key] = it }
     }
 
     private suspend fun complete(system: String, user: String, maxTokens: Int): TellamaCompletion? {
-        if (!client.hasApiKey() || !client.status().available) return null
+        if (!client.hasApiKey()) return null
         return try {
             client.completeJson(
                 systemPrompt = system,
                 userPrompt = user,
                 maxTokens = maxTokens,
                 temperature = 0.66,
-                timeoutMillis = 35_000,
+                timeoutMillis = 60_000,
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -164,12 +179,8 @@ internal object LlmNarrativeWriter {
         }
     }
 
-    private fun parseJson(raw: String): JSONObject? {
-        val cleaned = raw.trim()
-            .removePrefix("```json")
-            .removePrefix("```")
-            .removeSuffix("```")
-            .trim()
+    internal fun parseJson(raw: String): JSONObject? {
+        val cleaned = cleanReply(raw)
         runCatching { JSONObject(cleaned) }.getOrNull()?.let { return it }
         val start = cleaned.indexOf('{')
         val end = cleaned.lastIndexOf('}')
@@ -179,17 +190,44 @@ internal object LlmNarrativeWriter {
         return null
     }
 
-    private fun plainReply(raw: String): String = raw.trim()
+    internal fun flexibleField(raw: String, name: String, parsed: JSONObject? = parseJson(raw)): String? {
+        parsed?.optString(name)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        val cleaned = cleanReply(raw)
+        val quoted = Regex("(?is)[\\\"']?${Regex.escape(name)}[\\\"']?\\s*:\\s*\\\"([^\\\"]{2,900})\\\"")
+            .find(cleaned)?.groupValues?.getOrNull(1)?.trim()
+        if (!quoted.isNullOrBlank()) return quoted
+        val singleQuoted = Regex("(?is)[\\\"']?${Regex.escape(name)}[\\\"']?\\s*:\\s*'([^']{2,900})'")
+            .find(cleaned)?.groupValues?.getOrNull(1)?.trim()
+        return singleQuoted?.takeIf { it.isNotBlank() }
+    }
+
+    internal fun plainReply(raw: String): String {
+        var cleaned = cleanReply(raw)
+        if (cleaned.startsWith('{') && cleaned.endsWith('}') && cleaned.length > 2) {
+            cleaned = cleaned.substring(1, cleaned.length - 1).trim()
+        }
+        cleaned = cleaned
+            .replace(
+                Regex("(?i)[\\\"']?(quote|summary|message|advice|note|tone|outlook|title)[\\\"']?\\s*:\\s*"),
+                "",
+            )
+            .replace(Regex("\\s*,\\s*[\\\"']?[a-zA-Z_]+[\\\"']?\\s*:\\s*"), " ")
+            .trim()
+        if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length > 1) {
+            cleaned = cleaned.substring(1, cleaned.length - 1)
+        }
+        return cleaned
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(700)
+    }
+
+    private fun cleanReply(raw: String): String = raw.trim()
         .removePrefix("```json")
+        .removePrefix("```JSON")
         .removePrefix("```")
         .removeSuffix("```")
         .trim()
-        .lineSequence()
-        .filterNot { it.trim().startsWith("{") || it.trim().startsWith("}") }
-        .joinToString(" ")
-        .replace(Regex("\\s+"), " ")
-        .trim()
-        .take(520)
 }
 
 @Composable
@@ -305,7 +343,7 @@ internal fun LocalLlmCharacterVoiceCard(
             }
 
             when {
-                working -> Text("Qwen формулює репліку…", style = MaterialTheme.typography.bodySmall)
+                working -> Text("Qwen формулює репліку… Це може тривати до хвилини на 1.5B-моделі.", style = MaterialTheme.typography.bodySmall)
                 voice != null -> {
                     Text("“${voice!!.quoteUk}”", style = MaterialTheme.typography.bodyMedium)
                     if (voice!!.noteUk.isNotBlank()) Text(voice!!.noteUk, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -329,7 +367,8 @@ internal fun LocalLlmCharacterVoiceCard(
                                 }
                                 voice = LlmNarrativeWriter.character(person, tick, people, technologyEra)
                                 if (voice == null) {
-                                    failure = "Qwen не дала придатної відповіді. Натисніть ще раз; механіка гри не постраждала."
+                                    failure = TellamaRuntime.client.lastError()
+                                        ?: "Qwen відповіла, але текст не вдалося розібрати. Спробуйте ще раз."
                                 }
                                 working = false
                             }
