@@ -29,6 +29,13 @@ internal fun TurnDecisionDialog(
     val multi = EraTurnChoiceCatalog.isEraTurn(decision)
     var selectedIds by remember(decision.eventId) { mutableStateOf(emptySet<String>()) }
     val selected = decision.options.filter { it.id in selectedIds }
+    val selectedEra = selected.filter(TurnChoiceComposer::isEraOption)
+    val requiredEventSources = remember(decision) { TurnChoiceComposer.requiredHistoricalSources(decision) }
+    val resolvedEventSources = selected.asSequence()
+        .filterNot(TurnChoiceComposer::isEraOption)
+        .map { it.sourceEventId }
+        .toSet()
+    val historicalReady = requiredEventSources.all { it in resolvedEventSources }
 
     fun toggle(option: ChronicleDecisionOption) {
         if (!multi) {
@@ -39,14 +46,19 @@ internal fun TurnDecisionDialog(
             selectedIds = selectedIds - option.id
             return
         }
-        val family = EraTurnChoiceCatalog.family(option)
-        val withoutFamily = if (family == null) selectedIds else {
-            selectedIds.filterTo(linkedSetOf()) { id ->
-                val old = decision.options.firstOrNull { it.id == id }
-                old == null || EraTurnChoiceCatalog.family(old) != family
-            }
+        val group = TurnChoiceComposer.selectionGroup(option)
+        val withoutSameGroup = selectedIds.filterTo(linkedSetOf()) { id ->
+            val old = decision.options.firstOrNull { it.id == id }
+            old == null || TurnChoiceComposer.selectionGroup(old) != group
         }
-        selectedIds = if (withoutFamily.size >= 3) withoutFamily else withoutFamily + option.id
+        val eraCountAfterReplacement = decision.options.count { candidate ->
+            candidate.id in withoutSameGroup && TurnChoiceComposer.isEraOption(candidate)
+        }
+        if (TurnChoiceComposer.isEraOption(option) && eraCountAfterReplacement >= 3) {
+            selectedIds = withoutSameGroup
+            return
+        }
+        selectedIds = withoutSameGroup + option.id
     }
 
     AlertDialog(
@@ -69,12 +81,33 @@ internal fun TurnDecisionDialog(
                 Text(decision.promptUk, style = MaterialTheme.typography.bodyMedium)
                 if (multi) {
                     Text(
-                        "Можна поєднати кілька різних напрямів. Два варіанти одного типу взаємно замінюються.",
+                        "Відкриття можна накопичувати. Спосіб життя, суспільний курс і мобільність змінюють попередній вибір того ж типу.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                var shownHistoricalHeader = false
+                var shownEraHeader = false
                 decision.options.forEach { option ->
+                    val eraOption = TurnChoiceComposer.isEraOption(option)
+                    if (!eraOption && !shownHistoricalHeader) {
+                        Text(
+                            "ІСТОРИЧНА РОЗВИЛКА · ОБОВ’ЯЗКОВО",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        shownHistoricalHeader = true
+                    }
+                    if (eraOption && !shownEraHeader) {
+                        Text(
+                            "НАПРЯМИ ЕПОХИ · ОБЕРІТЬ 1–3",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        shownEraHeader = true
+                    }
                     val isSelected = option.id in selectedIds
                     if (isSelected) {
                         Button(
@@ -107,10 +140,17 @@ internal fun TurnDecisionDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Обрано ${selected.size}/3",
+                            "Напрямів ${selectedEra.size}/3",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary,
                         )
+                        if (requiredEventSources.isNotEmpty()) {
+                            Text(
+                                if (historicalReady) "Розвилку вирішено" else "Оберіть відповідь на подію",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (historicalReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                 }
             }
@@ -119,7 +159,7 @@ internal fun TurnDecisionDialog(
             if (multi) {
                 Button(
                     onClick = { onConfirm(selected) },
-                    enabled = selected.isNotEmpty(),
+                    enabled = selectedEra.isNotEmpty() && historicalReady,
                     shape = ChronosphereSmallShape,
                 ) { Text("Прожити 100 років") }
             }
