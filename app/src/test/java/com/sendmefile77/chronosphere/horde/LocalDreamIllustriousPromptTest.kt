@@ -37,13 +37,17 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.positivePrompt.contains("soles"))
         assertTrue(local.positivePrompt.contains("hide tent"))
         assertTrue(local.positivePrompt.contains("ochre"))
+        assertTrue(local.positivePrompt.contains("hearth fire"))
+        assertTrue(local.positivePrompt.contains("wide shot"))
+        assertTrue(local.positivePrompt.indexOf("hide tent") < local.positivePrompt.indexOf("footjob"))
         assertFalse(local.positivePrompt.contains("exact face match"))
         assertFalse(local.positivePrompt.contains("natural standing"))
+        assertTrue(local.negativePrompt.contains("modern bedroom"))
         assertNull(local.referenceCacheKey)
         assertEquals(24, local.steps)
         assertEquals(5.5, local.cfgScale, 0.0001)
         assertEquals(24, horde.steps)
-        assertTrue(local.cacheKey.contains("|ld-illust-v2"))
+        assertTrue(local.cacheKey.contains("|ld-illust-v3"))
         assertTrue(local.cacheKey.contains("ld-pack-illustrious"))
     }
 
@@ -61,5 +65,6 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.positivePrompt.contains("anal"))
         assertTrue(local.negativePrompt.contains("kiss"))
         assertTrue(local.positivePrompt.contains("hide tent"))
+        assertTrue(local.positivePrompt.contains("prehistoric tribal camp"))
     }
 }
