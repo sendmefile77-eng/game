@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere.horde
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,12 +25,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.ChronosphereSmallShape
+import com.sendmefile77.chronosphere.ChronosphereVisuals
 import com.sendmefile77.chronosphere.GalleryCapture
 import com.sendmefile77.chronosphere.GeneratedImageGalleryStore
 import com.sendmefile77.chronosphere.LocalSceneFallbackView
@@ -99,7 +104,7 @@ internal fun HordeSceneView(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         when (val current = state) {
             HordeUiState.Loading -> {
@@ -138,25 +143,30 @@ internal fun HordeSceneView(
                 } else {
                     Surface(
                         modifier = modifier.clickable { showFullscreen = true },
-                        shape = RoundedCornerShape(18.dp),
-                        tonalElevation = 2.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFF03070A),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.48f)),
+                        shadowElevation = 4.dp,
                     ) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "Згенерований портрет персонажа",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = if (fitFullBody) ContentScale.Fit else ContentScale.Crop,
-                        )
+                        Box(modifier = Modifier.fillMaxSize().padding(3.dp).clip(RoundedCornerShape(17.dp))) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "Згенерований портрет персонажа",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = if (fitFullBody) ContentScale.Fit else ContentScale.Crop,
+                            )
+                        }
                     }
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = ChronosphereSmallShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+                        color = ChronosphereVisuals.PanelSoft,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(7.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -184,9 +194,10 @@ internal fun HordeSceneView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
-                                    "На весь екран",
+                                    "НА ВЕСЬ ЕКРАН",
                                     modifier = Modifier.clickable { showFullscreen = true },
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.secondary,
                                 )
                             }
@@ -274,7 +285,8 @@ private fun FailureRow(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = ChronosphereSmallShape,
-        color = MaterialTheme.colorScheme.error.copy(alpha = 0.06f),
+        color = ChronosphereVisuals.PanelSoft,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.38f)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(9.dp),
