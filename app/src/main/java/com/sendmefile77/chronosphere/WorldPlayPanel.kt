@@ -77,7 +77,6 @@ internal fun WorldPlayPanel(
     val queuedAction = remember(session.state.tick, actionNonce) { GameplayLoop.queuedAction(session.state) }
     val directActionSpent = GameplayLoop.actionSpent(session.state)
     val storyChoiceQueued = session.state.recentEvents.any { ChronicleDecisionMailbox.contains(it.id) }
-    val hasPendingDecision = pendingDecisionTitle != null
     val turnReport = GameplayTurnReportStore.latestFor(civilization.id)
     val selectedCounterpart = neighbors.firstOrNull { it.civilizationId == selectedCounterpartId }
         ?: neighbors.firstOrNull()
@@ -111,12 +110,10 @@ internal fun WorldPlayPanel(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "ОБРАНА ДЕРЖАВА",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
+                civilization.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black,
             )
-            Text(civilization.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
                 economy?.era?.displayNameUk ?: "Епоха формується",
                 style = MaterialTheme.typography.bodyMedium,
@@ -125,7 +122,21 @@ internal fun WorldPlayPanel(
         }
         if (civilizationCount > 1) {
             OutlinedButton(onClick = onNextCivilization, enabled = !isAdvancing, shape = ChronosphereSmallShape) {
-                Text("Наступна")
+                Text("Інша держава")
+            }
+        }
+    }
+
+    PanelCard(accent = if (pendingDecisionTitle != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("ПОТОЧНА МЕТА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Black)
+            Text(briefing.objective.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(briefing.objective.detail, style = MaterialTheme.typography.bodySmall)
+            StatusPill(briefing.objective.meter, color = MaterialTheme.colorScheme.secondary)
+            if (pendingDecisionTitle != null) {
+                Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
+                    Text("Переглянути розвилку")
+                }
             }
         }
     }
@@ -145,55 +156,6 @@ internal fun WorldPlayPanel(
         onOpenChronicle = onOpenChronicle,
     )
 
-    LocalLlmWorldAdvisorCard(
-        state = session.state,
-        civilization = civilization,
-        economyState = economyState,
-        briefing = briefing,
-        enabled = !isAdvancing,
-    )
-
-    if (turnReport != null) {
-        TurnReportCard(turnReport)
-        LocalLlmTurnNarrativeCard(turnReport, enabled = !isAdvancing)
-    }
-
-    PanelCard(accent = MaterialTheme.colorScheme.primary) {
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Що відбувається", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                if (briefing.wars.isNotEmpty()) StatusPill("війна", color = MaterialTheme.colorScheme.error)
-            }
-            Text(briefing.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(briefing.pressure, style = MaterialTheme.typography.bodyMedium)
-            Text(briefing.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (briefing.wars.isNotEmpty()) {
-                Text("Війни · ${briefing.wars.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
-            if (briefing.allies.isNotEmpty()) {
-                Text("Союзники · ${briefing.allies.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-
-    PanelCard(accent = if (pendingDecisionTitle != null) MaterialTheme.colorScheme.secondary else null) {
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("ПОТОЧНА МЕТА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
-            Text(briefing.objective.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(briefing.objective.detail, style = MaterialTheme.typography.bodySmall)
-            StatusPill(briefing.objective.meter, color = MaterialTheme.colorScheme.secondary)
-            if (pendingDecisionTitle != null) {
-                Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) {
-                    Text("Прийняти рішення у Хроніці")
-                }
-            }
-        }
-    }
-
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MetricTile("Населення", compactNumber(civilization.population), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
         MetricTile("Стабільність", qualityBand(civilization.stability), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
@@ -207,14 +169,9 @@ internal fun WorldPlayPanel(
         }
     }
 
-    SectionHeader(title = "Внутрішня політика", eyebrow = "Одна команда на хід")
+    SectionHeader(title = "Команда на хід", eyebrow = "Швидкі дії")
     PanelCard(accent = MaterialTheme.colorScheme.secondary) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Команда спрацює на початку наступного кроку часу. Історична розвилка більше не блокує ці дії — її буде запропоновано разом із вибором епохи після натискання «Хід».",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             DomesticActionRow(
                 session = session,
                 civilization = civilization,
@@ -249,9 +206,9 @@ internal fun WorldPlayPanel(
     }
 
     if (neighbors.isNotEmpty()) {
-        SectionHeader(title = "Дипломатія", eyebrow = "Оберіть ціль")
+        SectionHeader(title = "Дипломатія", eyebrow = "Швидка дія")
         PanelCard {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -290,13 +247,6 @@ internal fun WorldPlayPanel(
                         )
                     }
 
-                    LocalLlmDiplomacyVoiceCard(
-                        tick = session.state.tick,
-                        ownName = civilization.name,
-                        target = target,
-                        enabled = !isAdvancing,
-                    )
-
                     DiplomacyActions(
                         session = session,
                         civilization = civilization,
@@ -305,9 +255,47 @@ internal fun WorldPlayPanel(
                         isAdvancing = isAdvancing,
                         onQueue = ::queueAction,
                     )
+
+                    LocalLlmDiplomacyVoiceCard(
+                        tick = session.state.tick,
+                        ownName = civilization.name,
+                        target = target,
+                        enabled = !isAdvancing,
+                    )
                 }
             }
         }
+    }
+
+    PanelCard(accent = MaterialTheme.colorScheme.primary) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Ситуація", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                if (briefing.wars.isNotEmpty()) StatusPill("війна", color = MaterialTheme.colorScheme.error)
+            }
+            Text(briefing.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(briefing.pressure, style = MaterialTheme.typography.bodySmall)
+            if (briefing.wars.isNotEmpty()) {
+                Text("Війни · ${briefing.wars.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    LocalLlmWorldAdvisorCard(
+        state = session.state,
+        civilization = civilization,
+        economyState = economyState,
+        briefing = briefing,
+        enabled = !isAdvancing,
+    )
+
+    if (turnReport != null) {
+        TurnReportCard(turnReport)
+        LocalLlmTurnNarrativeCard(turnReport, enabled = !isAdvancing)
     }
 
     PanelCard {
@@ -441,10 +429,8 @@ private fun TurnStateCard(
             when {
                 pendingDecisionTitle != null -> {
                     Text(pendingDecisionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Розвилка буде включена в наступний екран «Хід» разом із вибором епохи. Інші команди світу при цьому доступні.", style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth()) {
-                        Text("Подивитися у Хроніці")
-                    }
+                    Text("Розвилка з’явиться разом із вибором епохи після натискання «Хід».", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onOpenChronicle, enabled = !isAdvancing) { Text("Переглянути") }
                 }
                 storyChoiceQueued -> {
                     Text("Рішення Хроніки готове", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -453,19 +439,16 @@ private fun TurnStateCard(
                 queuedAction != null -> {
                     Text(queuedAction.option.titleUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(queuedAction.option.effectUk, style = MaterialTheme.typography.bodySmall)
-                    Text("Ризик · ${queuedAction.option.riskUk}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Команда виконається разом із наступним ходом", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                        Text("Заплановано на наступний хід", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
                         TextButton(onClick = onCancelQueued, enabled = !isAdvancing) { Text("Скасувати") }
                     }
                 }
                 directActionSpent -> {
-                    Text("Команду цього року вже виконано", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Прокрутіть час, щоб отримати нову команду і побачити наслідки.", style = MaterialTheme.typography.bodySmall)
+                    Text("Команду цього ходу вже використано", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 else -> {
-                    Text("Оберіть одну дію", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Можна втрутитися у внутрішню політику, дипломатію або просто перейти до вибору століття.", style = MaterialTheme.typography.bodySmall)
+                    Text("Можна обрати одну команду або одразу перейти до ходу", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
