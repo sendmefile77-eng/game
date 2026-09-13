@@ -211,14 +211,14 @@ internal fun WorldPlayPanel(
     PanelCard(accent = MaterialTheme.colorScheme.secondary) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Команда спрацює на початку наступного кроку часу. Після неї світ сам розіграє наслідки.",
+                "Команда спрацює на початку наступного кроку часу. Історична розвилка більше не блокує ці дії — її буде запропоновано разом із вибором епохи після натискання «Хід».",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             DomesticActionRow(
                 session = session,
                 civilization = civilization,
-                hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                hasPendingDecision = false,
                 isAdvancing = isAdvancing,
                 firstKind = InterventionKind.HARVEST_AID,
                 firstTitle = "Резерви",
@@ -233,7 +233,7 @@ internal fun WorldPlayPanel(
             DomesticActionRow(
                 session = session,
                 civilization = civilization,
-                hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                hasPendingDecision = false,
                 isAdvancing = isAdvancing,
                 firstKind = InterventionKind.STABILITY_SUPPORT,
                 firstTitle = "Порядок",
@@ -301,7 +301,7 @@ internal fun WorldPlayPanel(
                         session = session,
                         civilization = civilization,
                         target = target,
-                        hasPendingDecision = hasPendingDecision || storyChoiceQueued,
+                        hasPendingDecision = false,
                         isAdvancing = isAdvancing,
                         onQueue = ::queueAction,
                     )
@@ -356,8 +356,7 @@ internal fun WorldPlayPanel(
                 }
                 if (showEvolution) {
                     val bodyPlan = representativeLineage.bodyPlan
-                    val evolutionEnabled = !isAdvancing && !hasPendingDecision && !storyChoiceQueued &&
-                        queuedAction == null && !directActionSpent
+                    val evolutionEnabled = !isAdvancing && queuedAction == null && !directActionSpent
                     InfoLine(
                         "Активна лінія",
                         "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · мутації ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
@@ -442,21 +441,21 @@ private fun TurnStateCard(
             when {
                 pendingDecisionTitle != null -> {
                     Text(pendingDecisionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Історія зупинилася на важливій розвилці. Спочатку вирішіть її.", style = MaterialTheme.typography.bodySmall)
+                    Text("Розвилка буде включена в наступний екран «Хід» разом із вибором епохи. Інші команди світу при цьому доступні.", style = MaterialTheme.typography.bodySmall)
                     Button(onClick = onOpenChronicle, enabled = !isAdvancing, modifier = Modifier.fillMaxWidth()) {
-                        Text("Перейти до рішення")
+                        Text("Подивитися у Хроніці")
                     }
                 }
                 storyChoiceQueued -> {
                     Text("Рішення Хроніки готове", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Натисніть +1, +10 або +100. Рішення застосують на початку ходу, а швидка прокрутка зупиниться на наступній важливій розвилці.", style = MaterialTheme.typography.bodySmall)
+                    Text("Воно застосовується разом із найближчим переходом часу.", style = MaterialTheme.typography.bodySmall)
                 }
                 queuedAction != null -> {
                     Text(queuedAction.option.titleUk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(queuedAction.option.effectUk, style = MaterialTheme.typography.bodySmall)
                     Text("Ризик · ${queuedAction.option.riskUk}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Запустіть час, щоб виконати команду", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                        Text("Команда виконається разом із наступним ходом", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
                         TextButton(onClick = onCancelQueued, enabled = !isAdvancing) { Text("Скасувати") }
                     }
                 }
@@ -466,7 +465,7 @@ private fun TurnStateCard(
                 }
                 else -> {
                     Text("Оберіть одну дію", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Можна втрутитися у внутрішню політику, дипломатію або просто пропустити хід і дати світу розвиватися самому.", style = MaterialTheme.typography.bodySmall)
+                    Text("Можна втрутитися у внутрішню політику, дипломатію або просто перейти до вибору століття.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
