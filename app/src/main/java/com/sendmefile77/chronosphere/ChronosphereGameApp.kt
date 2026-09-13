@@ -108,9 +108,7 @@ fun ChronosphereGameApp() {
                 resourceGenerator = resourceGenerator,
                 peopleEngine = peopleEngine,
             )
-        } else {
-            null
-        }
+        } else null
     }
     val initialSession = restoredStart?.session ?: fallbackStart!!.session
     val initialPeople = restoredStart?.people ?: fallbackStart!!.people
@@ -153,13 +151,9 @@ fun ChronosphereGameApp() {
     var developmentAcknowledged by remember { mutableStateOf(true) }
     var saveStatus by remember {
         mutableStateOf(
-            if (restoredStart != null) {
-                "Світ автоматично відновлено"
-            } else if (adultModuleActive) {
-                "Гібридний режим · AI Horde · розширений модуль активний"
-            } else {
-                "Гібридний режим · AI Horde"
-            },
+            if (restoredStart != null) "Світ автоматично відновлено"
+            else if (adultModuleActive) "Гібридний режим · AI Horde · розширений модуль активний"
+            else "Гібридний режим · AI Horde",
         )
     }
 
@@ -198,21 +192,13 @@ fun ChronosphereGameApp() {
                 people = peopleState,
                 economy = economyState,
                 evolution = evolutionState,
-                workspace = historyTimeline.syncActive(
-                    workspace,
-                    session.state,
-                    peopleState,
-                    economyState,
-                    evolutionState,
-                ),
+                workspace = historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState),
                 selectedCivilizationId = selectedCivilizationId,
                 selectedPersonId = selectedPersonId,
                 selectedPanel = selectedPanel,
             )
             GameAutoResume.publish(snapshot)
-            withContext(Dispatchers.IO) {
-                GameAutoResume.persist(appContext, snapshot)
-            }
+            withContext(Dispatchers.IO) { GameAutoResume.persist(appContext, snapshot) }
         }
     }
 
@@ -234,13 +220,6 @@ fun ChronosphereGameApp() {
         workspace = historyTimeline.syncActive(workspace, nextState, nextPeople, nextEconomy, nextEvolution)
     }
 
-    fun currentDecision(): ChronicleDecision = GameplayLoop.playDecision(
-        state = session.state,
-        people = peopleState,
-        economy = economyState,
-        civilizationId = selectedCivilizationId,
-    )
-
     fun chronicleDecision(): ChronicleDecision? = ChronicleDecisionCatalog.latestUnresolved(
         session.state.recentEvents, peopleState, economyState,
     )
@@ -254,32 +233,46 @@ fun ChronosphereGameApp() {
         val sourceEvolution = evolutionState
         val targetCivilizationId = selectedCivilizationId
         val targetPersonId = selectedPersonId
-        val runner = PlayableSimulationRunner(worldMap = sourceSession.world, resources = sourceSession.resources, peopleEngine = peopleEngine, adultModule = adultModule)
+        val runner = PlayableSimulationRunner(
+            worldMap = sourceSession.world,
+            resources = sourceSession.resources,
+            peopleEngine = peopleEngine,
+            adultModule = adultModule,
+        )
         isAdvancing = true
-        saveStatus = "Моделювання історії…"
+        saveStatus = "Моделювання наступних років…"
         coroutineScope.launch {
             try {
                 val result = withContext(Dispatchers.Default) {
-                    runner.advance(currentWorld = sourceSession.state, currentPeople = sourcePeople, currentEconomy = sourceEconomy, currentEvolution = sourceEvolution, months = months)
+                    runner.advance(
+                        currentWorld = sourceSession.state,
+                        currentPeople = sourcePeople,
+                        currentEconomy = sourceEconomy,
+                        currentEvolution = sourceEvolution,
+                        months = months,
+                    )
                 }
                 syncState(result.world, result.people, result.economy, result.evolution)
-                val validCivilizationId = if (result.world.civilizations.any { it.id == targetCivilizationId }) targetCivilizationId else result.world.civilizations.first().id
+                val validCivilizationId = if (result.world.civilizations.any { it.id == targetCivilizationId }) {
+                    targetCivilizationId
+                } else result.world.civilizations.first().id
                 selectedCivilizationId = validCivilizationId
                 if (result.people.featuredPeople(validCivilizationId, result.world.tick).none { it.id == targetPersonId }) {
                     resetCharacterSelection(validCivilizationId, result.people)
                 }
                 turnReport = GameplayTurnReportStore.latestFor(selectedCivilizationId)
                     ?: GameplayTurnReportStore.latestFor(result.world.civilizations.first().id)
-                developmentAcknowledged = false
-                showDevelopmentDialog = false
+                developmentAcknowledged = turnReport == null
+                showDevelopmentDialog = turnReport != null
                 pendingTurnMonths = null
-                turnDecision = currentDecision()
-                saveStatus = "Світ дійшов до ${clock.at(result.world.tick).year} року · прийміть рішення століття"
+                turnDecision = null
+                saveStatus = "Світ прожив хід і дійшов до ${clock.at(result.world.tick).year} року"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: PendingChronicleDecisionException) {
-                turnDecision = chronicleDecision() ?: currentDecision()
+                val blocked = chronicleDecision()
                 pendingTurnMonths = months
+                turnDecision = blocked ?: EraTurnChoiceCatalog.decision(session.state, economyState, selectedCivilizationId)
                 saveStatus = error.message ?: "Спочатку прийміть рішення"
             } catch (error: Throwable) {
                 saveStatus = "Помилка моделювання: ${error.message ?: "невідома"}"
@@ -293,19 +286,17 @@ fun ChronosphereGameApp() {
         if (isAdvancing || turnDecision != null || showDevelopmentDialog) return
         if (turnReport != null && !developmentAcknowledged) {
             showDevelopmentDialog = true
-            saveStatus = "Спочатку прочитайте, як змінився світ"
+            saveStatus = "Спочатку прочитайте наслідки попереднього ходу"
             return
         }
+        pendingTurnMonths = months
         val blocked = chronicleDecision()
-        if (blocked != null && GameplayLoop.queuedAction(session.state) == null &&
-            !ChronicleDecisionMailbox.contains(blocked.eventId)
-        ) {
-            pendingTurnMonths = months
-            turnDecision = blocked
-            saveStatus = "Перед століттям треба прийняти рішення"
-            return
+        turnDecision = blocked ?: EraTurnChoiceCatalog.decision(session.state, economyState, selectedCivilizationId)
+        saveStatus = if (blocked != null) {
+            "Перед переходом треба вирішити історичну розвилку"
+        } else {
+            "Оберіть напрями розвитку — після підтвердження світ одразу проживе 100 років"
         }
-        advanceMonths(months)
     }
 
     fun selectCivilization(civilizationId: String) {
@@ -317,7 +308,13 @@ fun ChronosphereGameApp() {
     fun newWorld(setup: WorldSetup) {
         if (isAdvancing) return
         val created = runCatching {
-            createConfiguredWorldStart(setup = setup, generator = generator, hydrology = hydrology, resourceGenerator = resourceGenerator, peopleEngine = peopleEngine)
+            createConfiguredWorldStart(
+                setup = setup,
+                generator = generator,
+                hydrology = hydrology,
+                resourceGenerator = resourceGenerator,
+                peopleEngine = peopleEngine,
+            )
         }.getOrElse { error ->
             saveStatus = "Не вдалося створити світ: ${error.message ?: "невідома помилка"}"
             return
@@ -385,7 +382,9 @@ fun ChronosphereGameApp() {
         peopleState = nextPeople
         economyState = nextEconomy
         evolutionState = nextEvolution
-        val nextCivilizationId = if (branchState.civilizations.any { it.id == selectedCivilizationId }) selectedCivilizationId else branchState.civilizations.first().id
+        val nextCivilizationId = if (branchState.civilizations.any { it.id == selectedCivilizationId }) {
+            selectedCivilizationId
+        } else branchState.civilizations.first().id
         selectedCivilizationId = nextCivilizationId
         resetCharacterSelection(nextCivilizationId, nextPeople)
     }
@@ -394,8 +393,12 @@ fun ChronosphereGameApp() {
         if (isAdvancing) return
         saveStatus = runCatching {
             val syncedWorkspace = historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState)
-            context.openFileOutput(GAME_HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use { it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace)) }
-            context.openFileOutput(GAME_SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use { it.write(GameSnapshotV1.encode(session.state)) }
+            context.openFileOutput(GAME_HISTORY_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
+                it.write(HistoryWorkspaceSnapshotV1.encode(syncedWorkspace))
+            }
+            context.openFileOutput(GAME_SAVE_FILE, Context.MODE_PRIVATE).bufferedWriter().use {
+                it.write(GameSnapshotV1.encode(session.state))
+            }
             workspace = syncedWorkspace
             "Світ і часові гілки збережено"
         }.getOrElse { "Помилка збереження: ${it.message ?: "невідома"}" }
@@ -407,10 +410,12 @@ fun ChronosphereGameApp() {
             val loadedWorkspace = runCatching {
                 context.openFileInput(GAME_HISTORY_FILE).bufferedReader().use { HistoryWorkspaceSnapshotV1.decode(it.readText()) }
             }.getOrNull()
-            val loadedState = loadedWorkspace?.activeState ?: context.openFileInput(GAME_SAVE_FILE).bufferedReader().use { GameSnapshotV1.decode(it.readText()) }
+            val loadedState = loadedWorkspace?.activeState
+                ?: context.openFileInput(GAME_SAVE_FILE).bufferedReader().use { GameSnapshotV1.decode(it.readText()) }
             val loadedSession = restoreGameSession(loadedState, generator, hydrology, resourceGenerator)
             val loadedPeople = loadedWorkspace?.activePeopleState ?: peopleEngine.initialize(loadedSession.state)
-            val loadedEconomy = loadedWorkspace?.activeEconomyState ?: EconomyEngine(loadedSession.world, loadedSession.resources).initialize(loadedSession.state)
+            val loadedEconomy = loadedWorkspace?.activeEconomyState
+                ?: EconomyEngine(loadedSession.world, loadedSession.resources).initialize(loadedSession.state)
             val loadedEvolution = loadedWorkspace?.activeEvolutionState ?: EvolutionEngine(loadedSession.world).initialize(loadedSession.state)
             session = loadedSession
             peopleState = loadedPeople
@@ -423,8 +428,15 @@ fun ChronosphereGameApp() {
             }
             selectedCivilizationId = loadedSession.state.civilizations.first().id
             resetCharacterSelection(selectedCivilizationId, loadedPeople)
-            worldSetup = WorldSetup.default(seed = loadedState.worldSeed, tribeCount = loadedState.civilizations.size.coerceIn(WorldSetup.MIN_TRIBES, WorldSetup.MAX_TRIBES))
-            interventionSequence = loadedState.recentEvents.asSequence().map { it.id }.filter { it.startsWith("player-") }.mapNotNull { it.substringAfterLast('-').toLongOrNull() }.maxOrNull() ?: 0L
+            worldSetup = WorldSetup.default(
+                seed = loadedState.worldSeed,
+                tribeCount = loadedState.civilizations.size.coerceIn(WorldSetup.MIN_TRIBES, WorldSetup.MAX_TRIBES),
+            )
+            interventionSequence = loadedState.recentEvents.asSequence()
+                .map { it.id }
+                .filter { it.startsWith("player-") }
+                .mapNotNull { it.substringAfterLast('-').toLongOrNull() }
+                .maxOrNull() ?: 0L
             characterUndressed = false
             pendingTurnMonths = null
             turnDecision = null
@@ -451,34 +463,59 @@ fun ChronosphereGameApp() {
                     GamePanel.HISTORY, GamePanel.CHRONICLE -> (maxHeight * 0.24f).coerceIn(140.dp, 205.dp)
                 }
                 Column(modifier = Modifier.fillMaxSize()) {
-                    ChronosphereTopBar(year = time.year, branchName = branchDisplayName(workspace.activeBranch.name), onNewWorld = { if (!isAdvancing) showNewWorldDialog = true })
+                    ChronosphereTopBar(
+                        year = time.year,
+                        branchName = branchDisplayName(workspace.activeBranch.name),
+                        onNewWorld = { if (!isAdvancing) showNewWorldDialog = true },
+                    )
                     Box(modifier = Modifier.fillMaxWidth().height(mapHeight).padding(horizontal = 10.dp)) {
                         WorldMapView(
                             world = session.world,
                             rivers = session.rivers,
                             territoryOwners = territory,
                             settlements = session.state.settlements.map {
-                                SettlementMarker(x = it.x, y = it.y, population = it.population, civilizationIndex = civilizationOrder[it.civilizationId] ?: 0)
+                                SettlementMarker(
+                                    x = it.x,
+                                    y = it.y,
+                                    population = it.population,
+                                    civilizationIndex = civilizationOrder[it.civilizationId] ?: 0,
+                                )
                             },
                             selectedCivilizationIndex = civilizationOrder[selectedCivilizationId],
-                            onCivilizationSelected = if (isAdvancing) null else { index -> civilizations.getOrNull(index)?.let { selectCivilization(it.id) } },
+                            onCivilizationSelected = if (isAdvancing) null else { index ->
+                                civilizations.getOrNull(index)?.let { selectCivilization(it.id) }
+                            },
                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
                         )
-                        WorldMapSummary(totalPopulation = session.state.totalPopulation, settlements = session.state.settlements.size, civilizations = civilizations.size, wars = session.state.wars.size, tradeRoutes = economyState.routes.size, modifier = Modifier.align(Alignment.TopStart).padding(10.dp))
-                        SelectedCivilizationBadge(civilizationName = selectedCivilization.name, eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується", modifier = Modifier.align(Alignment.TopEnd).padding(10.dp))
+                        WorldMapSummary(
+                            totalPopulation = session.state.totalPopulation,
+                            settlements = session.state.settlements.size,
+                            civilizations = civilizations.size,
+                            wars = session.state.wars.size,
+                            tradeRoutes = economyState.routes.size,
+                            modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                        )
+                        SelectedCivilizationBadge(
+                            civilizationName = selectedCivilization.name,
+                            eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
+                            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                        )
                         Surface(
                             modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp),
                             color = Color(0xE60A1117),
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
                                 TimeButton(
                                     "Хід · 100 років",
                                     !isAdvancing && turnDecision == null && !showDevelopmentDialog,
                                 ) { requestTurn(TURN_MONTHS) }
                                 Text(
-                                    "Один хід = 100 років. Рішення в кінці століття, розвиток світу — на наступному ході.",
+                                    "Натисніть хід → оберіть напрями епохи → світ одразу проживе 100 років.",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -488,7 +525,10 @@ fun ChronosphereGameApp() {
                     if (isAdvancing) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     GameTabs(selectedPanel = selectedPanel, enabled = !isAdvancing, onSelect = { selectedPanel = it })
                     Surface(modifier = Modifier.fillMaxWidth().weight(1f), color = MaterialTheme.colorScheme.surface) {
-                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             when (selectedPanel) {
                                 GamePanel.WORLD -> WorldPlayPanel(
                                     civilization = selectedCivilization,
@@ -508,22 +548,46 @@ fun ChronosphereGameApp() {
                                     onEvolutionIntervene = ::interveneEvolution,
                                 )
                                 GamePanel.PERSON -> {
-                                    val livingCharacters = peopleState.featuredPeople(selectedCivilization.id, session.state.tick).sortedByDescending { it.prestige }
-                                    val selectedPerson = livingCharacters.firstOrNull { it.id == selectedPersonId } ?: livingCharacters.firstOrNull()
+                                    val livingCharacters = peopleState.featuredPeople(selectedCivilization.id, session.state.tick)
+                                        .sortedByDescending { it.prestige }
+                                    val selectedPerson = livingCharacters.firstOrNull { it.id == selectedPersonId }
+                                        ?: livingCharacters.firstOrNull()
                                     if (selectedPerson == null) {
                                         EmptyPanel("У цій державі зараз немає активних визначних осіб віком 18–40 років")
                                     } else {
                                         val age = selectedPerson.ageYearsAt(session.state.tick)
                                         val effectiveUndressed = characterUndressed && age >= 18
-                                        val baseScene = remember(selectedPerson.id, session.state.tick, evolutionState, effectiveUndressed) {
-                                            CharacterSceneFactory.resolve(person = selectedPerson, tick = session.state.tick, evolution = evolutionState, undressed = effectiveUndressed)
+                                        val baseScene = remember(
+                                            selectedPerson.id,
+                                            session.state.tick,
+                                            evolutionState,
+                                            effectiveUndressed,
+                                            selectedCivilization.cultureTags,
+                                        ) {
+                                            CharacterSceneFactory.resolve(
+                                                person = selectedPerson,
+                                                tick = session.state.tick,
+                                                evolution = evolutionState,
+                                                undressed = effectiveUndressed,
+                                            ).let { resolved ->
+                                                resolved.copy(
+                                                    layerKeys = (resolved.layerKeys + selectedCivilization.cultureTags).distinct(),
+                                                )
+                                            }
                                         }
                                         val adultRequest = remember(selectedPerson.id, session.state.tick, peopleState, evolutionState) {
-                                            CharacterSceneFactory.adultRequest(person = selectedPerson, tick = session.state.tick, people = peopleState, evolution = evolutionState)
+                                            CharacterSceneFactory.adultRequest(
+                                                person = selectedPerson,
+                                                tick = session.state.tick,
+                                                people = peopleState,
+                                                evolution = evolutionState,
+                                            )
                                         }
                                         val scene = remember(baseScene, adultRequest, effectiveUndressed, adultSceneRuntime.isActive) {
                                             if (adultRequest != null && adultSceneRuntime.isActive) {
-                                                adultSceneRuntime.resolveCharacterCard(adultRequest, effectiveUndressed) ?: baseScene
+                                                adultSceneRuntime.resolveCharacterCard(adultRequest, effectiveUndressed)?.let { adultScene ->
+                                                    adultScene.copy(layerKeys = (adultScene.layerKeys + baseScene.layerKeys).distinct())
+                                                } ?: baseScene
                                             } else baseScene
                                         }
                                         CharacterCardPanel(
@@ -550,11 +614,17 @@ fun ChronosphereGameApp() {
                                     timeYear = time.year,
                                     isAdvancing = isAdvancing,
                                     onCheckpoint = {
-                                        workspace = historyTimeline.checkpoint(historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState), "Рік ${time.year}")
+                                        workspace = historyTimeline.checkpoint(
+                                            historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState),
+                                            "Рік ${time.year}",
+                                        )
                                         saveStatus = "Момент історії збережено"
                                     },
                                     onFork = {
-                                        workspace = historyTimeline.fork(historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState), "Альтернатива ${workspace.branches.size}")
+                                        workspace = historyTimeline.fork(
+                                            historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState),
+                                            "Альтернатива ${workspace.branches.size}",
+                                        )
                                         activateWorkspaceState()
                                         saveStatus = "Створено альтернативну історію"
                                     },
@@ -568,7 +638,10 @@ fun ChronosphereGameApp() {
                                         if (workspace.branches.size > 1) {
                                             val currentIndex = workspace.branches.indexOfFirst { it.id == workspace.activeBranchId }.coerceAtLeast(0)
                                             val nextBranch = workspace.branches[(currentIndex + 1) % workspace.branches.size]
-                                            workspace = historyTimeline.switchTo(historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState), nextBranch.id)
+                                            workspace = historyTimeline.switchTo(
+                                                historyTimeline.syncActive(workspace, session.state, peopleState, economyState, evolutionState),
+                                                nextBranch.id,
+                                            )
                                             activateWorkspaceState()
                                             saveStatus = "Активна лінія: ${branchDisplayName(workspace.activeBranch.name)}"
                                         }
@@ -576,30 +649,57 @@ fun ChronosphereGameApp() {
                                     onSave = ::saveGame,
                                     onLoad = ::loadGame,
                                 )
-                                GamePanel.CHRONICLE -> ChroniclePanel(session = session, peopleState = peopleState, economyState = economyState, clock = clock, textGenerator = textGenerator)
+                                GamePanel.CHRONICLE -> ChroniclePanel(
+                                    session = session,
+                                    peopleState = peopleState,
+                                    economyState = economyState,
+                                    clock = clock,
+                                    textGenerator = textGenerator,
+                                )
                             }
                         }
                     }
-                    Text(saveStatus, modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        saveStatus,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
         if (showNewWorldDialog) {
-            NewWorldSetupDialog(initial = worldSetup, enabled = !isAdvancing, onDismiss = { showNewWorldDialog = false }, onCreate = ::newWorld)
+            NewWorldSetupDialog(
+                initial = worldSetup,
+                enabled = !isAdvancing,
+                onDismiss = { showNewWorldDialog = false },
+                onCreate = ::newWorld,
+            )
         }
         turnDecision?.let { decision ->
             TurnDecisionDialog(
                 decision = decision,
-                onSelect = { option ->
-                    ChronicleDecisionMailbox.enqueue(option)
-                    turnDecision = null
-                    val months = pendingTurnMonths
-                    pendingTurnMonths = null
-                    if (months != null) {
-                        advanceMonths(months)
-                    } else {
-                        saveStatus = "Рішення прийнято. Наступний хід покаже розвиток світу"
+                onConfirm = { options ->
+                    if (options.isEmpty()) return@TurnDecisionDialog
+                    if (EraTurnChoiceCatalog.isEraTurn(decision)) {
+                        var nextWorld = session.state
+                        options.forEach { option ->
+                            nextWorld = EraTurnChoiceCatalog.applyLegacy(
+                                state = nextWorld,
+                                civilizationId = option.targetCivilizationId,
+                                choiceId = option.id,
+                            )
+                        }
+                        syncState(nextWorld)
                     }
+                    options.forEach(ChronicleDecisionMailbox::enqueue)
+                    turnDecision = null
+                    val months = pendingTurnMonths ?: TURN_MONTHS
+                    pendingTurnMonths = null
+                    saveStatus = "Рішення прийнято · моделюю наслідки одразу"
+                    advanceMonths(months)
                 },
             )
         }
@@ -610,7 +710,7 @@ fun ChronosphereGameApp() {
                     onDismiss = {
                         showDevelopmentDialog = false
                         developmentAcknowledged = true
-                        requestTurn(pendingTurnMonths ?: TURN_MONTHS)
+                        saveStatus = "Хід завершено. Можна починати наступне століття"
                     },
                 )
             }
