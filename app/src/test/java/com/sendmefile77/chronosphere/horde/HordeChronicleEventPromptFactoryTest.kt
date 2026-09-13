@@ -1,9 +1,14 @@
 package com.sendmefile77.chronosphere.horde
 
+import com.sendmefile77.chronosphere.civilization.Civilization
+import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.economy.CivilizationEconomy
 import com.sendmefile77.chronosphere.economy.EconomicGood
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.economy.TechnologyEra
+import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
+import com.sendmefile77.chronosphere.history.HistoryBranch
 import com.sendmefile77.chronosphere.people.Dynasty
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -74,6 +79,40 @@ class HordeChronicleEventPromptFactoryTest {
         assertNotEquals(tribal.cacheKey, metal.cacheKey)
     }
 
+    @Test
+    fun persistentEraChoicesRemainVisibleInLaterUnrelatedChronicleFrames() {
+        ActiveHistoricalContextRegistry.activate(
+            HistoryBranch(
+                id = "branch-test",
+                name = "test",
+                parentBranchId = null,
+                forkTick = 0L,
+                state = taggedWorld(),
+                economyState = economy(TechnologyEra.TRIBAL),
+            ),
+        )
+        try {
+            val request = HordeChronicleEventPromptFactory.create(
+                SimulationEvent(
+                    id = "later-war",
+                    tick = 360L,
+                    code = "WAR_STARTED",
+                    actorIds = listOf("civ"),
+                    facts = mapOf("civilization" to "A"),
+                ),
+                people(),
+                economy(TechnologyEra.TRIBAL),
+            )
+
+            assertTrue(request.positivePrompt.contains("blood-stained"))
+            assertTrue(request.positivePrompt.contains("flint knives"))
+            assertTrue(request.positivePrompt.contains("persistent historical way of life"))
+            assertTrue(request.cacheKey.contains("era-choice:subsistence:predator_hunters"))
+        } finally {
+            ActiveHistoricalContextRegistry.clear()
+        }
+    }
+
     private fun people(): PeopleState = PeopleState(
         worldSeed = 1L,
         tick = 360,
@@ -97,6 +136,31 @@ class HordeChronicleEventPromptFactoryTest {
         role = PersonRole.NOTABLE,
         prestige = 0.5,
         aptitude = 0.5,
+    )
+
+    private fun taggedWorld(): LivingPlanetState = LivingPlanetState(
+        worldSeed = 1L,
+        tick = 360L,
+        civilizations = listOf(
+            Civilization(
+                id = "civ",
+                name = "A",
+                population = 1_000L,
+                stability = 0.6,
+                technology = 0.1,
+                treasury = 50.0,
+                cultureTags = setOf(
+                    "era-choice:subsistence:predator_hunters",
+                    "policy:predator_hunters",
+                    "hist:blood_hunt",
+                    "era-choice:breakthrough:stone_tools",
+                    "foundation:stone_tools",
+                ),
+            ),
+        ),
+        settlements = listOf(
+            Settlement("city", "A", "civ", 1, 1, 1_000L, 500.0, 10.0, 0L),
+        ),
     )
 
     private fun metallurgicEconomy(): EconomyState = economy(TechnologyEra.METALLURGIC)
