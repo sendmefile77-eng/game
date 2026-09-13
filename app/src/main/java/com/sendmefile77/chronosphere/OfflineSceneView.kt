@@ -15,12 +15,7 @@ import com.sendmefile77.chronosphere.horde.HordeSceneView
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
-/**
- * Character-scene image surface.
- *
- * AI Horde is the primary renderer. The fully local renderer remains visible while a request is
- * queued and is kept permanently as the failure/offline fallback.
- */
+/** Character-scene image surface with Local Dream/Horde rendering and local fallback. */
 @Composable
 internal fun OfflineSceneView(
     scene: ResolvedScene,
@@ -34,16 +29,18 @@ internal fun OfflineSceneView(
     galleryCapture: GalleryCapture? = null,
     modifier: Modifier = Modifier.fillMaxWidth().height(220.dp),
 ) {
-    val historicalVisualTags = adultVisual?.mediaTags.orEmpty().filterTo(linkedSetOf()) { tag ->
+    val adultHistoricalTags = adultVisual?.mediaTags.orEmpty().filterTo(linkedSetOf()) { tag ->
         HISTORICAL_VISUAL_PREFIXES.any(tag::startsWith)
     }
-    val mergedVisualTags = remember(visualTags, historicalVisualTags) {
-        (visualTags + historicalVisualTags).toSortedSet()
+    val sceneHistoricalTags = scene.layerKeys.filterTo(linkedSetOf()) { tag ->
+        HISTORICAL_VISUAL_PREFIXES.any(tag::startsWith)
     }
-    val fallbackScene = remember(scene, historicalVisualTags) {
-        if (historicalVisualTags.isEmpty()) scene else scene.copy(
-            layerKeys = (scene.layerKeys + historicalVisualTags).distinct(),
-        )
+    val mergedVisualTags = remember(visualTags, adultHistoricalTags, sceneHistoricalTags) {
+        (visualTags + adultHistoricalTags + sceneHistoricalTags).toSortedSet()
+    }
+    val fallbackScene = remember(scene, adultHistoricalTags, sceneHistoricalTags) {
+        val tags = adultHistoricalTags + sceneHistoricalTags
+        if (tags.isEmpty()) scene else scene.copy(layerKeys = (scene.layerKeys + tags).distinct())
     }
     val adultFullBody = ageYears >= 18 && (
         actionPlan != null ||
@@ -119,6 +116,7 @@ private val HISTORICAL_VISUAL_PREFIXES = listOf(
     "hist:",
     "foundation:",
     "policy:",
+    "era-choice:",
     "era:",
     "civ:",
     "branch:",
