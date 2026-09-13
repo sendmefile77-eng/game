@@ -191,6 +191,12 @@ private fun adultActionMenuItems(): List<AdultActionMenuItem> = listOf(
     AdultActionMenuItem(AdultActionType.FUTANARI_ORGASM, "Футанарі оргазм"),
 )
 
+private fun actionCaption(plan: AdultActionPlan): String {
+    val label = adultActionMenuItems().firstOrNull { it.type == plan.type }?.label
+        ?: plan.type.name.lowercase().replace('_', ' ')
+    return plan.partner?.name?.let { "$label · $it" } ?: label
+}
+
 private fun roleLabel(role: PersonRole): String = when (role) {
     PersonRole.RULER -> "Правитель"
     PersonRole.HEIR -> "Спадкоємець"
