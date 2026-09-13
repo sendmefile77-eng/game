@@ -2,10 +2,11 @@ package com.sendmefile77.chronosphere.horde
 
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.economy.TechnologyEra
+import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
-internal const val CHRONICLE_EVENT_CACHE_SCHEMA = "horde-chronicle-event-v8-era-choice"
+internal const val CHRONICLE_EVENT_CACHE_SCHEMA = "horde-chronicle-event-v9-persistent-era-choice"
 
 /** Wide chronicle frame: era city life with the material consequences of player choices visible. */
 object HordeChronicleEventPromptFactory {
@@ -37,12 +38,19 @@ object HordeChronicleEventPromptFactory {
         val settlement = event.facts["settlement"]?.takeIf { it.isNotBlank() }
         val choiceVisual = HordeHistoricalVisualPrompt.eraChoiceFragment(event.facts["choiceId"])
         val choiceLabel = event.facts["choiceLabel"]?.takeIf { it.isNotBlank() }
+        val persistentTags = persistentHistoricalTags(event, people, economy)
+        val persistentVisual = HordeHistoricalVisualPrompt.fragment(persistentTags)
+        val persistentSignature = HordeHistoricalVisualPrompt.signature(persistentTags)
 
         val positive = buildList {
             add("masterpiece, best quality, anime illustration, cinematic wide establishing shot of a living settlement")
             add(HordeEraVisual.materialCulture(era))
             add(HordeEraVisual.distinctiveMarker(era))
             add(sceneWork(event, era, settlement))
+            if (persistentVisual.isNotBlank()) {
+                add("persistent historical way of life must remain materially visible in clothing, tools, work and surroundings: $persistentVisual")
+                add("these are established daily-life consequences, not temporary decorations or symbolic icons")
+            }
             if (choiceVisual.isNotBlank()) {
                 add("the newly chosen way of life must be unmistakably visible in the main action: $choiceVisual")
                 add("show the practical material consequence, not a symbolic icon or caption")
@@ -79,6 +87,7 @@ object HordeChronicleEventPromptFactory {
                 eraSignature,
                 event.facts["choiceId"].orEmpty(),
                 choiceLabel.orEmpty(),
+                persistentSignature,
                 event.actorIds.sorted().joinToString(","),
                 event.locationId.orEmpty(),
                 if (erotic) "nsfw" else "safe",
@@ -91,13 +100,40 @@ object HordeChronicleEventPromptFactory {
             height = 576,
             steps = 22,
             cfgScale = 5.5,
-            seed = "chronosphere:chronicle-choice:$eraSignature:${event.id}:${event.facts["choiceId"].orEmpty()}",
+            seed = "chronosphere:chronicle-choice:$eraSignature:${event.id}:${event.facts["choiceId"].orEmpty()}:$persistentSignature",
             preferredModels = preferredModels,
             qualityPriority = false,
             referenceCacheKey = null,
             saveResultAsReference = false,
         )
     }
+
+    private fun persistentHistoricalTags(
+        event: SimulationEvent,
+        people: PeopleState,
+        economy: EconomyState?,
+    ): Set<String> {
+        val active = ActiveHistoricalContextRegistry.snapshot(people.worldSeed) ?: return emptySet()
+        val civilizationIds = economy?.civilizations?.mapTo(hashSetOf()) { it.civilizationId }.orEmpty()
+        val actorCivilizations = event.actorIds.mapNotNull { actorId ->
+            when {
+                actorId in civilizationIds -> actorId
+                else -> people.persons.firstOrNull { it.id == actorId }?.civilizationId
+            }
+        }.distinct()
+        val fallback = if (actorCivilizations.isEmpty() && active.cultureTagsByCivilization.size == 1) {
+            active.cultureTagsByCivilization.keys.toList()
+        } else {
+            emptyList()
+        }
+        return (actorCivilizations + fallback)
+            .asSequence()
+            .flatMap { civilizationId -> active.cultureTagsByCivilization[civilizationId].orEmpty().asSequence() }
+            .filter(::isHistoricalVisualTag)
+            .toSortedSet()
+    }
+
+    private fun isHistoricalVisualTag(tag: String): Boolean = HISTORY_PREFIXES.any(tag::startsWith)
 
     private fun resolveEra(event: SimulationEvent, people: PeopleState, economy: EconomyState?): TechnologyEra? {
         if (economy == null) return null
@@ -136,4 +172,9 @@ object HordeChronicleEventPromptFactory {
             else -> work
         }
     }
+
+    private val HISTORY_PREFIXES = listOf(
+        "cloth:", "jewel:", "hair:", "body-norm:", "arch:", "set-bias:", "cosmetic:", "publicness:",
+        "hist:", "foundation:", "policy:", "era-choice:", "era:",
+    )
 }
