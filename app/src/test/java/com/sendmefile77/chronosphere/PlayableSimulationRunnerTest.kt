@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere
 import com.sendmefile77.chronosphere.adultcontracts.NoOpAdultModule
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.economy.EconomyEngine
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
 import com.sendmefile77.chronosphere.people.PeopleEngine
@@ -17,7 +18,7 @@ import org.junit.Test
 
 class PlayableSimulationRunnerTest {
     @Test
-    fun repeatedRunFromSameStateIsDeterministicEvenWhenFastForwardPauses() {
+    fun repeatedRunFromSameStateIsDeterministic() {
         ChronicleDecisionMailbox.drain()
         val fixture = fixture()
 
@@ -26,17 +27,31 @@ class PlayableSimulationRunnerTest {
         val second = fixture.runner.advance(fixture.worldState, fixture.people, fixture.economy, fixture.evolution, months = 120)
 
         assertEquals(first, second)
-        assertTrue(first.world.tick in 1L..120L)
+        assertEquals(fixture.worldState.tick + 120L, first.world.tick)
         assertEquals(first.world.tick, first.people.tick)
         assertEquals(first.world.tick, first.economy.tick)
         assertEquals(first.world.tick, first.evolution.tick)
         assertTrue(first.world.totalPopulation >= 0L)
         assertTrue(first.world.civilizations.all { it.treasury.isFinite() && it.stability.isFinite() && it.technology.isFinite() })
-        if (first.world.tick < 120L) {
-            assertTrue(
-                ChronicleDecisionCatalog.latestUnresolved(first.world.recentEvents, first.people, first.economy) != null,
-            )
-        }
+    }
+
+    @Test
+    fun confirmedCenturyAlwaysAdvancesFull1200Months() {
+        ChronicleDecisionMailbox.drain()
+        val fixture = fixture()
+
+        val result = fixture.runner.advance(
+            fixture.worldState,
+            fixture.people,
+            fixture.economy,
+            fixture.evolution,
+            months = TURN_MONTHS,
+        )
+
+        assertEquals(fixture.worldState.tick + TURN_MONTHS, result.world.tick)
+        assertEquals(result.world.tick, result.people.tick)
+        assertEquals(result.world.tick, result.economy.tick)
+        assertEquals(result.world.tick, result.evolution.tick)
     }
 
     @Test
@@ -72,6 +87,72 @@ class PlayableSimulationRunnerTest {
                 it.facts["sourceEventId"] == "source-era-event" && it.facts["choiceId"] == "era-push"
             },
         )
+        assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
+    }
+
+    @Test
+    fun multipleEraChoicesAreAppliedBeforeTheSameSimulationAdvance() {
+        ChronicleDecisionMailbox.drain()
+        val fixture = fixture()
+        val target = fixture.worldState.civilizations.first()
+        val decision = EraTurnChoiceCatalog.decision(
+            worldSeed = fixture.worldState.worldSeed,
+            tick = fixture.worldState.tick,
+            civilizationId = target.id,
+            civilizationName = target.name,
+            era = TechnologyEra.TRIBAL,
+            cultureTags = target.cultureTags,
+        )
+        val fire = decision.options.first { it.id == "era-tribal-breakthrough-fire" }
+        val hunters = decision.options.first { it.id == "era-tribal-subsistence-predator_hunters" }
+        var chosenWorld = EraTurnChoiceCatalog.applyLegacy(fixture.worldState, target.id, fire.id)
+        chosenWorld = EraTurnChoiceCatalog.applyLegacy(chosenWorld, target.id, hunters.id)
+        ChronicleDecisionMailbox.enqueue(fire)
+        ChronicleDecisionMailbox.enqueue(hunters)
+
+        val result = fixture.runner.advance(
+            chosenWorld,
+            fixture.people,
+            fixture.economy,
+            fixture.evolution,
+            months = 1,
+        )
+        val resolvedSources = result.world.recentEvents.mapNotNull { it.facts["sourceEventId"] }.toSet()
+        val cultureTags = result.world.civilizations.first { it.id == target.id }.cultureTags
+
+        assertTrue(fire.sourceEventId in resolvedSources)
+        assertTrue(hunters.sourceEventId in resolvedSources)
+        assertTrue("foundation:fire_mastery" in cultureTags)
+        assertTrue("policy:predator_hunters" in cultureTags)
+        assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
+    }
+
+    @Test
+    fun queuedResolutionOfExistingForkDoesNotBlockTheCenturyStart() {
+        ChronicleDecisionMailbox.drain()
+        val fixture = fixture()
+        val target = fixture.worldState.civilizations.first()
+        val source = SimulationEvent(
+            id = "shortage-now",
+            tick = fixture.worldState.tick,
+            code = "FOOD_SHORTAGE",
+            actorIds = listOf(target.id),
+            facts = mapOf("civilization" to target.name),
+        )
+        val blockedWorld = fixture.worldState.copy(recentEvents = fixture.worldState.recentEvents + source)
+        val decision = ChronicleDecisionCatalog.latestUnresolved(blockedWorld.recentEvents, fixture.people, fixture.economy)!!
+        ChronicleDecisionMailbox.enqueue(decision.options.first())
+
+        val result = fixture.runner.advance(
+            blockedWorld,
+            fixture.people,
+            fixture.economy,
+            fixture.evolution,
+            months = 1,
+        )
+
+        assertEquals(blockedWorld.tick + 1L, result.world.tick)
+        assertTrue(result.world.recentEvents.any { it.facts["sourceEventId"] == source.id })
         assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
     }
 
