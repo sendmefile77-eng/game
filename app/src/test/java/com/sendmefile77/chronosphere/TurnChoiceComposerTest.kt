@@ -35,6 +35,83 @@ class TurnChoiceComposerTest {
         assertTrue(combined.promptUk.contains("одразу проживе"))
     }
 
+    @Test
+    fun playerCanSelectOneToThreeEraDirectionsButNeverFour() {
+        val decision = eraDecision()
+        var selected = emptySet<String>()
+        selected = TurnChoiceComposer.toggleSelection(decision, selected, "era-tribal-breakthrough-fire")
+        selected = TurnChoiceComposer.toggleSelection(decision, selected, "era-tribal-subsistence-predator_hunters")
+        selected = TurnChoiceComposer.toggleSelection(decision, selected, "era-tribal-society-ritual_culture")
+
+        assertEquals(3, selected.size)
+        assertTrue("era-tribal-breakthrough-fire" in selected)
+        assertTrue("era-tribal-subsistence-predator_hunters" in selected)
+        assertTrue("era-tribal-society-ritual_culture" in selected)
+
+        val afterFourth = TurnChoiceComposer.toggleSelection(
+            decision,
+            selected,
+            "era-tribal-mobility-nomadic_migration",
+        )
+        assertEquals(selected, afterFourth)
+    }
+
+    @Test
+    fun selectingAnotherOptionInSameFamilyReplacesThePreviousOne() {
+        val decision = eraDecision().copy(
+            options = eraDecision().options +
+                option("era-tribal-breakthrough-stone_tools", "player-century-choice-1200-civ-a-breakthrough"),
+        )
+        var selected = TurnChoiceComposer.toggleSelection(
+            decision,
+            emptySet(),
+            "era-tribal-breakthrough-fire",
+        )
+        selected = TurnChoiceComposer.toggleSelection(
+            decision,
+            selected,
+            "era-tribal-breakthrough-stone_tools",
+        )
+
+        assertEquals(setOf("era-tribal-breakthrough-stone_tools"), selected)
+    }
+
+    @Test
+    fun historicalForkStillRequiresExactlyOneChoiceFromItsSource() {
+        val combined = TurnChoiceComposer.compose(
+            eraDecision(),
+            ChronicleDecision(
+                eventId = "event-ruler",
+                titleUk = "Нова влада",
+                promptUk = "Оберіть реакцію",
+                options = listOf(
+                    option("rule-legitimacy", "event-ruler"),
+                    option("rule-reform", "event-ruler"),
+                ),
+            ),
+        )
+        var selected = TurnChoiceComposer.toggleSelection(combined, emptySet(), "rule-legitimacy")
+        selected = TurnChoiceComposer.toggleSelection(combined, selected, "rule-reform")
+
+        assertEquals(setOf("rule-reform"), selected)
+        assertEquals(
+            setOf("event-ruler"),
+            selected.mapNotNull { id -> combined.options.firstOrNull { it.id == id }?.sourceEventId }.toSet(),
+        )
+    }
+
+    private fun eraDecision() = ChronicleDecision(
+        eventId = "player-century-choice-1200-civ-a",
+        titleUk = "Племінна доба",
+        promptUk = "Оберіть напрями",
+        options = listOf(
+            option("era-tribal-breakthrough-fire", "player-century-choice-1200-civ-a-breakthrough"),
+            option("era-tribal-subsistence-predator_hunters", "player-century-choice-1200-civ-a-subsistence"),
+            option("era-tribal-society-ritual_culture", "player-century-choice-1200-civ-a-society"),
+            option("era-tribal-mobility-nomadic_migration", "player-century-choice-1200-civ-a-mobility"),
+        ),
+    )
+
     private fun option(id: String, source: String) = ChronicleDecisionOption(
         id = id,
         sourceEventId = source,
