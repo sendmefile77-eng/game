@@ -9,6 +9,7 @@ import com.sendmefile77.chronosphere.history.InterventionKind
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import com.sendmefile77.chronosphere.textgen.ChronicleNarrative
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,6 +67,7 @@ class ChronicleLlmEnricherTest {
                     kind = InterventionKind.STABILITY_SUPPORT,
                     targetCivilizationId = "civ-a",
                     strength = 0.66,
+                    counterpartCivilizationId = "civ-b",
                 ),
             ),
         )
@@ -84,5 +86,54 @@ class ChronicleLlmEnricherTest {
         assertTrue(prompt.contains("Нері"))
         assertFalse(prompt.contains("private-cache-key"))
         assertFalse(prompt.contains("internal:tag"))
+    }
+
+    @Test
+    fun proseRewriteCannotChangeOrDropMechanicalTargets() {
+        val narrative = ChronicleNarrative(
+            title = "Почалася війна",
+            hook = "Кордон спалахнув.",
+            body = "Нері та Варки вступили у війну.",
+            significance = "Баланс сил зміниться.",
+        )
+        val original = ChronicleDecisionOption(
+            id = "war-embassy",
+            sourceEventId = "war-1",
+            titleUk = "Послати послів",
+            effectUk = "Спробувати знизити напругу.",
+            riskUk = "Супротивник може відмовити.",
+            kind = InterventionKind.EMBASSY,
+            targetCivilizationId = "civ-a",
+            strength = 0.61,
+            counterpartCivilizationId = "civ-b",
+        )
+        val decision = ChronicleDecision(
+            eventId = "war-1",
+            titleUk = "Як відповісти?",
+            promptUk = "Оберіть напрямок.",
+            options = listOf(original),
+        )
+        val raw = """
+            {
+              "title":"Війна на межі",
+              "hook":"Кордон спалахнув.",
+              "body":"Нері та Варки вступили у війну.",
+              "significance":"Баланс сил зміниться.",
+              "changes":[],
+              "decision_title":"Що робити?",
+              "decision_prompt":"Оберіть відповідь.",
+              "options":[{"id":"war-embassy","title":"Відрядити посольство","effect":"Шанс на розрядку.","risk":"Можлива відмова."}]
+            }
+        """.trimIndent()
+
+        val rewritten = ChronicleLlmEnricher.parseResponse(raw, narrative, decision).second!!.options.single()
+
+        assertEquals(original.id, rewritten.id)
+        assertEquals(original.sourceEventId, rewritten.sourceEventId)
+        assertEquals(original.kind, rewritten.kind)
+        assertEquals(original.targetCivilizationId, rewritten.targetCivilizationId)
+        assertEquals(original.strength, rewritten.strength, 0.0)
+        assertEquals(original.counterpartCivilizationId, rewritten.counterpartCivilizationId)
+        assertEquals("Відрядити посольство", rewritten.titleUk)
     }
 }
