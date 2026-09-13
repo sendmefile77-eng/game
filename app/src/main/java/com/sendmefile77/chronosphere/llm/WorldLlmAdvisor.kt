@@ -32,12 +32,14 @@ internal object WorldLlmAdvisor {
         economyState: EconomyState,
         briefing: GameBriefing,
     ): LlmWorldAdvice? {
+        val historicalLegacy = historicalLegacy(civilization.cultureTags)
         val cacheKey = listOf(
             state.tick.toString(),
             civilization.id,
             civilization.population.toString(),
             "%.3f".format(civilization.stability),
             "%.3f".format(civilization.technology),
+            historicalLegacy.joinToString("|").hashCode().toString(),
             briefing.headline,
             briefing.objective.title,
             briefing.objective.meter,
@@ -81,6 +83,7 @@ internal object WorldLlmAdvisor {
             "${neighbor.name}: ${neighbor.status}, relation=${"%.2f".format(neighbor.relation)}"
         }.ifBlank { "немає" }
         val latest = briefing.latestEvent ?: "немає"
+        val historicalLegacy = historicalLegacy(civilization.cultureTags)
         return buildString {
             appendLine("Це вже порахований стан гри. Не додавай нових фактів:")
             appendLine("tick=${state.tick}")
@@ -91,6 +94,10 @@ internal object WorldLlmAdvisor {
             appendLine("казна=${"%.1f".format(civilization.treasury)}")
             if (economy != null) {
                 appendLine("епоха=${economy.era.displayNameUk}; дефіцит=${"%.3f".format(economy.shortageIndex)}; торгівля=${"%.1f".format(economy.tradeBalance)}")
+            }
+            if (historicalLegacy.isNotEmpty()) {
+                appendLine("довготривала спадщина виборів=${historicalLegacy.joinToString(", ")}")
+                appendLine("правило спадщини=вважай ці риси реальною частиною господарства, культури й повсякденної поведінки, а не декоративними назвами")
             }
             appendLine("ситуація=${briefing.headline}")
             appendLine("тиск=${briefing.pressure}")
@@ -157,6 +164,25 @@ internal object WorldLlmAdvisor {
         "Відкрити хроніку",
         "Хід · 100 років",
     )
+
+    private fun historicalLegacy(tags: Set<String>): List<String> = tags.asSequence()
+        .filter { tag -> HISTORY_PREFIXES.any(tag::startsWith) }
+        .map { tag ->
+            val parts = tag.split(':')
+            when {
+                tag.startsWith("era-choice:") && parts.size >= 3 -> "${humanize(parts[1])}: ${humanize(parts.drop(2).joinToString(" "))}"
+                else -> humanize(tag.substringAfter(':', tag))
+            }
+        }
+        .filter(String::isNotBlank)
+        .distinct()
+        .sorted()
+        .take(12)
+        .toList()
+
+    private fun humanize(value: String): String = value.replace('_', ' ').replace('-', ' ')
+
+    private val HISTORY_PREFIXES = listOf("era-choice:", "foundation:", "policy:", "hist:", "history_policy:")
 
     private val SYSTEM_PROMPT = """
         Ти локальний радник у грі «Хроносфера». Відповідай українською.
