@@ -5,6 +5,8 @@ package com.sendmefile77.chronosphere
  * era-development directions. This avoids a chain of modal confirmations before time can move.
  */
 internal object TurnChoiceComposer {
+    const val MAX_ERA_CHOICES = 3
+
     fun compose(
         eraDecision: ChronicleDecision,
         historicalDecision: ChronicleDecision?,
@@ -33,4 +35,27 @@ internal object TurnChoiceComposer {
         .filterNot(::isEraOption)
         .map { it.sourceEventId }
         .toSet()
+
+    /** Pure selection reducer shared by Compose and unit tests. */
+    fun toggleSelection(
+        decision: ChronicleDecision,
+        selectedIds: Set<String>,
+        optionId: String,
+    ): Set<String> {
+        val option = decision.options.firstOrNull { it.id == optionId } ?: return selectedIds
+        if (option.id in selectedIds) return selectedIds - option.id
+
+        val group = selectionGroup(option)
+        val withoutSameGroup = selectedIds.filterTo(linkedSetOf()) { id ->
+            val old = decision.options.firstOrNull { it.id == id }
+            old == null || selectionGroup(old) != group
+        }
+        if (isEraOption(option)) {
+            val eraCountAfterReplacement = decision.options.count { candidate ->
+                candidate.id in withoutSameGroup && isEraOption(candidate)
+            }
+            if (eraCountAfterReplacement >= MAX_ERA_CHOICES) return selectedIds
+        }
+        return withoutSameGroup + option.id
+    }
 }
