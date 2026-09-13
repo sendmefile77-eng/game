@@ -224,6 +224,11 @@ fun ChronosphereGameApp() {
         session.state.recentEvents, peopleState, economyState,
     )
 
+    fun composeTurnDecision(): ChronicleDecision = TurnChoiceComposer.compose(
+        eraDecision = EraTurnChoiceCatalog.decision(session.state, economyState, selectedCivilizationId),
+        historicalDecision = chronicleDecision(),
+    )
+
     fun advanceMonths(months: Int) {
         if (isAdvancing) return
         require(months > 0)
@@ -270,10 +275,9 @@ fun ChronosphereGameApp() {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: PendingChronicleDecisionException) {
-                val blocked = chronicleDecision()
                 pendingTurnMonths = months
-                turnDecision = blocked ?: EraTurnChoiceCatalog.decision(session.state, economyState, selectedCivilizationId)
-                saveStatus = error.message ?: "Спочатку прийміть рішення"
+                turnDecision = composeTurnDecision()
+                saveStatus = error.message ?: "Потрібна відповідь на історичну розвилку"
             } catch (error: Throwable) {
                 saveStatus = "Помилка моделювання: ${error.message ?: "невідома"}"
             } finally {
@@ -290,12 +294,11 @@ fun ChronosphereGameApp() {
             return
         }
         pendingTurnMonths = months
-        val blocked = chronicleDecision()
-        turnDecision = blocked ?: EraTurnChoiceCatalog.decision(session.state, economyState, selectedCivilizationId)
-        saveStatus = if (blocked != null) {
-            "Перед переходом треба вирішити історичну розвилку"
+        turnDecision = composeTurnDecision()
+        saveStatus = if (chronicleDecision() != null) {
+            "Оберіть відповідь на подію та напрями епохи — потім одразу мине 100 років"
         } else {
-            "Оберіть напрями розвитку — після підтвердження світ одразу проживе 100 років"
+            "Оберіть 1–3 напрями епохи — після підтвердження світ одразу проживе 100 років"
         }
     }
 
@@ -682,24 +685,25 @@ fun ChronosphereGameApp() {
             TurnDecisionDialog(
                 decision = decision,
                 onConfirm = { options ->
-                    if (options.isEmpty()) return@TurnDecisionDialog
-                    if (EraTurnChoiceCatalog.isEraTurn(decision)) {
-                        var nextWorld = session.state
-                        options.forEach { option ->
-                            nextWorld = EraTurnChoiceCatalog.applyLegacy(
-                                state = nextWorld,
-                                civilizationId = option.targetCivilizationId,
-                                choiceId = option.id,
-                            )
+                    if (options.isNotEmpty()) {
+                        if (EraTurnChoiceCatalog.isEraTurn(decision)) {
+                            var nextWorld = session.state
+                            options.forEach { option ->
+                                nextWorld = EraTurnChoiceCatalog.applyLegacy(
+                                    state = nextWorld,
+                                    civilizationId = option.targetCivilizationId,
+                                    choiceId = option.id,
+                                )
+                            }
+                            syncState(nextWorld)
                         }
-                        syncState(nextWorld)
+                        options.forEach(ChronicleDecisionMailbox::enqueue)
+                        turnDecision = null
+                        val months = pendingTurnMonths ?: TURN_MONTHS
+                        pendingTurnMonths = null
+                        saveStatus = "Рішення прийнято · моделюю наслідки одразу"
+                        advanceMonths(months)
                     }
-                    options.forEach(ChronicleDecisionMailbox::enqueue)
-                    turnDecision = null
-                    val months = pendingTurnMonths ?: TURN_MONTHS
-                    pendingTurnMonths = null
-                    saveStatus = "Рішення прийнято · моделюю наслідки одразу"
-                    advanceMonths(months)
                 },
             )
         }
