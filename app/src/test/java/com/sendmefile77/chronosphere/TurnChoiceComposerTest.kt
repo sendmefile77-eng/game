@@ -31,7 +31,7 @@ class TurnChoiceComposerTest {
 
         assertEquals(4, combined.options.size)
         assertEquals(setOf("event-ruler"), TurnChoiceComposer.requiredHistoricalSources(combined))
-        assertTrue(combined.options.any(TurnChoiceComposer::isEraOption))
+        assertTrue(combined.options.any { TurnChoiceComposer.isEraOption(it) })
         assertTrue(combined.promptUk.contains("одразу проживе"))
     }
 
