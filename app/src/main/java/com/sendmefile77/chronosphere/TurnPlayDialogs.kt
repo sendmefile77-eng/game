@@ -42,23 +42,7 @@ internal fun TurnDecisionDialog(
             onConfirm(listOf(option))
             return
         }
-        if (option.id in selectedIds) {
-            selectedIds = selectedIds - option.id
-            return
-        }
-        val group = TurnChoiceComposer.selectionGroup(option)
-        val withoutSameGroup = selectedIds.filterTo(linkedSetOf()) { id ->
-            val old = decision.options.firstOrNull { it.id == id }
-            old == null || TurnChoiceComposer.selectionGroup(old) != group
-        }
-        val eraCountAfterReplacement = decision.options.count { candidate ->
-            candidate.id in withoutSameGroup && TurnChoiceComposer.isEraOption(candidate)
-        }
-        if (TurnChoiceComposer.isEraOption(option) && eraCountAfterReplacement >= 3) {
-            selectedIds = withoutSameGroup
-            return
-        }
-        selectedIds = withoutSameGroup + option.id
+        selectedIds = TurnChoiceComposer.toggleSelection(decision, selectedIds, option.id)
     }
 
     AlertDialog(
@@ -66,7 +50,7 @@ internal fun TurnDecisionDialog(
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    if (multi) "Вибір століття · до 3 напрямів" else "Історична розвилка",
+                    if (multi) "Вибір століття · до ${TurnChoiceComposer.MAX_ERA_CHOICES} напрямів" else "Історична розвилка",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -101,7 +85,7 @@ internal fun TurnDecisionDialog(
                     }
                     if (eraOption && !shownEraHeader) {
                         Text(
-                            "НАПРЯМИ ЕПОХИ · ОБЕРІТЬ 1–3",
+                            "НАПРЯМИ ЕПОХИ · ОБЕРІТЬ 1–${TurnChoiceComposer.MAX_ERA_CHOICES}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.Bold,
@@ -140,7 +124,7 @@ internal fun TurnDecisionDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Напрямів ${selectedEra.size}/3",
+                            "Напрямів ${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary,
                         )
