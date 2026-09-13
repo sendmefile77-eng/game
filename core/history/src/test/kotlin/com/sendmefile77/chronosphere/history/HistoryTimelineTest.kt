@@ -28,6 +28,53 @@ class HistoryTimelineTest {
     }
 
     @Test
+    fun eraChoiceLegacyForksWithWorldAndThenCanDivergePerBranch() {
+        val originalTags = setOf(
+            "era-choice:breakthrough:fire",
+            "foundation:fire_mastery",
+            "era-choice:subsistence:predator_hunters",
+            "policy:predator_hunters",
+            "hist:blood_hunt",
+        )
+        val initial = sampleState(tick = 120L, cultureTags = originalTags)
+        var workspace = timeline.create(initial)
+        workspace = timeline.fork(workspace, "River future")
+
+        assertEquals(originalTags, workspace.activeState.civilizations.single().cultureTags)
+        assertEquals(
+            originalTags,
+            ActiveHistoricalContextRegistry.snapshot(initial.worldSeed)!!.cultureTagsByCivilization.getValue("civ-1"),
+        )
+
+        val branchState = workspace.activeState.copy(
+            tick = 240L,
+            civilizations = workspace.activeState.civilizations.map { civilization ->
+                civilization.copy(
+                    cultureTags = civilization.cultureTags
+                        .filterNot { it.startsWith("era-choice:subsistence:") || it.startsWith("policy:predator_hunters") || it == "hist:blood_hunt" }
+                        .toSet() + setOf(
+                        "era-choice:subsistence:river_fishers",
+                        "policy:river_fishers",
+                        "hist:river_clans",
+                    ),
+                )
+            },
+        )
+        workspace = timeline.syncActive(workspace, branchState)
+        assertTrue("era-choice:subsistence:river_fishers" in workspace.activeState.civilizations.single().cultureTags)
+
+        workspace = timeline.switchTo(workspace, HistoryTimeline.ROOT_BRANCH_ID)
+        val restoredTags = workspace.activeState.civilizations.single().cultureTags
+        assertTrue("era-choice:subsistence:predator_hunters" in restoredTags)
+        assertTrue("foundation:fire_mastery" in restoredTags)
+        assertTrue("era-choice:subsistence:river_fishers" !in restoredTags)
+        assertEquals(
+            restoredTags,
+            ActiveHistoricalContextRegistry.snapshot(initial.worldSeed)!!.cultureTagsByCivilization.getValue("civ-1"),
+        )
+    }
+
+    @Test
     fun latestCheckpointRestoresExactStateOnActiveBranch() {
         val initial = sampleState(tick = 48L)
         var workspace = timeline.create(initial)
@@ -126,7 +173,7 @@ class HistoryTimelineTest {
         assertEquals(listOf(pending), workspace.activePendingInterventions)
     }
 
-    private fun sampleState(tick: Long): LivingPlanetState {
+    private fun sampleState(tick: Long, cultureTags: Set<String> = emptySet()): LivingPlanetState {
         val civilization = Civilization(
             id = "civ-1",
             name = "Ardan",
@@ -134,6 +181,7 @@ class HistoryTimelineTest {
             stability = 0.65,
             technology = 0.12,
             treasury = 80.0,
+            cultureTags = cultureTags,
         )
         val settlement = Settlement(
             id = "city-1",
