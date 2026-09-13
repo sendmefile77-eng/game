@@ -40,6 +40,7 @@ fun CharacterCardPanel(
     evolution: EvolutionState,
     scene: ResolvedScene,
     technologyEra: TechnologyEra? = null,
+    civilizationVisualTags: Set<String> = emptySet(),
     adultVisual: AdultVisualSceneDescriptor? = null,
     hasPreviousOrNext: Boolean,
     onNext: () -> Unit,
@@ -58,6 +59,9 @@ fun CharacterCardPanel(
     val dynasty = person.dynastyId?.let { dynastyId -> people.dynasties.firstOrNull { it.id == dynastyId }?.name }
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
+    val mergedVisualTags = remember(descriptor?.tags, civilizationVisualTags) {
+        (descriptor?.tags.orEmpty() + civilizationVisualTags).toSet()
+    }
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
     val effectiveAdultVisual = remember(adultVisual, person.id, tick, people, evolution, displayScene.wardrobeState, adultSceneRuntime.hasStructuredVisuals) {
         adultVisual ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED && age >= 18 && adultSceneRuntime.hasStructuredVisuals) {
@@ -74,7 +78,7 @@ fun CharacterCardPanel(
         val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
         "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
     }
-    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, actionPlan?.cacheToken, technologyEra) {
+    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, actionPlan?.cacheToken, technologyEra, mergedVisualTags) {
         GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
     }
 
@@ -92,7 +96,7 @@ fun CharacterCardPanel(
         }
     }
 
-    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = descriptor?.tags ?: emptySet(), visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = actionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
+    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = mergedVisualTags, visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = actionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -230,45 +234,20 @@ private fun aptitudeLabel(value: Double): String = when {
     else -> "звичайні"
 }
 
-private fun traitLabel(trait: String): String = when (trait.lowercase()) {
-    "ambitious" -> "амбітний"
-    "martial" -> "войовничий"
-    "scholarly" -> "допитливий"
-    "pious" -> "набожний"
-    "charismatic" -> "харизматичний"
-    "mercantile" -> "підприємливий"
-    "cautious" -> "обережний"
-    "bold" -> "сміливий"
-    "diplomatic" -> "дипломатичний"
-    "ruthless" -> "безжальний"
-    else -> trait.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() }
-}
+private fun traitLabel(value: String): String = value.replace('_', ' ').replace('-', ' ')
 
-private fun rankLabel(rank: String): String = when (rank.lowercase()) {
+private fun rankLabel(value: String): String = when (value.lowercase()) {
     "population" -> "популяція"
     "morph" -> "морф"
     "subspecies" -> "підвид"
     "species" -> "вид"
-    else -> rank.lowercase()
+    else -> value.lowercase()
 }
 
-private fun coveringLabel(covering: String): String = when (covering.lowercase()) {
-    "dense_hair" -> "густе волосся"
-    "fine_fur" -> "шерсть"
+private fun coveringLabel(value: String): String = when (value) {
+    "fur" -> "хутро"
+    "feathers" -> "пір’я"
     "scales" -> "луска"
-    else -> covering.replace('_', ' ').lowercase()
-}
-
-private fun actionCaption(plan: AdultActionPlan): String {
-    val act = when (plan.type) {
-        AdultActionType.FOOTJOB -> "футджоб"
-        AdultActionType.ORAL -> "мінет"
-        AdultActionType.VAGINAL -> "вагінальний секс"
-        AdultActionType.ANAL -> "анал"
-        AdultActionType.BUKKAKE -> "буккаке"
-        AdultActionType.MASTURBATION -> "мастурбація"
-        AdultActionType.BDSM -> "BDSM"
-        AdultActionType.FUTANARI_ORGASM -> "футанарі оргазм"
-    }
-    return if (plan.partner == null) act else "$act · з ${plan.partner.name}"
+    "plates" -> "пластини"
+    else -> value.replace('_', ' ')
 }
