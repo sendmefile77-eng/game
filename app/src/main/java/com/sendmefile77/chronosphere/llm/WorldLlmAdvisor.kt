@@ -50,7 +50,7 @@ internal object WorldLlmAdvisor {
                 userPrompt = buildPrompt(state, civilization, economyState, briefing),
                 maxTokens = 260,
                 temperature = 0.50,
-                timeoutMillis = 30_000,
+                timeoutMillis = 60_000,
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -58,7 +58,8 @@ internal object WorldLlmAdvisor {
             null
         } ?: return null
 
-        val parsed = runCatching { parse(completion.content) }.getOrNull() ?: return null
+        val parsed = parse(completion.content)
+        if (parsed.adviceUk.isBlank()) return null
         return LlmWorldAdvice(
             titleUk = parsed.titleUk,
             adviceUk = parsed.adviceUk,
@@ -99,26 +100,39 @@ internal object WorldLlmAdvisor {
             appendLine("союзники=${briefing.allies.joinToString(", ").ifBlank { "немає" }}")
             appendLine("сусіди=$neighbors")
             appendLine("остання подія=$latest")
-            appendLine("правило ходу=гравець планує максимум одну команду, потім запускає час; важлива подія може зупинити швидку прокрутку")
+            appendLine("правило ходу=гравець обирає напрями епохи й одразу запускає 100 років симуляції")
             appendLine("дипломатія=Посольство покращує відносини; Союз потребує добрих відносин; Мир і Набіг доступні під час війни")
             appendLine()
             appendLine("Дозволені назви дій: ${ALLOWED_ACTIONS.joinToString(", ")}")
-            appendLine("Поверни лише JSON:")
+            appendLine("Бажаний JSON:")
             appendLine("{\"title\":\"коротка оцінка\",\"advice\":\"1-2 речення\",\"why\":\"1 коротке речення\",\"action\":\"одна дозволена назва або порожній рядок\"}")
+            appendLine("Якщо JSON не виходить — поверни просто коротку пораду звичайним текстом.")
         }.take(5_500)
     }
 
     internal fun parse(raw: String): ParsedWorldAdvice {
         val clean = raw.trim()
-            .removePrefix("```json").removePrefix("```")
+            .removePrefix("```json").removePrefix("```JSON").removePrefix("```")
             .removeSuffix("```").trim()
-        val json = JSONObject(clean)
-        val title = json.optString("title").trim().takeIf { it.length in 3..100 }
-            ?: return ParsedWorldAdvice("Оцінка ситуації", "", "", null)
-        val advice = json.optString("advice").trim().takeIf { it.length in 5..420 }.orEmpty()
-        val why = json.optString("why").trim().takeIf { it.length in 3..260 }.orEmpty()
-        if (advice.isBlank()) return ParsedWorldAdvice(title, "", why, null)
-        val requestedAction = json.optString("action").trim()
+        val json = runCatching {
+            JSONObject(clean)
+        }.getOrNull() ?: run {
+            val start = clean.indexOf('{')
+            val end = clean.lastIndexOf('}')
+            if (start >= 0 && end > start) runCatching { JSONObject(clean.substring(start, end + 1)) }.getOrNull() else null
+        }
+
+        val title = LlmNarrativeWriter.flexibleField(clean, "title", json)
+            ?.takeIf { it.length in 3..100 }
+            ?: "Оцінка ситуації"
+        val advice = LlmNarrativeWriter.flexibleField(clean, "advice", json)
+            ?.takeIf { it.length in 5..420 }
+            ?: LlmNarrativeWriter.plainReply(clean).takeIf { it.length in 5..420 }
+            .orEmpty()
+        val why = LlmNarrativeWriter.flexibleField(clean, "why", json)
+            ?.takeIf { it.length in 3..260 }
+            .orEmpty()
+        val requestedAction = LlmNarrativeWriter.flexibleField(clean, "action", json).orEmpty()
         val action = ALLOWED_ACTIONS.firstOrNull { it.equals(requestedAction, ignoreCase = true) }
         return ParsedWorldAdvice(title, advice, why, action)
     }
@@ -141,15 +155,14 @@ internal object WorldLlmAdvisor {
         "Мир",
         "Набіг",
         "Відкрити хроніку",
-        "+1 рік",
+        "Хід · 100 років",
     )
 
     private val SYSTEM_PROMPT = """
         Ти локальний радник у грі «Хроносфера». Відповідай українською.
         Спирайся ТІЛЬКИ на наданий порахований стан. Не вигадуй людей, держави, війни, ресурси або числа.
         Не змінюй правила і не виконуй дії. Ти лише коротко пояснюєш гравцеві ситуацію.
-        У гравця максимум одна стратегічна команда на хід, після чого він запускає час.
         Якщо рекомендуєш дію, використовуй точну назву лише з наданого списку. Якщо жодна не підходить — action порожній.
-        Відповідь — один валідний JSON без markdown.
+        JSON бажаний, але коректна коротка текстова відповідь теж прийнятна.
     """.trimIndent()
 }
