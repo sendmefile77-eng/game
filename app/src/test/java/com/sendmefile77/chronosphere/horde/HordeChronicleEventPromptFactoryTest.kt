@@ -59,7 +59,7 @@ class HordeChronicleEventPromptFactoryTest {
         assertTrue(request.positivePrompt.contains("explicit"))
         assertFalse(request.positivePrompt.contains("non-explicit"))
         assertFalse(request.negativePrompt.contains("explicit sex"))
-        assertTrue(request.cacheKey.contains("v7"))
+        assertTrue(request.cacheKey.startsWith("$CHRONICLE_EVENT_CACHE_SCHEMA|"))
         assertNotNull(request.cacheKey)
     }
 
