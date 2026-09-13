@@ -41,7 +41,7 @@ class LocalDreamFastProfileTest {
     fun cyberRealisticPackKeepsEraPromptAndUsesScreenshotSampling() {
         LocalDreamModelPackRuntime.select(LocalDreamModelPacks.cyberRealistic)
         val horde = HordeImageRequest(
-            cacheKey = "horde-chronicle-event-v7-city-erotica|settle",
+            cacheKey = "$CHRONICLE_EVENT_CACHE_SCHEMA|settle",
             positivePrompt = "prehistoric tribal society, hide tents, hearth fire, settlement Galenhaven",
             nsfw = true,
             ageYears = 21,
