@@ -5,6 +5,8 @@ import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
+internal const val CHRONICLE_EVENT_CACHE_SCHEMA = "horde-chronicle-event-v8-era-choice"
+
 /** Wide chronicle frame: era city life with the material consequences of player choices visible. */
 object HordeChronicleEventPromptFactory {
     private val preferredModels = listOf(
@@ -70,7 +72,7 @@ object HordeChronicleEventPromptFactory {
         val adultMinAge = participants.minOfOrNull { it.ageYearsAt(event.tick) }?.coerceAtLeast(0) ?: 21
         return HordeImageRequest(
             cacheKey = listOf(
-                "horde-chronicle-event-v8-era-choice",
+                CHRONICLE_EVENT_CACHE_SCHEMA,
                 event.id,
                 event.tick.toString(),
                 event.code,
