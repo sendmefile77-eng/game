@@ -460,68 +460,93 @@ fun ChronosphereGameApp() {
     MaterialTheme(colorScheme = ChronosphereColors) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val mapHeight = when (selectedPanel) {
-                    GamePanel.WORLD -> (maxHeight * 0.46f).coerceIn(220.dp, 360.dp)
-                    GamePanel.PERSON -> (maxHeight * 0.27f).coerceIn(150.dp, 220.dp)
-                    GamePanel.HISTORY, GamePanel.CHRONICLE -> (maxHeight * 0.24f).coerceIn(140.dp, 205.dp)
-                }
+                val worldMapHeight = (maxHeight * 0.40f).coerceIn(205.dp, 315.dp)
+                val turnEnabled = !isAdvancing && turnDecision == null && !showDevelopmentDialog
                 Column(modifier = Modifier.fillMaxSize()) {
                     ChronosphereTopBar(
                         year = time.year,
                         branchName = branchDisplayName(workspace.activeBranch.name),
                         onNewWorld = { if (!isAdvancing) showNewWorldDialog = true },
                     )
-                    Box(modifier = Modifier.fillMaxWidth().height(mapHeight).padding(horizontal = 10.dp)) {
-                        WorldMapView(
-                            world = session.world,
-                            rivers = session.rivers,
-                            territoryOwners = territory,
-                            settlements = session.state.settlements.map {
-                                SettlementMarker(
-                                    x = it.x,
-                                    y = it.y,
-                                    population = it.population,
-                                    civilizationIndex = civilizationOrder[it.civilizationId] ?: 0,
-                                )
-                            },
-                            selectedCivilizationIndex = civilizationOrder[selectedCivilizationId],
-                            onCivilizationSelected = if (isAdvancing) null else { index ->
-                                civilizations.getOrNull(index)?.let { selectCivilization(it.id) }
-                            },
-                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
-                        )
-                        WorldMapSummary(
-                            totalPopulation = session.state.totalPopulation,
-                            settlements = session.state.settlements.size,
-                            civilizations = civilizations.size,
-                            wars = session.state.wars.size,
-                            tradeRoutes = economyState.routes.size,
-                            modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
-                        )
-                        SelectedCivilizationBadge(
-                            civilizationName = selectedCivilization.name,
-                            eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
-                            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                        )
-                        Surface(
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp),
-                            color = Color(0xE60A1117),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                    if (selectedPanel == GamePanel.WORLD) {
+                        Box(modifier = Modifier.fillMaxWidth().height(worldMapHeight).padding(horizontal = 8.dp)) {
+                            WorldMapView(
+                                world = session.world,
+                                rivers = session.rivers,
+                                territoryOwners = territory,
+                                settlements = session.state.settlements.map {
+                                    SettlementMarker(
+                                        x = it.x,
+                                        y = it.y,
+                                        population = it.population,
+                                        civilizationIndex = civilizationOrder[it.civilizationId] ?: 0,
+                                    )
+                                },
+                                selectedCivilizationIndex = civilizationOrder[selectedCivilizationId],
+                                onCivilizationSelected = if (isAdvancing) null else { index ->
+                                    civilizations.getOrNull(index)?.let { selectCivilization(it.id) }
+                                },
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
+                            )
+                            WorldMapSummary(
+                                totalPopulation = session.state.totalPopulation,
+                                settlements = session.state.settlements.size,
+                                civilizations = civilizations.size,
+                                wars = session.state.wars.size,
+                                tradeRoutes = economyState.routes.size,
+                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                            )
+                            SelectedCivilizationBadge(
+                                civilizationName = selectedCivilization.name,
+                                eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                            )
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
+                                color = Color(0xE60A1117),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.44f)),
                             ) {
-                                TimeButton(
-                                    "Хід · 100 років",
-                                    !isAdvancing && turnDecision == null && !showDevelopmentDialog,
-                                ) { requestTurn(TURN_MONTHS) }
-                                Text(
-                                    "Натисніть хід → оберіть напрями епохи → світ одразу проживе 100 років.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Box(modifier = Modifier.padding(6.dp)) {
+                                    TimeButton("Хід · 100 років", turnEnabled) { requestTurn(TURN_MONTHS) }
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        selectedCivilization.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${selectedEconomy?.era?.displayNameUk ?: "Епоха формується"} · ${time.year} рік",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Button(
+                                    onClick = { requestTurn(TURN_MONTHS) },
+                                    enabled = turnEnabled,
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 13.dp, vertical = 9.dp),
+                                ) {
+                                    Text("Хід · 100 р.", maxLines = 1, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -529,8 +554,8 @@ fun ChronosphereGameApp() {
                     GameTabs(selectedPanel = selectedPanel, enabled = !isAdvancing, onSelect = { selectedPanel = it })
                     Surface(modifier = Modifier.fillMaxWidth().weight(1f), color = MaterialTheme.colorScheme.surface) {
                         Column(
-                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(9.dp),
                         ) {
                             when (selectedPanel) {
                                 GamePanel.WORLD -> WorldPlayPanel(
@@ -664,7 +689,7 @@ fun ChronosphereGameApp() {
                     }
                     Text(
                         saveStatus,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
