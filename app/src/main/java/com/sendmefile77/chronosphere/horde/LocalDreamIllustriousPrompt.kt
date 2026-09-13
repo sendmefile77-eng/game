@@ -2,8 +2,8 @@ package com.sendmefile77.chronosphere.horde
 
 /**
  * Local Dream is running WAI Illustrious (or a DMD2 merge of it), not a Horde worker.
- * Long documentary prompts collapse; this rewrite keeps the act AND the era/setting
- * tags, and drops only identity/pose soup. Horde still receives the original request.
+ * Long documentary prompts collapse; this rewrite keeps the act AND a visible era set.
+ * Era scenery is placed first so it is not drowned by nude/act tags.
  */
 internal object LocalDreamIllustriousPrompt {
     private const val QUALITY =
@@ -12,7 +12,9 @@ internal object LocalDreamIllustriousPrompt {
     private const val NEGATIVE =
         "lowres, worst quality, bad anatomy, extra limbs, extra fingers, text, watermark, " +
             "clothed, dress, panties, bra, standing idle, standing side by side, " +
-            "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli"
+            "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli, " +
+            "modern bedroom, drywall, tiled bathroom, porcelain toilet, smartphone, neon lights, " +
+            "skyscraper, marble palace, greek columns, office, hospital, empty white background"
 
     fun apply(request: HordeImageRequest): HordeImageRequest {
         val source = request.positivePrompt.lowercase()
@@ -21,17 +23,17 @@ internal object LocalDreamIllustriousPrompt {
         val men = countMen(source)
         val people = peopleTag(girls, men, action, request.nsfw)
         val act = actTags(source)
-        val era = eraTags(source)
-        val eraSuffix = if (era.isBlank()) "" else ", $era"
+        val era = eraScene(source)
+        val eraPrefix = if (era.isBlank()) "" else "$era, "
         val positive = if (action && act.isNotBlank()) {
-            "$QUALITY, $people, $act$eraSuffix"
+            "$QUALITY, $eraPrefix$people, $act"
         } else if (request.nsfw) {
-            "$QUALITY, $people, standing, nipples, pussy, navel$eraSuffix"
+            "$QUALITY, ${eraPrefix}$people, standing, nipples, pussy, navel"
         } else {
-            "masterpiece, best quality, $people, fully clothed$eraSuffix"
+            "masterpiece, best quality, ${eraPrefix}$people, fully clothed"
         }
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v2",
+            cacheKey = "${request.cacheKey}|ld-illust-v3",
             positivePrompt = positive,
             negativePrompt = NEGATIVE,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
@@ -94,6 +96,31 @@ internal object LocalDreamIllustriousPrompt {
             "sex, vaginal, penis, pussy, missionary"
         else -> ""
     }
+
+    private fun eraScene(source: String): String = when {
+        matches(source, "prehistoric", "tribal", "stone-age", "stone age", "hide tent", "hide tents", "reed hut", "ochre", "hearth") ->
+            "wide shot, prehistoric tribal camp, hide tent interior, packed earth floor, stacked furs, open hearth fire, woodsmoke, ochre body paint, bone charms, animal hides, stone tools"
+        matches(source, "agrarian", "thatch", "cottage", "grain") ->
+            "wide shot, agrarian village, thatch cottage, clay walls, straw pallet, oil lamp, grain baskets"
+        matches(source, "early urban", "mudbrick", "market") ->
+            "wide shot, early city street, mudbrick houses, timber beams, clay lamps, market cloth"
+        matches(source, "bronze", "iron tools", "furnace", "metalworking") ->
+            "wide shot, metal-age workshop dwelling, furnace glow, hammered bronze, soot on timber"
+        matches(source, "medieval", "timber-framed", "rope bed", "candle") ->
+            "wide shot, medieval timber chamber, rope bed, wool blankets, heavy shutters, candlelight"
+        matches(source, "early industrial", "industrial", "tenement", "gaslight", "soot") ->
+            "wide shot, industrial tenement, brick walls, iron bed, gaslight, factory smoke outside"
+        matches(source, "electric lighting", "bakelite") ->
+            "wide shot, early electric apartment, wired bulb, bakelite radio, wallpaper"
+        matches(source, "information-age", "contemporary apartment") ->
+            "wide shot, contemporary apartment, current furniture, city window"
+        matches(source, "spacefaring", "spacecraft", "viewport") ->
+            "wide shot, spacecraft cabin, padded bulkheads, oval viewport, instrument lighting"
+        else -> eraTags(source)
+    }
+
+    private fun matches(source: String, vararg needles: String): Boolean =
+        needles.any { source.contains(it) }
 
     private fun eraTags(source: String): String {
         val found = ERA_PHRASES.filter { source.contains(it) }.distinct().toMutableList()
