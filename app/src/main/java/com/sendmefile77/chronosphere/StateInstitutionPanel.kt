@@ -22,7 +22,7 @@ import com.sendmefile77.chronosphere.history.InterventionKind
 internal fun StateInstitutionPanel(
     state: LivingPlanetState,
     civilization: Civilization,
-    hasPendingDecision: Boolean,
+    hasPendingDecision: Boolean = false,
     isAdvancing: Boolean,
     onQueue: (InterventionKind, String, String, String, String?) -> Unit,
 ) {
