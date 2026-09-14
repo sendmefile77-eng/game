@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import android.content.Context
+import com.sendmefile77.chronosphere.civilization.InternalPoliticsEngine
 import com.sendmefile77.chronosphere.economy.EconomyEngine
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
@@ -78,7 +79,7 @@ internal object GameAutoResume {
             val historyFile = File(app.filesDir, HISTORY_FILE)
             if (!historyFile.isFile) return null
             val workspace = HistoryWorkspaceSnapshotV1.decode(historyFile.readText(Charsets.UTF_8))
-            val state = workspace.activeState
+            val state = InternalPoliticsEngine.reconcile(workspace.activeState)
             val session = restoreGameSession(state, generator, hydrology, resourceGenerator)
             val people = workspace.activePeopleState ?: peopleEngine.initialize(state)
             val economy = workspace.activeEconomyState ?: EconomyEngine(session.world, session.resources).initialize(state)
