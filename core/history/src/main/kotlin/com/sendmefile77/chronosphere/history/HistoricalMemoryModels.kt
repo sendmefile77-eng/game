@@ -36,6 +36,7 @@ enum class HistoricalProcessKind {
     TECHNOLOGICAL_TRANSITION,
     DYNASTIC_TRANSITION,
     POPULATION_DIVERGENCE,
+    INTERNAL_CRISIS,
 }
 
 enum class HistoricalProcessStage {
@@ -158,6 +159,7 @@ enum class HistoricalLegacyKind {
     DYNASTIC_MEMORY,
     POPULATION_MEMORY,
     TECHNOLOGICAL_MEMORY,
+    REBELLION_MEMORY,
 }
 
 data class HistoricalLegacy(
