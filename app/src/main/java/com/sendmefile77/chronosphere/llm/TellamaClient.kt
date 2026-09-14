@@ -117,8 +117,9 @@ internal class TellamaClient(
                 )
 
             var lastError: Throwable? = null
-            repeat(3) { attempt ->
+            repeat(5) { attempt ->
                 val started = System.currentTimeMillis()
+                var retryDelayMillis = 450L + attempt * 550L
                 try {
                     val content = postChatNdjson("/api/chat", request, timeoutMillis).trim()
                     if (content.isNotBlank()) {
@@ -132,12 +133,20 @@ internal class TellamaClient(
                     lastError = IllegalStateException("Tellama повернула порожню відповідь")
                 } catch (error: Throwable) {
                     lastError = error
-                    if (!isTransientGenerationProblem(error) || attempt == 2) {
+                    val runtimeBusy = isRuntimeBusy(error)
+                    val normalRetryLimitReached = !runtimeBusy && attempt >= 2
+                    if (!isTransientGenerationProblem(error) || normalRetryLimitReached || attempt == 4) {
                         lastGenerationError = friendlyGenerationError(error)
                         throw error
                     }
+                    if (runtimeBusy) {
+                        // Tellama can keep returning RUNTIME_008 for a few seconds after another
+                        // stream ends. Keep the app-level mutex and wait that short window out
+                        // instead of immediately surfacing a red error card to the player.
+                        retryDelayMillis = 1_100L + attempt * 900L
+                    }
                 }
-                delay(450L + attempt * 550L)
+                delay(retryDelayMillis)
             }
             lastGenerationError = friendlyGenerationError(lastError ?: IllegalStateException("Tellama не дала відповіді"))
             null
@@ -247,8 +256,8 @@ internal class TellamaClient(
     private fun friendlyGenerationError(error: Throwable): String {
         val raw = error.message.orEmpty()
         return when {
-            raw.contains("runtime зайнятий", ignoreCase = true) || raw.contains("RUNTIME_008", ignoreCase = true) ->
-                "Qwen зараз зайнята іншим локальним запитом. Хроносфера повторила запит автоматично, але Tellama все ще зайнята."
+            isRuntimeBusy(error) ->
+                "Qwen зараз зайнята іншим локальним запитом. Хроносфера почекала й повторила запит, але Tellama все ще зайнята."
             raw.contains("timed out", ignoreCase = true) || generateSequence(error) { it.cause }.last() is SocketTimeoutException ->
                 "Qwen не встигла завершити відповідь за 60 секунд. Модель могла ще завантажуватися або телефон був зайнятий генерацією зображення."
             raw.contains("порожню відповідь", ignoreCase = true) ->
@@ -257,13 +266,16 @@ internal class TellamaClient(
         }
     }
 
-    private fun isTransientGenerationProblem(error: Throwable): Boolean {
-        val root = generateSequence(error) { it.cause }.last()
+    private fun isRuntimeBusy(error: Throwable): Boolean {
         val raw = error.message.orEmpty()
-        return isConnectionProblem(error) || root is SocketTimeoutException ||
-            raw.contains("runtime зайнятий", ignoreCase = true) ||
+        return raw.contains("runtime зайнятий", ignoreCase = true) ||
             raw.contains("RUNTIME_008", ignoreCase = true) ||
             raw.contains("HTTP 503", ignoreCase = true)
+    }
+
+    private fun isTransientGenerationProblem(error: Throwable): Boolean {
+        val root = generateSequence(error) { it.cause }.last()
+        return isConnectionProblem(error) || root is SocketTimeoutException || isRuntimeBusy(error)
     }
 
     private fun isConnectionProblem(error: Throwable): Boolean {
