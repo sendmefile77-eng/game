@@ -218,7 +218,7 @@ internal fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Primary navigation deliberately contains only the three things the player repeatedly uses. */
+/** Three primary play spaces plus one compact overflow for timeline/save tools. */
 @Composable
 internal fun GameTabs(selectedPanel: GamePanel, enabled: Boolean, onSelect: (GamePanel) -> Unit) {
     Surface(
@@ -235,6 +235,20 @@ internal fun GameTabs(selectedPanel: GamePanel, enabled: Boolean, onSelect: (Gam
             GameTab("Гра", GamePanel.WORLD, selectedPanel, enabled, onSelect)
             GameTab("Люди", GamePanel.PERSON, selectedPanel, enabled, onSelect)
             GameTab("Хроніка", GamePanel.CHRONICLE, selectedPanel, enabled, onSelect)
+            Surface(
+                modifier = Modifier
+                    .width(42.dp)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled) { onSelect(GamePanel.HISTORY) },
+                color = if (selectedPanel == GamePanel.HISTORY) MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f) else Color.Transparent,
+                border = if (selectedPanel == GamePanel.HISTORY) BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.62f)) else null,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("•••", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Black)
+                }
+            }
         }
     }
 }
@@ -309,8 +323,8 @@ internal fun InterventionButton(label: String, modifier: Modifier, enabled: Bool
 }
 
 /**
- * Kept for save compatibility and advanced timeline work, but intentionally removed from primary
- * navigation. Normal play no longer asks the player to manage branches between every century.
+ * Kept behind the overflow control. Timeline management and manual saves no longer occupy a
+ * permanent primary tab, but the functionality remains fully reachable.
  */
 @Composable
 internal fun HistoryPanel(
