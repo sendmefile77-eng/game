@@ -4,7 +4,7 @@ import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
-internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v12"
+internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v13"
 internal const val CHARACTER_REFERENCE_CACHE_SCHEMA = "horde-character-reference-v5"
 
 object HordeResolvedScenePromptFactory {
@@ -40,6 +40,7 @@ object HordeResolvedScenePromptFactory {
 
         val identity = HordeCharacterVisualProfile.from(characterKey)
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
+        val chimeric = morphology.signature != "baseline" && morphology.promptFragment.isNotBlank()
         val historicalVisualRaw = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
         val historicalVisual = if (undressed) HordeAdultSubjectGuard.sanitize(historicalVisualRaw) else historicalVisualRaw
         val historicalSignature = HordeHistoricalVisualPrompt.signature(visualTags)
@@ -79,14 +80,18 @@ object HordeResolvedScenePromptFactory {
         val positiveRaw = buildList {
             add("high quality photorealistic single fictional character")
             add(agePhrase)
-            add(identity.promptFragment)
+            add("canonical identity: ${identity.promptFragment}")
             add(morphologyPhrase)
+            if (undressed) {
+                add(HordeAdultSubjectGuard.PERSON_LOCK)
+                add(HordeAdultSubjectGuard.IDENTITY_LOCK)
+                if (chimeric) add(HordeAdultSubjectGuard.CHIMERA_LOCK)
+                add(HordeAdultSubjectGuard.EROTIC_LOCK)
+            }
             add(HordeEraVisual.materialCulture(technologyEra))
             add(HordeEraVisual.portraitInterior(technologyEra))
             if (historicalVisual.isNotBlank()) add(historicalVisual)
             if (undressed) {
-                add(HordeAdultSubjectGuard.HUMAN_LOCK)
-                add(HordeAdultSubjectGuard.EROTIC_LOCK)
                 HordeAdultVisualEnrichment.fragment(
                     visualTags,
                     technologyEra,
@@ -132,7 +137,7 @@ object HordeResolvedScenePromptFactory {
             add("detached body parts")
             addAll(HordeEraVisual.negatives(technologyEra))
             if (undressed) {
-                addAll(HordeAdultSubjectGuard.NEGATIVES)
+                addAll(HordeAdultSubjectGuard.animalSubjectNegatives(chimeric))
                 add("clothing")
                 add("dress")
                 add("robe")
