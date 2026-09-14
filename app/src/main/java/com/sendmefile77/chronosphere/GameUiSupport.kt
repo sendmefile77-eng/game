@@ -358,7 +358,6 @@ internal fun HistoryPanel(
     SectionHeader(
         title = "Машина часу",
         eyebrow = "Часова лінія",
-        trailing = "$timeYear рік",
     )
     PanelCard(accent = MaterialTheme.colorScheme.secondary) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -468,41 +467,6 @@ internal fun ChroniclePanel(
         civilizations = session.state.civilizations,
         clock = clock,
     )
-
-    PanelCard {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text("Світ зараз", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            val leaders = session.state.civilizations.sortedByDescending { it.population }.take(5)
-            leaders.forEachIndexed { index, civilization ->
-                val leaderName = peopleState.ruler(civilization.id)?.name ?: "без відомого правителя"
-                val eraName = economyState.economy(civilization.id)?.era?.displayNameUk ?: "епоха формується"
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatusPill("${index + 1}", color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(civilization.name, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "${compactNumber(civilization.population)} людей · $leaderName · $eraName",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            if (session.state.wars.isNotEmpty()) {
-                Text("Активні війни", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
-                session.state.wars.take(5).forEach { war ->
-                    Text(
-                        "${names[war.civilizationA] ?: "Невідома держава"} — ${names[war.civilizationB] ?: "Невідома держава"}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        }
-    }
 
     PanelCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
