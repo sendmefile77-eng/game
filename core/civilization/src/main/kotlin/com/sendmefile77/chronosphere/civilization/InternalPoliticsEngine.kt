@@ -101,7 +101,13 @@ object InternalPoliticsEngine {
         if (next == existing.kind) return current
         return current.copy(
             taxPolicies = current.taxPolicies.map { policy ->
-                if (policy.civilizationId == civilizationId) policy.copy(kind = next, changedTick = current.tick) else policy
+                if (policy.civilizationId == civilizationId) {
+                    policy.copy(
+                        kind = next,
+                        changedTick = current.tick,
+                        playerPriorityUntilTick = current.tick + PLAYER_POLICY_PRIORITY_MONTHS,
+                    )
+                } else policy
             },
         )
     }
@@ -140,6 +146,7 @@ object InternalPoliticsEngine {
         val old = state.taxPolicies.associateBy { it.civilizationId }
         return state.civilizations.map { civilization ->
             val current = old[civilization.id] ?: CivilizationTaxPolicy(civilization.id)
+            if (state.tick < current.playerPriorityUntilTick) return@map current
             if (state.tick - current.changedTick < 36L) return@map current
             val activeRebellion = state.activeRebellionsFor(civilization.id).isNotEmpty()
             val administration = state.institutionFor(civilization.id, InstitutionKind.ADMINISTRATION)?.capacity ?: 0.0
@@ -449,6 +456,7 @@ object InternalPoliticsEngine {
         return z.ushr(11).toDouble() * (1.0 / (1L shl 53).toDouble())
     }
 
+    private const val PLAYER_POLICY_PRIORITY_MONTHS = 240L
     private const val UNREST_EVENT_THRESHOLD = 0.62
     private const val REBELLION_THRESHOLD = 0.74
 }
