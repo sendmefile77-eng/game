@@ -22,15 +22,19 @@ import com.sendmefile77.chronosphere.history.InterventionKind
 internal fun StateInstitutionPanel(
     state: LivingPlanetState,
     civilization: Civilization,
+    hasPendingDecision: Boolean,
     isAdvancing: Boolean,
     onQueue: (InterventionKind, String, String, String, String?) -> Unit,
 ) {
     val taxPolicy = state.taxPolicyFor(civilization.id)
     val institutions = state.institutionsFor(civilization.id).sortedBy { it.kind.ordinal }
     val weakest = institutions.minByOrNull { institutionScore(it) }
-    val lowerGate = GameplayLoop.gate(state, civilization.id, InterventionKind.TAX_LOWER, null, false)
-    val raiseGate = GameplayLoop.gate(state, civilization.id, InterventionKind.TAX_RAISE, null, false)
-    val reformGate = GameplayLoop.gate(state, civilization.id, InterventionKind.INSTITUTION_REFORM, null, false)
+    val lowerGate = GameplayLoop.gate(state, civilization.id, InterventionKind.TAX_LOWER, null, hasPendingDecision)
+    val raiseGate = GameplayLoop.gate(state, civilization.id, InterventionKind.TAX_RAISE, null, hasPendingDecision)
+    val reformGate = GameplayLoop.gate(state, civilization.id, InterventionKind.INSTITUTION_REFORM, null, hasPendingDecision)
+    val policyPriorityYears = taxPolicy
+        ?.let { ((it.playerPriorityUntilTick - state.tick).coerceAtLeast(0L) / 12L).toInt() }
+        ?: 0
 
     SectionHeader(title = "Устрій держави", eyebrow = "Податки й інститути")
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
@@ -47,7 +51,10 @@ internal fun StateInstitutionPanel(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Ставка ${String.format("%.0f%%", (taxPolicy?.rate ?: 0.16) * 100.0)} · збір залежить від адміністрації та лояльності провінцій",
+                        buildString {
+                            append("Ставка ${String.format("%.0f%%", (taxPolicy?.rate ?: 0.16) * 100.0)} · збір залежить від адміністрації та лояльності провінцій")
+                            if (policyPriorityYears > 0) append(" · курс гравця ще ~$policyPriorityYears р.")
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
