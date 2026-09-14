@@ -21,9 +21,12 @@ object HordeAdultActionPromptFactory {
         val eraName = technologyEra?.name ?: "UNSPECIFIED"
         val recipeSetting = adultVisual?.settingKey?.takeIf { it.isNotBlank() }?.let { "structured scene setting ${it.replace('.', ' ').replace('-', ' ')}" }
         val partnerLine = plan.partner?.let { partner -> "second confirmed adult age ${partner.ageYears}, ${partnerIdentity?.promptFragment}, fully nude" }
-        val positive = listOf(actionPrompt(plan), actLock(plan.type), cameraPrompt(plan), "explicit uncensored adult sex, adults 18+", "primary adult face locked: ${identity.promptFragment}", partnerLine, "completely nude, genitals visible, sexual contact readable at a glance", HordeEraVisual.intimateInterior(technologyEra), HordeEraVisual.distinctiveMarker(technologyEra), HordeEraVisual.materialCulture(technologyEra), recipeSetting, morphology.promptFragment.takeIf { it.isNotBlank() }, "environment matches era $eraName, no modern kitchen, no tiled bathroom", "no text in image").filter { !it.isNullOrBlank() }.joinToString(", ")
+        val historicalBase = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
+        val adultOverlay = HordeAdultVisualEnrichment.fragment(visualTags, technologyEra, HordeAdultVisualEnrichment.Kind.SCENE)
+        val adultSignature = HordeAdultVisualEnrichment.signature(visualTags)
+        val positive = listOf(actionPrompt(plan), actLock(plan.type), cameraPrompt(plan), "explicit uncensored adult sex, adults 18+", "primary adult face locked: ${identity.promptFragment}", partnerLine, "completely nude, genitals visible, sexual contact readable at a glance", HordeEraVisual.intimateInterior(technologyEra), HordeEraVisual.distinctiveMarker(technologyEra), HordeEraVisual.materialCulture(technologyEra), historicalBase.takeIf { it.isNotBlank() }, adultOverlay.takeIf { it.isNotBlank() }, recipeSetting, morphology.promptFragment.takeIf { it.isNotBlank() }, "environment matches era $eraName, no modern kitchen, no tiled bathroom", "no text in image").filter { !it.isNullOrBlank() }.joinToString(", ")
         return base.copy(
-            cacheKey = listOf("horde-adult-action-v9", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none").joinToString("|"),
+            cacheKey = listOf("horde-adult-action-v9", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none", adultSignature).joinToString("|"),
             positivePrompt = positive,
             negativePrompt = buildList {
                 add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
