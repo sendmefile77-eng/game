@@ -11,9 +11,12 @@ internal object HordeHistoricalVisualPrompt {
             .sorted()
             .firstOrNull()
 
+        fun originOrdinal(raw: String): Int = HordeVisualEraChoiceIndex
+            .eraForSlug(HordeHistoricalTagEra.canonical(raw))
+            ?.ordinal ?: -1
+
         fun eraRelevant(raw: String): Boolean {
-            val slug = HordeHistoricalTagEra.canonical(raw)
-            val origin = HordeVisualEraChoiceIndex.eraForSlug(slug) ?: return true
+            val origin = HordeVisualEraChoiceIndex.eraForSlug(HordeHistoricalTagEra.canonical(raw)) ?: return true
             val era = technologyEra ?: return true
             return origin.ordinal >= (era.ordinal - 1).coerceAtLeast(0)
         }
@@ -38,19 +41,23 @@ internal object HordeHistoricalVisualPrompt {
             .take(3)
             .forEach { parts += HordeDecisionVisualCue.forSlug(it.slug) }
 
-        // Breakthroughs accumulate forever. Only current/recent-era breakthroughs are foregrounded;
-        // otherwise an industrial civilization keeps receiving stone-age props in every portrait.
+        // Breakthroughs accumulate forever. Prefer the newest historical layer, and when the
+        // current era is known restrict emphasis to the current/previous era. This prevents fire
+        // and stone tools from becoming the main props of an industrial or information-age image.
         eraChoices.asSequence()
             .filter { it.family == "breakthrough" }
             .filter { HordeVisualEraChoiceIndex.shouldEmphasizeBreakthrough(it.slug, technologyEra) }
-            .sortedBy { it.slug }
+            .sortedWith(
+                compareByDescending<EraChoice> { HordeVisualEraChoiceIndex.eraForSlug(it.slug)?.ordinal ?: -1 }
+                    .thenBy { it.slug },
+            )
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forSlug(it.slug) }
 
         tags.asSequence()
             .filter { it.startsWith("policy:") }
             .map { it.removePrefix("policy:") }
-            .sorted()
+            .sortedByDescending(::originOrdinal)
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forHistoricalTag("policy:", it) }
 
@@ -58,7 +65,7 @@ internal object HordeHistoricalVisualPrompt {
             .filter { it.startsWith("foundation:") }
             .map { it.removePrefix("foundation:") }
             .filter(::eraRelevant)
-            .sorted()
+            .sortedByDescending(::originOrdinal)
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forHistoricalTag("foundation:", it) }
 
@@ -66,7 +73,7 @@ internal object HordeHistoricalVisualPrompt {
             .filter { it.startsWith("hist:") }
             .map { it.removePrefix("hist:") }
             .filter(::eraRelevant)
-            .sorted()
+            .sortedByDescending(::originOrdinal)
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forHistoricalTag("hist:", it) }
 
@@ -103,7 +110,7 @@ internal object HordeHistoricalVisualPrompt {
 
     private fun humanize(value: String): String = value.replace('_', ' ').replace('-', ' ').replace('+', ' ')
 
-    private const val SIGNATURE_SCHEMA = "material-visual-v3"
+    private const val SIGNATURE_SCHEMA = "material-visual-v4"
     private const val MAX_PARTS = 11
 
     private val PREFIXES = listOf(
