@@ -1,5 +1,7 @@
 package com.sendmefile77.chronosphere.map
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,14 +15,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.worldgen.Biome
 import com.sendmefile77.chronosphere.worldgen.TileCoord
 import com.sendmefile77.chronosphere.worldgen.WorldMap
@@ -28,7 +37,24 @@ import com.sendmefile77.chronosphere.worldgen.WorldTile
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-data class SettlementMarker(val x: Int, val y: Int, val population: Long, val civilizationIndex: Int)
+data class SettlementMarker(
+    val x: Int,
+    val y: Int,
+    val population: Long,
+    val civilizationIndex: Int,
+    val name: String = "",
+    val civilizationName: String = "",
+)
+
+enum class MapConnectionKind { TRADE, WAR }
+
+data class MapConnection(
+    val fromX: Int,
+    val fromY: Int,
+    val toX: Int,
+    val toY: Int,
+    val kind: MapConnectionKind,
+)
 
 private val civilizationPalette = listOf(
     Color(0xFFE0B85E), Color(0xFFD56C72), Color(0xFF58BFA7), Color(0xFF69AFCB),
@@ -42,6 +68,7 @@ fun WorldMapView(
     modifier: Modifier = Modifier,
     rivers: Set<TileCoord> = emptySet(),
     settlements: List<SettlementMarker> = emptyList(),
+    connections: List<MapConnection> = emptyList(),
     territoryOwners: IntArray? = null,
     selectedCivilizationIndex: Int? = null,
     onCivilizationSelected: ((Int) -> Unit)? = null,
@@ -191,6 +218,53 @@ fun WorldMapView(
             }
         }
 
+        // Sparse biome marks become visible as the player zooms in. They add relief without
+        // covering the political layer or turning the map into a noisy tile grid.
+        if (minCell * scale >= 3.0f) {
+            world.tiles.forEach { tile ->
+                val center = Offset((tile.x + 0.5f) * cellW, (tile.y + 0.5f) * cellH)
+                when (tile.biome) {
+                    Biome.MOUNTAIN -> {
+                        val halfWidth = cellW * 0.34f
+                        val peakHeight = cellH * 0.38f
+                        val foot = center.y + cellH * 0.24f
+                        drawLine(
+                            Color(0xFF171A1B).copy(alpha = 0.68f),
+                            Offset(center.x - halfWidth, foot),
+                            Offset(center.x, foot - peakHeight),
+                            (0.9f / scale).coerceAtLeast(0.35f),
+                        )
+                        drawLine(
+                            Color(0xFFE7E2D5).copy(alpha = 0.34f),
+                            Offset(center.x, foot - peakHeight),
+                            Offset(center.x + halfWidth, foot),
+                            (0.75f / scale).coerceAtLeast(0.30f),
+                        )
+                    }
+
+                    Biome.FOREST, Biome.RAINFOREST, Biome.TAIGA -> {
+                        val jitter = (((tile.x * 31 + tile.y * 17) and 7) - 3) * cellW * 0.035f
+                        drawCircle(
+                            color = Color(0xFF071B16).copy(alpha = 0.42f),
+                            radius = (minCell * 0.16f).coerceAtLeast(0.42f),
+                            center = Offset(center.x + jitter, center.y),
+                        )
+                    }
+
+                    Biome.DESERT -> if ((tile.x + tile.y) % 3 == 0) {
+                        drawLine(
+                            Color(0xFFF0D59A).copy(alpha = 0.16f),
+                            Offset(center.x - cellW * 0.22f, center.y),
+                            Offset(center.x + cellW * 0.22f, center.y),
+                            (0.65f / scale).coerceAtLeast(0.25f),
+                        )
+                    }
+
+                    else -> Unit
+                }
+            }
+        }
+
         // Coastline: dark ink outside, warm cartographic highlight inside.
         world.tiles.forEachIndexed { index, tile ->
             val land = tile.biome.isLand()
@@ -284,6 +358,40 @@ fun WorldMapView(
             }
         }
 
+        // Current trade and war links make the strategic state readable directly on the map.
+        connections.forEach { connection ->
+            val from = Offset((connection.fromX + 0.5f) * cellW, (connection.fromY + 0.5f) * cellH)
+            val to = Offset((connection.toX + 0.5f) * cellW, (connection.toY + 0.5f) * cellH)
+            val hostile = connection.kind == MapConnectionKind.WAR
+            val color = if (hostile) Color(0xFFE66F6B) else Color(0xFF73D2C8)
+            val pathEffect = if (hostile) {
+                PathEffect.dashPathEffect(floatArrayOf(6f / scale, 4f / scale))
+            } else null
+            drawLine(
+                color = Color(0xFF02070B).copy(alpha = 0.78f),
+                start = from,
+                end = to,
+                strokeWidth = (4.0f / scale).coerceAtLeast(1.1f),
+                cap = StrokeCap.Round,
+                pathEffect = pathEffect,
+            )
+            drawLine(
+                color = color.copy(alpha = if (hostile) 0.94f else 0.72f),
+                start = from,
+                end = to,
+                strokeWidth = (1.45f / scale).coerceAtLeast(0.55f),
+                cap = StrokeCap.Round,
+                pathEffect = pathEffect,
+            )
+            if (hostile) {
+                drawCircle(
+                    color = color.copy(alpha = 0.90f),
+                    radius = (2.4f / scale).coerceAtLeast(0.8f),
+                    center = Offset((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f),
+                )
+            }
+        }
+
         // Edge vignette ties the tile renderer into the dark game shell and keeps focus near the world center.
         drawRect(
             brush = Brush.radialGradient(
@@ -314,6 +422,74 @@ fun WorldMapView(
                     radius + 1.9f,
                     center,
                     style = Stroke(0.8f),
+                )
+            }
+        }
+
+        val selectedCapital = settlements
+            .filter { it.civilizationIndex == selectedCivilizationIndex }
+            .maxByOrNull { it.population }
+        val labelLimit = if (scale >= 1.65f) 12 else 5
+        val labelCandidates = buildList {
+            if (selectedCapital != null) add(selectedCapital)
+            settlements.asSequence()
+                .filter { it !== selectedCapital && it.name.isNotBlank() }
+                .sortedByDescending { it.population }
+                .take(labelLimit - size)
+                .forEach(::add)
+        }
+        val occupiedLabels = mutableListOf<Rect>()
+        labelCandidates.forEach { settlement ->
+            val selected = settlement === selectedCapital
+            val rawLabel = if (selected && settlement.civilizationName.isNotBlank()) {
+                "${settlement.civilizationName} · ${settlement.name}"
+            } else settlement.name
+            val label = rawLabel.take(30)
+            if (label.isBlank()) return@forEach
+
+            val textSize = (11.dp.toPx() / scale).coerceAtLeast(3.5f)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.rgb(236, 231, 213)
+                this.textSize = textSize
+                typeface = Typeface.create(Typeface.DEFAULT, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            }
+            val paddingX = 5.dp.toPx() / scale
+            val paddingY = 3.dp.toPx() / scale
+            val labelWidth = paint.measureText(label) + paddingX * 2f
+            val labelHeight = textSize + paddingY * 2f
+            val radius = settlementRadius(settlement.population)
+            val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
+            val left = (center.x + radius + 4.dp.toPx() / scale)
+                .coerceAtMost((size.width - labelWidth - 3.dp.toPx() / scale).coerceAtLeast(0f))
+            val top = (center.y - labelHeight * 0.5f)
+                .coerceIn(2.dp.toPx() / scale, (size.height - labelHeight - 2.dp.toPx() / scale).coerceAtLeast(0f))
+            val bounds = Rect(left, top, left + labelWidth, top + labelHeight)
+            val overlaps = occupiedLabels.any { other ->
+                bounds.left < other.right && bounds.right > other.left && bounds.top < other.bottom && bounds.bottom > other.top
+            }
+            if (overlaps && !selected) return@forEach
+            occupiedLabels += bounds
+
+            val nationColor = civilizationPalette[settlement.civilizationIndex % civilizationPalette.size]
+            drawRoundRect(
+                color = Color(0xE6091016),
+                topLeft = Offset(bounds.left, bounds.top),
+                size = Size(bounds.width, bounds.height),
+                cornerRadius = CornerRadius(4.dp.toPx() / scale),
+            )
+            drawRoundRect(
+                color = if (selected) nationColor.copy(alpha = 0.74f) else Color(0xFF85939A).copy(alpha = 0.32f),
+                topLeft = Offset(bounds.left, bounds.top),
+                size = Size(bounds.width, bounds.height),
+                cornerRadius = CornerRadius(4.dp.toPx() / scale),
+                style = Stroke((0.8f / scale).coerceAtLeast(0.25f)),
+            )
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.drawText(
+                    label,
+                    bounds.left + paddingX,
+                    bounds.bottom - paddingY - textSize * 0.12f,
+                    paint,
                 )
             }
         }

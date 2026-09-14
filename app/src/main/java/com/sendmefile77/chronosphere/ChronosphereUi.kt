@@ -129,7 +129,11 @@ internal fun PanelCard(
         Column(
             modifier = Modifier.background(
                 Brush.verticalGradient(
-                    colors = listOf(top, ChronosphereVisuals.PanelBottom),
+                    colors = listOf(
+                        top,
+                        blend(top, ChronosphereVisuals.PanelBottom, 0.48f),
+                        ChronosphereVisuals.PanelBottom,
+                    ),
                 ),
             ),
         ) {

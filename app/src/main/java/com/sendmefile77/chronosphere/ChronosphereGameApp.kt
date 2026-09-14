@@ -2,6 +2,7 @@ package com.sendmefile77.chronosphere
 
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,6 +25,8 @@ import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.evolution.PlayerEvolutionInterventionEngine
 import com.sendmefile77.chronosphere.history.HistoryTimeline
+import com.sendmefile77.chronosphere.map.MapConnection
+import com.sendmefile77.chronosphere.map.MapConnectionKind
 import com.sendmefile77.chronosphere.map.SettlementMarker
 import com.sendmefile77.chronosphere.map.WorldMapView
 import com.sendmefile77.chronosphere.people.PeopleEngine
@@ -447,8 +451,45 @@ fun ChronosphereGameApp() {
     val selectedCivilization = civilizations.firstOrNull { it.id == selectedCivilizationId } ?: civilizations.first()
     val selectedEconomy = economyState.economy(selectedCivilization.id)
     val time = clock.at(session.state.tick)
-    val civilizationOrder = civilizations.mapIndexed { index, civilization -> civilization.id to index }.toMap()
+    val civilizationOrder = remember(civilizations) {
+        civilizations.mapIndexed { index, civilization -> civilization.id to index }.toMap()
+    }
+    val civilizationNames = remember(civilizations) { civilizations.associate { it.id to it.name } }
+    val settlementMarkers = remember(session.state.settlements, civilizationOrder, civilizationNames) {
+        session.state.settlements.map { settlement ->
+            SettlementMarker(
+                x = settlement.x,
+                y = settlement.y,
+                population = settlement.population,
+                civilizationIndex = civilizationOrder[settlement.civilizationId] ?: 0,
+                name = settlement.name,
+                civilizationName = civilizationNames[settlement.civilizationId].orEmpty(),
+            )
+        }
+    }
     val territory = remember(session.state) { territoryResolver.resolve(session.world, session.state) }
+    val mapConnections = remember(session.state.settlements, session.state.wars, economyState.routes) {
+        val capitals = session.state.settlements
+            .groupBy { it.civilizationId }
+            .mapValues { (_, centers) -> centers.maxByOrNull { it.population } }
+        buildList {
+            val tradePairs = hashSetOf<String>()
+            economyState.routes.sortedByDescending { it.value }.forEach tradeRoute@{ route ->
+                if (tradePairs.size >= 18) return@tradeRoute
+                val pair = listOf(route.exporterId, route.importerId).sorted()
+                val pairKey = pair.joinToString("|")
+                if (!tradePairs.add(pairKey)) return@tradeRoute
+                val from = capitals[route.exporterId] ?: return@tradeRoute
+                val to = capitals[route.importerId] ?: return@tradeRoute
+                add(MapConnection(from.x, from.y, to.x, to.y, MapConnectionKind.TRADE))
+            }
+            session.state.wars.forEach warLink@{ war ->
+                val from = capitals[war.civilizationA] ?: return@warLink
+                val to = capitals[war.civilizationB] ?: return@warLink
+                add(MapConnection(from.x, from.y, to.x, to.y, MapConnectionKind.WAR))
+            }
+        }
+    }
     val worldPanelScroll = rememberScrollState()
     val personPanelScroll = rememberScrollState()
     val historyPanelScroll = rememberScrollState()
@@ -477,35 +518,37 @@ fun ChronosphereGameApp() {
                                 world = session.world,
                                 rivers = session.rivers,
                                 territoryOwners = territory,
-                                settlements = session.state.settlements.map {
-                                    SettlementMarker(
-                                        x = it.x,
-                                        y = it.y,
-                                        population = it.population,
-                                        civilizationIndex = civilizationOrder[it.civilizationId] ?: 0,
-                                    )
-                                },
+                                connections = mapConnections,
+                                settlements = settlementMarkers,
                                 selectedCivilizationIndex = civilizationOrder[selectedCivilizationId],
                                 onCivilizationSelected = if (isAdvancing) null else { index ->
                                     civilizations.getOrNull(index)?.let { selectCivilization(it.id) }
                                 },
                                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
                             )
-                            WorldMapSummary(
-                                totalPopulation = session.state.totalPopulation,
-                                settlements = session.state.settlements.size,
-                                civilizations = civilizations.size,
-                                wars = session.state.wars.size,
-                                tradeRoutes = economyState.routes.size,
-                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-                            )
-                            SelectedCivilizationBadge(
-                                civilizationName = selectedCivilization.name,
-                                eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                            Row(
+                                modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                WorldMapSummary(
+                                    totalPopulation = session.state.totalPopulation,
+                                    settlements = session.state.settlements.size,
+                                    civilizations = civilizations.size,
+                                    wars = session.state.wars.size,
+                                    tradeRoutes = economyState.routes.size,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                SelectedCivilizationBadge(
+                                    civilizationName = selectedCivilization.name,
+                                    eraName = selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
+                                )
+                            }
+                            MapGestureHint(
+                                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
                             )
                             Surface(
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
                                 color = Color(0xE60A1117),
                                 shape = RoundedCornerShape(14.dp),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.44f)),
@@ -555,9 +598,20 @@ fun ChronosphereGameApp() {
                     }
                     if (isAdvancing) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     GameTabs(selectedPanel = selectedPanel, enabled = !isAdvancing, onSelect = { selectedPanel = it })
-                    Surface(modifier = Modifier.fillMaxWidth().weight(1f), color = MaterialTheme.colorScheme.surface) {
+                    Surface(modifier = Modifier.fillMaxWidth().weight(1f), color = Color.Transparent) {
                         Column(
-                            modifier = Modifier.fillMaxSize().verticalScroll(activePanelScroll).padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.surface,
+                                            MaterialTheme.colorScheme.background,
+                                        ),
+                                    ),
+                                )
+                                .verticalScroll(activePanelScroll)
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(9.dp),
                         ) {
                             when (selectedPanel) {

@@ -145,6 +145,8 @@ internal fun WorldMapSummary(
             )
             Text(
                 "$settlements поселень · $civilizations держав · $wars війн · $tradeRoutes шляхів",
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -192,6 +194,34 @@ internal fun SelectedCivilizationBadge(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun MapGestureHint(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = ChronosphereVisuals.DeepSpace.copy(alpha = 0.88f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                "МАПА",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.65.sp),
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                "щипок · 2× огляд",
+                maxLines = 1,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -269,6 +299,16 @@ internal fun RowScope.GameTab(
                 fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 5.dp)
+                        .width(24.dp)
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(100.dp)),
+                )
+            }
         }
     }
 }
