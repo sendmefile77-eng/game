@@ -88,7 +88,14 @@ fun CharacterCardPanel(
             )?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
         } else null
     }
-    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType) {
+    val livingProfile = people.profile(person.civilizationId)
+    val livingNorms = AdultIntimateNorms.resolve(
+        era = technologyEra,
+        profile = livingProfile,
+        tags = livingProfile?.tags.orEmpty() + civilizationVisualTags,
+        role = person.role,
+    )
+    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType, technologyEra, livingProfile) {
         if (age >= 18 && resolvedActionSequence > 0) {
             AdultActionPlanner.plan(
                 person = person,
@@ -96,6 +103,9 @@ fun CharacterCardPanel(
                 people = people,
                 sequence = resolvedActionSequence,
                 preferredType = chosenActionType,
+                technologyEra = technologyEra,
+                profile = livingProfile,
+                cultureTags = livingProfile?.tags.orEmpty() + civilizationVisualTags,
             )
         } else null
     }
@@ -191,7 +201,8 @@ fun CharacterCardPanel(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Інтимна сцена", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Режим без одягу активний" else "Відкрийте дорослу сцену персонажа",
+                            visibleActionPlan?.let(::sceneContextLine)
+                                ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED) livingNorms.setting else "Відкрийте дорослу сцену цього віку",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -207,17 +218,35 @@ fun CharacterCardPanel(
                     ) {
                         Text(if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Без одягу")
                     }
-                    Box(modifier = Modifier.weight(1f)) {
-                        Button(
+                    Button(
+                        onClick = {
+                            val nextType = visibleActionPlan?.type
+                                ?: livingNorms.allowedActs.firstOrNull()
+                                ?: AdultActionType.MASTURBATION
+                            val stored = AdultActionSelectionStore.remember(person.id, nextType)
+                            chosenActionType = stored.type
+                            localActionSequence = stored.sequence
+                            onAdultAction()
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier.weight(1f),
+                        shape = ChronosphereSmallShape,
+                    ) {
+                        Text("Наступна сцена")
+                    }
+                }
+                val allowedMenu = adultActionMenuItems().filter { livingNorms.allows(it.type) }
+                if (allowedMenu.size > 1) {
+                    Box {
+                        OutlinedButton(
                             onClick = { actionMenuOpen = true },
                             enabled = controlsEnabled,
-                            modifier = Modifier.fillMaxWidth(),
                             shape = ChronosphereSmallShape,
                         ) {
-                            Text("Інтимна дія")
+                            Text("Інший звичай")
                         }
                         DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
-                            adultActionMenuItems().forEach { item ->
+                            allowedMenu.forEach { item ->
                                 DropdownMenuItem(
                                     text = { Text(item.label) },
                                     onClick = {
@@ -280,6 +309,18 @@ private fun actionCaption(plan: AdultActionPlan): String {
     val label = adultActionMenuItems().firstOrNull { it.type == plan.type }?.label
         ?: plan.type.name.lowercase().replace('_', ' ')
     return plan.partner?.name?.let { "$label · $it" } ?: label
+}
+
+private fun sceneContextLine(plan: AdultActionPlan): String {
+    val who = plan.partner?.name ?: "наодинці"
+    val bond = when (plan.bond) {
+        RelationshipKind.PARTNER -> "партнерство"
+        RelationshipKind.LOVER -> "близькість"
+        RelationshipKind.ALLY -> "союз"
+        else -> null
+    }
+    return listOfNotNull(who, bond, plan.setting.takeIf { it.isNotBlank() }?.substringBefore(';'))
+        .joinToString(" · ")
 }
 
 private fun roleLabel(role: PersonRole): String = when (role) {
