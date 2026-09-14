@@ -2,9 +2,16 @@ package com.sendmefile77.chronosphere.storage
 
 import com.sendmefile77.chronosphere.civilization.AllianceState
 import com.sendmefile77.chronosphere.civilization.Civilization
+import com.sendmefile77.chronosphere.civilization.CivilizationTaxPolicy
 import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
+import com.sendmefile77.chronosphere.civilization.EliteFactionKind
+import com.sendmefile77.chronosphere.civilization.EliteFactionState
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.ProvinceState
+import com.sendmefile77.chronosphere.civilization.RebellionState
+import com.sendmefile77.chronosphere.civilization.RebellionStatus
 import com.sendmefile77.chronosphere.civilization.Settlement
+import com.sendmefile77.chronosphere.civilization.TaxPolicyKind
 import com.sendmefile77.chronosphere.civilization.WarState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import java.nio.charset.StandardCharsets
@@ -30,6 +37,18 @@ object GameSnapshotV1 {
         }
         state.alliances.forEach { a ->
             appendLine(listOf("ALLY", esc(a.id), esc(a.civilizationA), esc(a.civilizationB), a.startedTick).joinToString("\t"))
+        }
+        state.taxPolicies.forEach { policy ->
+            appendLine(listOf("TAX", esc(policy.civilizationId), policy.kind.name, policy.changedTick).joinToString("\t"))
+        }
+        state.eliteFactions.forEach { faction ->
+            appendLine(listOf("ELITE", esc(faction.id), esc(faction.civilizationId), faction.kind.name, faction.influence, faction.loyalty, faction.lastUpdatedTick).joinToString("\t"))
+        }
+        state.provinces.forEach { province ->
+            appendLine(listOf("PROV", esc(province.id), esc(province.civilizationId), esc(province.settlementId), province.loyalty, province.unrest, province.autonomy, province.taxBurden, province.lastUpdatedTick).joinToString("\t"))
+        }
+        state.rebellions.forEach { rebellion ->
+            appendLine(listOf("REB", esc(rebellion.id), esc(rebellion.civilizationId), esc(rebellion.provinceId), rebellion.startedTick, rebellion.lastUpdatedTick, rebellion.severity, rebellion.status.name, rebellion.endedTick?.toString().orEmpty()).joinToString("\t"))
         }
         state.recentEvents.forEach { event ->
             appendLine(
@@ -78,6 +97,47 @@ object GameSnapshotV1 {
             val p = row.split('\t')
             AllianceState(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4].toLong())
         }
+        val taxPolicies = rows.filter { it.startsWith("TAX\t") }.map { row ->
+            val p = row.split('\t')
+            CivilizationTaxPolicy(unesc(p[1]), TaxPolicyKind.valueOf(p[2]), p[3].toLong())
+        }
+        val eliteFactions = rows.filter { it.startsWith("ELITE\t") }.map { row ->
+            val p = row.split('\t')
+            EliteFactionState(
+                id = unesc(p[1]),
+                civilizationId = unesc(p[2]),
+                kind = EliteFactionKind.valueOf(p[3]),
+                influence = p[4].toDouble(),
+                loyalty = p[5].toDouble(),
+                lastUpdatedTick = p[6].toLong(),
+            )
+        }
+        val provinces = rows.filter { it.startsWith("PROV\t") }.map { row ->
+            val p = row.split('\t')
+            ProvinceState(
+                id = unesc(p[1]),
+                civilizationId = unesc(p[2]),
+                settlementId = unesc(p[3]),
+                loyalty = p[4].toDouble(),
+                unrest = p[5].toDouble(),
+                autonomy = p[6].toDouble(),
+                taxBurden = p[7].toDouble(),
+                lastUpdatedTick = p[8].toLong(),
+            )
+        }
+        val rebellions = rows.filter { it.startsWith("REB\t") }.map { row ->
+            val p = row.split('\t')
+            RebellionState(
+                id = unesc(p[1]),
+                civilizationId = unesc(p[2]),
+                provinceId = unesc(p[3]),
+                startedTick = p[4].toLong(),
+                lastUpdatedTick = p[5].toLong(),
+                severity = p[6].toDouble(),
+                status = RebellionStatus.valueOf(p[7]),
+                endedTick = p.getOrElse(8) { "" }.takeIf { it.isNotBlank() }?.toLong(),
+            )
+        }
         val events = rows.filter { it.startsWith("EVT\t") }.map { row ->
             val p = row.split('\t')
             require(p.size >= 8) { "Malformed EVT row" }
@@ -100,6 +160,10 @@ object GameSnapshotV1 {
             relations = relations,
             wars = wars,
             alliances = alliances,
+            taxPolicies = taxPolicies,
+            eliteFactions = eliteFactions,
+            provinces = provinces,
+            rebellions = rebellions,
         )
     }
 

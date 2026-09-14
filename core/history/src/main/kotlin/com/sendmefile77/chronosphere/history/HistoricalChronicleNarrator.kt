@@ -106,15 +106,16 @@ object HistoricalChronicleNarrator {
     }
 
     private fun processKind(code: String): HistoricalProcessKind? = when (code) {
-        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "SETTLEMENT_GROWTH" -> HistoricalProcessKind.SETTLEMENT_EXPANSION
+        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "SETTLEMENT_GROWTH", "STATE_FOUNDED" -> HistoricalProcessKind.SETTLEMENT_EXPANSION
         "MIGRATION" -> HistoricalProcessKind.MIGRATION
         "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> HistoricalProcessKind.SHORTAGE
         "WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED", "PEACE_TREATY" -> HistoricalProcessKind.WAR
-        "ALLIANCE_FORMED", "ALLIANCE_DISSOLVED", "INTERVENTION_EMBASSY" -> HistoricalProcessKind.DIPLOMATIC_ALIGNMENT
+        "ALLIANCE_FORMED", "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED", "INTERVENTION_EMBASSY" -> HistoricalProcessKind.DIPLOMATIC_ALIGNMENT
         "ERA_ADVANCED", "INTERVENTION_TECH_BOOST" -> HistoricalProcessKind.TECHNOLOGICAL_TRANSITION
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> HistoricalProcessKind.DYNASTIC_TRANSITION
         "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> HistoricalProcessKind.POPULATION_DIVERGENCE
+        "TAXES_RAISED", "TAXES_LOWERED", "PROVINCIAL_UNREST", "REBELLION_STARTED", "REBELLION_SUPPRESSED", "SECESSION" -> HistoricalProcessKind.INTERNAL_CRISIS
         else -> null
     }
 
@@ -127,11 +128,13 @@ object HistoricalChronicleNarrator {
         HistoricalProcessKind.TECHNOLOGICAL_TRANSITION -> "Технологічний перехід"
         HistoricalProcessKind.DYNASTIC_TRANSITION -> "Династичний перехід"
         HistoricalProcessKind.POPULATION_DIVERGENCE -> "Зміна населення"
+        HistoricalProcessKind.INTERNAL_CRISIS -> "Внутрішня політична криза"
     }
 
     private fun eventCause(code: String): String = when (code) {
         "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> "заснування нового осередку"
         "SETTLEMENT_GROWTH" -> "зростання поселень"
+        "STATE_FOUNDED", "SECESSION" -> "політичного відокремлення"
         "MIGRATION" -> "руху населення"
         "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "дефіциту ресурсів"
         "WAR_STARTED" -> "початку війни"
@@ -139,11 +142,16 @@ object HistoricalChronicleNarrator {
         "CITY_CAPTURED" -> "втрати або захоплення міста"
         "PEACE_TREATY" -> "мирної угоди"
         "ALLIANCE_FORMED" -> "утворення союзу"
-        "ALLIANCE_DISSOLVED" -> "розпаду союзу"
+        "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED" -> "розпаду союзу"
         "INTERVENTION_EMBASSY" -> "дипломатичного зближення"
         "ERA_ADVANCED" -> "переходу технологічного рубежу"
         "INTERVENTION_TECH_BOOST" -> "свідомої ставки на розвиток"
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> "зміни влади"
+        "TAXES_RAISED" -> "посилення податкового тиску"
+        "TAXES_LOWERED" -> "податкового послаблення"
+        "PROVINCIAL_UNREST" -> "провінційного невдоволення"
+        "REBELLION_STARTED" -> "початку повстання"
+        "REBELLION_SUPPRESSED" -> "придушення повстання"
         else -> "зафіксованої зміни"
     }
 
@@ -153,10 +161,16 @@ object HistoricalChronicleNarrator {
         "WAR_CASUALTIES" -> "накопичення воєнних втрат"
         "ERA_ADVANCED" -> "нової технологічної епохи"
         "ALLIANCE_FORMED" -> "нової системи союзів"
-        "ALLIANCE_DISSOLVED" -> "розриву дипломатичного порядку"
+        "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED" -> "розриву дипломатичного порядку"
         "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "гострої нестачі"
         "MIGRATION" -> "переміщення населення"
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> "закріплення нової влади"
+        "TAXES_RAISED" -> "підвищення податкового навантаження"
+        "TAXES_LOWERED" -> "податкового послаблення"
+        "PROVINCIAL_UNREST" -> "відкритого регіонального невдоволення"
+        "REBELLION_STARTED" -> "відкритого повстання"
+        "REBELLION_SUPPRESSED" -> "відновлення контролю центру"
+        "STATE_FOUNDED", "SECESSION" -> "нової політичної межі"
         "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> "стійкої зміни населення"
         else -> "нового стану"

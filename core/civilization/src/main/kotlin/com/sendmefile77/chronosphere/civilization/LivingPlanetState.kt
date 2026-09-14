@@ -23,6 +23,10 @@ data class LivingPlanetState(
     val relations: List<DiplomaticRelation> = emptyList(),
     val wars: List<WarState> = emptyList(),
     val alliances: List<AllianceState> = emptyList(),
+    val taxPolicies: List<CivilizationTaxPolicy> = emptyList(),
+    val eliteFactions: List<EliteFactionState> = emptyList(),
+    val provinces: List<ProvinceState> = emptyList(),
+    val rebellions: List<RebellionState> = emptyList(),
 ) {
     val totalPopulation: Long get() = settlements.sumOf { it.population }
 }
