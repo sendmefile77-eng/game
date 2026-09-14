@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -25,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.sendmefile77.chronosphere.adultcontracts.AdultVisualSceneDescriptor
 import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.evolution.EvolutionState
-import com.sendmefile77.chronosphere.llm.LocalLlmCharacterVoiceCard
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.people.PersonRole
@@ -33,6 +31,10 @@ import com.sendmefile77.chronosphere.people.RelationshipKind
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
+/**
+ * Character screen: the person and their scene come first. Biography and diagnostics are secondary.
+ * Adult actions remain a separate runtime layer, but are surfaced directly for adult characters.
+ */
 @Composable
 fun CharacterCardPanel(
     person: NotablePerson,
@@ -64,46 +66,94 @@ fun CharacterCardPanel(
         (descriptor?.tags.orEmpty() + civilizationVisualTags).toSet()
     }
     val adultSceneRuntime = remember { AdultSceneRuntime.load() }
-    val effectiveAdultVisual = remember(adultVisual, person.id, tick, people, evolution, displayScene.wardrobeState, adultSceneRuntime.hasStructuredVisuals) {
-        adultVisual ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED && age >= 18 && adultSceneRuntime.hasStructuredVisuals) {
-            CharacterSceneFactory.adultRequest(person = person, tick = tick, people = people, evolution = evolution)?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
+    val effectiveAdultVisual = remember(
+        adultVisual,
+        person.id,
+        tick,
+        people,
+        evolution,
+        displayScene.wardrobeState,
+        adultSceneRuntime.hasStructuredVisuals,
+    ) {
+        adultVisual ?: if (
+            displayScene.wardrobeState == WardrobeState.UNDRESSED &&
+            age >= 18 &&
+            adultSceneRuntime.hasStructuredVisuals
+        ) {
+            CharacterSceneFactory.adultRequest(
+                person = person,
+                tick = tick,
+                people = people,
+                evolution = evolution,
+            )?.let { request -> adultSceneRuntime.resolveCharacterVisual(request, undressed = true) }
         } else null
     }
     val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType) {
         if (age >= 18 && resolvedActionSequence > 0) {
-            AdultActionPlanner.plan(person = person, tick = tick, people = people, sequence = resolvedActionSequence, preferredType = chosenActionType)
+            AdultActionPlanner.plan(
+                person = person,
+                tick = tick,
+                people = people,
+                sequence = resolvedActionSequence,
+                preferredType = chosenActionType,
+            )
         } else null
     }
     val visibleActionPlan = actionPlan.takeIf {
         age >= 18 && displayScene.wardrobeState == WardrobeState.UNDRESSED
     }
-    val relationships = people.relationships.filter { it.involves(person.id) }.sortedByDescending { kotlin.math.abs(it.strength) }.take(6).mapNotNull { relationship ->
-        val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
-        val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
-        "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
-    }
-    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, visibleActionPlan?.cacheToken, displayScene.wardrobeState, technologyEra, mergedVisualTags) {
-        GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
+    val relationships = people.relationships
+        .filter { it.involves(person.id) }
+        .sortedByDescending { kotlin.math.abs(it.strength) }
+        .take(4)
+        .mapNotNull { relationship ->
+            val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
+            val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
+            "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
+        }
+    val galleryCapture = remember(
+        person.id,
+        person.civilizationId,
+        people.worldSeed,
+        visibleActionPlan?.cacheToken,
+        displayScene.wardrobeState,
+        technologyEra,
+        mergedVisualTags,
+    ) {
+        GalleryCapture(
+            worldSeed = people.worldSeed,
+            civilizationIds = listOf(person.civilizationId),
+            kind = GalleryImageKind.PERSON,
+            subject = person.name,
+            tick = tick,
+        )
     }
 
     val ancestry = if (lineage != null && descriptor != null) {
-        descriptor.ancestry.entries.sortedByDescending { it.value }.take(4).joinToString(" · ") { (lineageId, share) ->
-            val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
-            "$label ${String.format("%.0f%%", share * 100.0)}"
-        }
+        descriptor.ancestry.entries
+            .sortedByDescending { it.value }
+            .take(3)
+            .joinToString(" · ") { (lineageId, share) ->
+                val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
+                "$label ${String.format("%.0f%%", share * 100.0)}"
+            }
     } else ""
-    val morphology = if (descriptor != null) {
-        val covering = descriptor.bodyPlan.covering.name.lowercase()
+    val morphology = descriptor?.let {
+        val covering = it.bodyPlan.covering.name.lowercase()
         buildString {
-            append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
-            if (descriptor.bodyPlan.hasTail) append(" · хвіст")
+            append("рук ${it.bodyPlan.armPairs * 2} · ніг ${it.bodyPlan.legPairs * 2} · очей ${it.bodyPlan.eyeCount}")
+            if (it.bodyPlan.hasTail) append(" · хвіст")
             if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
         }
-    } else null
+    }
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("ВИЗНАЧНА ОСОБА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text("ПЕРСОНАЖ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Black)
             Text(person.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 StatusPill(roleLabel(person.role), color = MaterialTheme.colorScheme.primary)
@@ -111,7 +161,9 @@ fun CharacterCardPanel(
             }
         }
         if (hasPreviousOrNext) {
-            OutlinedButton(onClick = onNext, enabled = controlsEnabled, shape = ChronosphereSmallShape) { Text("Інша") }
+            OutlinedButton(onClick = onNext, enabled = controlsEnabled, shape = ChronosphereSmallShape) {
+                Text("Інша")
+            }
         }
     }
 
@@ -125,12 +177,67 @@ fun CharacterCardPanel(
         adultVisual = effectiveAdultVisual,
         actionPlan = visibleActionPlan,
         galleryCapture = galleryCapture,
-        modifier = Modifier.fillMaxWidth().height(if (age >= 18) 360.dp else 230.dp),
+        modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 260.dp),
     )
 
-    PanelCard(accent = MaterialTheme.colorScheme.primary) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text("Профіль", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    if (age >= 18) {
+        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Інтимна сцена", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Режим без одягу активний" else "Відкрийте дорослу сцену персонажа",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    visibleActionPlan?.let { StatusPill(actionCaption(it), color = MaterialTheme.colorScheme.secondary) }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onToggleWardrobe,
+                        enabled = controlsEnabled,
+                        modifier = Modifier.weight(1f),
+                        shape = ChronosphereSmallShape,
+                    ) {
+                        Text(if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Без одягу")
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        Button(
+                            onClick = { actionMenuOpen = true },
+                            enabled = controlsEnabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = ChronosphereSmallShape,
+                        ) {
+                            Text("Інтимна дія")
+                        }
+                        DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
+                            adultActionMenuItems().forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item.label) },
+                                    onClick = {
+                                        val stored = AdultActionSelectionStore.remember(person.id, item.type)
+                                        chosenActionType = stored.type
+                                        localActionSequence = stored.sequence
+                                        onAdultAction()
+                                        actionMenuOpen = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricTile("Вплив", prestigeLabel(person.prestige), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
                 MetricTile("Здібності", aptitudeLabel(person.aptitude), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
@@ -140,64 +247,16 @@ fun CharacterCardPanel(
                 InfoLine("Характер", person.traits.sorted().joinToString(" · ") { traitLabel(it) })
             }
             if (lineage != null && descriptor != null) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
                 InfoLine(
                     "Походження",
                     "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "",
                 )
-                morphology?.let { InfoLine("Морфологія", it) }
+                morphology?.let { InfoLine("Тіло", it) }
             }
-        }
-    }
-
-    LocalLlmCharacterVoiceCard(
-        person = person,
-        tick = tick,
-        people = people,
-        technologyEra = technologyEra,
-        enabled = controlsEnabled,
-    )
-
-    if (relationships.isNotEmpty()) {
-        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Зв’язки", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (relationships.isNotEmpty()) {
+                Text("Зв’язки", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
                 relationships.forEach { relationship ->
-                    Text(relationship, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
-
-    if (age >= 18) {
-        PanelCard(accent = MaterialTheme.colorScheme.secondary) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Режим одягу та обрана дія змінюють сцену, але не особу й не її канонічний портрет.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton(
-                    onClick = onToggleWardrobe,
-                    enabled = controlsEnabled,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = ChronosphereSmallShape,
-                ) {
-                    Text(if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Роздягнути")
-                }
-                Box {
-                    Button(onClick = { actionMenuOpen = true }, enabled = controlsEnabled, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) { Text("Дія") }
-                    DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
-                        adultActionMenuItems().forEach { item ->
-                            DropdownMenuItem(text = { Text(item.label) }, onClick = {
-                                val stored = AdultActionSelectionStore.remember(person.id, item.type)
-                                chosenActionType = stored.type
-                                localActionSequence = stored.sequence
-                                onAdultAction()
-                                actionMenuOpen = false
-                            })
-                        }
-                    }
-                }
-                if (visibleActionPlan != null) {
-                    StatusPill(actionCaption(visibleActionPlan), color = MaterialTheme.colorScheme.secondary)
+                    Text(relationship, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
