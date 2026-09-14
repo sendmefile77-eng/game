@@ -56,6 +56,7 @@ class HistoricalMemoryEngineTest {
         assertEquals(3, first.foundationsFor("civ-a").size)
         assertEquals(1, first.processes.count { it.kind == HistoricalProcessKind.WAR })
         assertEquals(first.processes, second.processes)
+        assertEquals(first.legacies, second.legacies)
     }
 
     @Test
@@ -67,6 +68,61 @@ class HistoricalMemoryEngineTest {
 
         assertTrue(second.commitments.any { it.choiceId == "rule-legitimacy" && it.status == HistoricalCommitmentStatus.SUPERSEDED })
         assertTrue(second.commitments.any { it.choiceId == "rule-reform" && it.status == HistoricalCommitmentStatus.ACTIVE })
+    }
+
+    @Test
+    fun warSequenceCreatesExplicitCausalLinkAndPersistentLegacy() {
+        val start = SimulationEvent(
+            id = "war-1-start",
+            tick = 120L,
+            code = "WAR_STARTED",
+            actorIds = listOf("civ-a", "civ-b"),
+        )
+        val casualties = SimulationEvent(
+            id = "war-1-losses",
+            tick = 180L,
+            code = "WAR_CASUALTIES",
+            actorIds = listOf("civ-a", "civ-b"),
+        )
+        val world = state(
+            tick = 180L,
+            events = listOf(start, casualties),
+            includeSecondCivilization = true,
+        )
+
+        val memory = HistoricalMemoryEngine.reconcile(null, world, economy = economy(world))
+        val link = memory.causalLinks.single { it.effectEventId == casualties.id }
+
+        assertEquals(start.id, link.causeEventId)
+        assertEquals(HistoricalCausalRelation.ESCALATION, link.relation)
+        assertTrue(memory.legacies.any { it.kind == HistoricalLegacyKind.WAR_MEMORY && "civ-a" in it.civilizationIds })
+    }
+
+    @Test
+    fun shortageCanBecomeRecordedCauseOfMigration() {
+        val shortage = SimulationEvent(
+            id = "shortage-1",
+            tick = 120L,
+            code = "FOOD_SHORTAGE",
+            actorIds = listOf("civ-a"),
+        )
+        val migration = SimulationEvent(
+            id = "migration-1",
+            tick = 200L,
+            code = "MIGRATION",
+            actorIds = listOf("civ-a"),
+        )
+        val world = state(tick = 200L, events = listOf(shortage, migration))
+
+        val memory = HistoricalMemoryEngine.reconcile(null, world, economy = economy(world))
+
+        assertTrue(memory.causalLinks.any {
+            it.causeEventId == shortage.id &&
+                it.effectEventId == migration.id &&
+                it.relation == HistoricalCausalRelation.DISPLACEMENT
+        })
+        assertTrue(memory.legacies.any { it.kind == HistoricalLegacyKind.SCARCITY_MEMORY })
+        assertTrue(memory.legacies.any { it.kind == HistoricalLegacyKind.MIGRATION_MEMORY })
     }
 
     private fun state(
