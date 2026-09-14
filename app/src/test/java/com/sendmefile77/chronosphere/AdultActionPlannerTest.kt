@@ -43,11 +43,10 @@ class AdultActionPlannerTest {
 
     @Test
     fun successiveSequencesChangeActionType() {
-        val types = (1..12).map { sequence ->
+        val types = (1..18).map { sequence ->
             AdultActionPlanner.pickType("adult-a", 360L, sequence)
         }.toSet()
-        assertTrue(types.size >= 2)
-        assertTrue(types.containsAll(setOf(AdultActionType.FOOTJOB, AdultActionType.ORAL)) || types.size >= 3)
+        assertTrue(types.size >= 3)
     }
 
     @Test
@@ -66,6 +65,37 @@ class AdultActionPlannerTest {
     }
 
     @Test
+    fun expandedExplicitTypesAreNotDroppedByEraNorms() {
+        val adult = person("adult-a", birthTick = 0L)
+        val other = person("adult-b", birthTick = 0L)
+        val expanded = listOf(
+            AdultActionType.HANDJOB,
+            AdultActionType.CUNNILINGUS,
+            AdultActionType.SIXTY_NINE,
+            AdultActionType.PAIZURI,
+            AdultActionType.SCISSORING,
+            AdultActionType.MUTUAL_MASTURBATION,
+            AdultActionType.FACIAL,
+            AdultActionType.CREAMPIE,
+            AdultActionType.MMF,
+            AdultActionType.FFM,
+        )
+
+        expanded.forEachIndexed { index, type ->
+            val plan = AdultActionPlanner.plan(
+                person = adult,
+                tick = 360L,
+                people = people(adult, other),
+                sequence = index + 1,
+                preferredType = type,
+                technologyEra = TechnologyEra.TRIBAL,
+            )
+            requireNotNull(plan)
+            assertEquals(type, plan.type)
+        }
+    }
+
+    @Test
     fun explicitPlayerChoiceIsNotSilentlyReplacedByEraNorms() {
         val adult = person("adult-a", birthTick = 0L)
         val other = person("adult-b", birthTick = 0L)
@@ -80,6 +110,21 @@ class AdultActionPlannerTest {
         requireNotNull(plan)
         assertEquals(AdultActionType.BUKKAKE, plan.type)
         assertTrue(plan.mood.contains("taboo"))
+    }
+
+    @Test
+    fun sceneModeSeparatesSoloPairAndGroupCacheFamilies() {
+        val primary = AdultActionParticipant("adult-a", "A", 30, BiologicalSex.FEMALE)
+        val partner = AdultActionParticipant("adult-b", "B", 31, BiologicalSex.MALE)
+        val solo = AdultActionPlan(AdultActionType.MASTURBATION, 1, primary, null)
+        val pair = AdultActionPlan(AdultActionType.FOOTJOB, 1, primary, partner)
+        val group = AdultActionPlan(AdultActionType.MMF, 1, primary, partner)
+
+        assertEquals("solo", solo.sceneMode)
+        assertEquals("pair", pair.sceneMode)
+        assertEquals("group", group.sceneMode)
+        assertNotEquals(solo.cacheToken, pair.cacheToken)
+        assertNotEquals(pair.cacheToken, group.cacheToken)
     }
 
     @Test
