@@ -101,11 +101,16 @@ internal object InternalSecessionEngine {
             code = "SECESSION",
             actorIds = listOf(successorId, parent.id),
             locationId = settlement.id,
-            numbers = mapOf("severity" to candidate.severity, "population" to settlement.population.toDouble()),
+            numbers = mapOf(
+                "severity" to candidate.severity,
+                "population" to settlement.population.toDouble(),
+                "sourceTick" to candidate.startedTick.toDouble(),
+            ),
             facts = mapOf(
                 "civilization" to successorName,
                 "parent" to parent.name,
                 "settlement" to settlement.name,
+                "sourceEventId" to "rebellion-start-${candidate.id}",
             ),
         )
         return InternalPoliticsEngine.reconcile(
