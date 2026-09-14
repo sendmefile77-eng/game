@@ -39,6 +39,13 @@ object HistoricalChronicleNarrator {
             }
             ?: "Ця цивілізація"
 
+        if (focusId != null) {
+            val persistent = ActiveHistoricalContextRegistry.snapshot()
+                ?.historicalMemory
+                ?.let { memory -> fromMemory(memory, focusId, civName) }
+            if (persistent != null) return persistent
+        }
+
         val primary = latestKinds.first()
         val firstEvent = primary.value.minWith(compareBy<Pair<SimulationEvent, HistoricalProcessKind>> { it.first.tick }.thenBy { it.first.id }).first
         val lastEvent = primary.value.maxWith(compareBy<Pair<SimulationEvent, HistoricalProcessKind>> { it.first.tick }.thenBy { it.first.id }).first
@@ -82,7 +89,7 @@ object HistoricalChronicleNarrator {
         val latestCausal = causalLinks.firstOrNull()
         val strongestLegacy = legacies.firstOrNull()
         val body = when {
-            latestCausal != null -> "$civilizationName живе всередині причинного ланцюга: ${latestCausal.titleUk.lowercase()}. Ця залежність уже записана в історичній пам'яті й не зникне разом з останнім повідомленням хроники."
+            latestCausal != null -> "$civilizationName живе всередині причинного ланцюга: ${latestCausal.titleUk.lowercase()}. Ця залежність уже записана в історичній пам'яті й не зникне разом з останнім повідомленням хроніки."
             primary != null -> "${primary.titleUk} формує теперішній стан $civilizationName. Стадія: ${stageLabel(primary.stage)}; сила процесу — ${intensityLabel(primary.intensity)}."
             strongestLegacy != null -> "$civilizationName зберігає історичну пам'ять: ${strongestLegacy.titleUk.lowercase()}. Її вага — ${intensityLabel(strongestLegacy.strength)}."
             commitments.isNotEmpty() -> "$civilizationName і далі живе з наслідками раніше обраного курсу: ${commitments.first().titleUk}."
