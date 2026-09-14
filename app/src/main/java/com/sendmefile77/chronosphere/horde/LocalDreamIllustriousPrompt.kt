@@ -16,6 +16,11 @@ internal object LocalDreamIllustriousPrompt {
             "modern bedroom, drywall, tiled bathroom, porcelain toilet, smartphone, neon lights, " +
             "skyscraper, marble palace, greek columns, office, hospital, empty white background"
 
+    private const val SAFE_NEGATIVE =
+        "lowres, worst quality, bad anatomy, extra limbs, extra fingers, text, watermark, duplicate person, " +
+            "floating head, disconnected body, 3d, plastic doll, child, loli, shota, nudity, explicit sex, " +
+            "anachronistic props, unexplained modern objects, neon cyberpunk, empty white background"
+
     fun apply(request: HordeImageRequest): HordeImageRequest {
         val source = request.positivePrompt.lowercase()
         val action = request.cacheKey.startsWith("horde-adult-action-") || looksLikeAct(source)
@@ -28,7 +33,8 @@ internal object LocalDreamIllustriousPrompt {
         // Non-adult only: keep a few material consequences of the civilization's actual history
         // after Illustrious compresses the much longer documentary prompt. Adult branches below are
         // intentionally unchanged and remain owned by the separate adult enrichment layer.
-        val safeMaterial = if (!action && !request.nsfw) LocalDreamMaterialCueBridge.fragment(source) else ""
+        val safeRequest = !action && !request.nsfw
+        val safeMaterial = if (safeRequest) LocalDreamMaterialCueBridge.fragment(source) else ""
         val safeMaterialSuffix = if (safeMaterial.isBlank()) "" else ", $safeMaterial"
         val positive = if (action && act.isNotBlank()) {
             "$QUALITY, $eraPrefix$people, $act"
@@ -37,11 +43,11 @@ internal object LocalDreamIllustriousPrompt {
         } else {
             "masterpiece, best quality, ${eraPrefix}$people, fully clothed$safeMaterialSuffix"
         }
-        val safeCacheSuffix = if (!action && !request.nsfw) "|material-v1" else ""
+        val safeCacheSuffix = if (safeRequest) "|material-v2" else ""
         return request.copy(
             cacheKey = "${request.cacheKey}|ld-illust-v3$safeCacheSuffix",
             positivePrompt = positive,
-            negativePrompt = NEGATIVE,
+            negativePrompt = if (safeRequest) SAFE_NEGATIVE else NEGATIVE,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
             saveResultAsReference = request.saveResultAsReference && !request.nsfw && !action,
             referenceDenoisingStrength = if (action) 0.92 else request.referenceDenoisingStrength,
