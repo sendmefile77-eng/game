@@ -21,7 +21,10 @@ class PolicyInterventionTest {
             InterventionCommand("player-tax", InterventionKind.TAX_RAISE, "civ-1", 0.65),
         )
 
-        assertEquals(TaxPolicyKind.HIGH, result.taxPolicyFor("civ-1")?.kind)
+        val policy = result.taxPolicyFor("civ-1")!!
+        assertEquals(TaxPolicyKind.HIGH, policy.kind)
+        assertEquals(120L, policy.changedTick)
+        assertEquals(360L, policy.playerPriorityUntilTick)
         val event = result.recentEvents.last()
         assertEquals("INTERVENTION_TAX_RAISE", event.code)
         assertEquals(listOf("civ-1"), event.actorIds)
