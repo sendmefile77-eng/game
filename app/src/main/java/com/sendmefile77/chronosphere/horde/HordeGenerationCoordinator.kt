@@ -113,6 +113,7 @@ internal object HordeGenerationCoordinator {
      * portraits keep occupying Local Dream and later turns appear to be stuck at the start.
      */
     fun cancel(cacheKey: String) {
+        localDreamClient.cancelGeneration(cacheKey)
         val prefix = "$cacheKey|"
         inFlight.entries.toList().forEach { (jobKey, deferred) ->
             if (jobKey.startsWith(prefix) && inFlight.remove(jobKey, deferred)) {
