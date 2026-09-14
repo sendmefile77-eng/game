@@ -35,6 +35,8 @@ object ActiveHistoricalContextRegistry {
 
     fun snapshot(worldSeed: Long): ActiveHistoricalContext? = active?.takeIf { it.worldSeed == worldSeed }
 
+    fun snapshot(): ActiveHistoricalContext? = active
+
     @Synchronized
     fun clear() {
         active = null
