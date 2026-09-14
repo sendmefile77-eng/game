@@ -53,7 +53,12 @@ class InterventionEngine {
         require(state.civilizations.any { it.id == command.civilizationId }) {
             "Unknown civilization: ${command.civilizationId}"
         }
-        val counterpartId = resolveCounterpart(state, command)
+        val counterpartId = when (command.kind) {
+            InterventionKind.TAX_LOWER,
+            InterventionKind.TAX_RAISE,
+            InterventionKind.INSTITUTION_REFORM -> null
+            else -> resolveCounterpart(state, command)
+        }
         val event = eventFor(state, command, counterpartId)
         return when (command.kind) {
             InterventionKind.HARVEST_AID -> applyHarvestAid(state, command, event)
