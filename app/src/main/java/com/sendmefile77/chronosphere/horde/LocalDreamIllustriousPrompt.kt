@@ -2,9 +2,9 @@ package com.sendmefile77.chronosphere.horde
 
 /**
  * Local Dream is running WAI Illustrious (or a DMD2 merge of it), not a Horde worker.
- * Long documentary prompts collapse; this rewrite keeps the act AND a visible era set.
- * Adult/portrait frames lead with the person (human or chimera) so a tent or
- * domestication tag cannot become an empty-room or animal picture.
+ * Long documentary prompts collapse; this rewrite keeps the selected act AND a visible era set.
+ * Adult/portrait frames lead with the person (human or chimera) so a tent or domestication tag
+ * cannot become an empty-room or animal picture.
  */
 internal object LocalDreamIllustriousPrompt {
     private const val QUALITY =
@@ -27,7 +27,7 @@ internal object LocalDreamIllustriousPrompt {
 
     private const val ADULT_PRESENTATION =
         "unmistakably adult woman or man, mature adult facial features, adult body proportions, " +
-            "confident sensual expression, direct erotic gaze, parted lips, sexually charged body language"
+            "confident sensual expression, direct erotic gaze, sexually charged body language"
 
     fun apply(request: HordeImageRequest): HordeImageRequest {
         val source = request.positivePrompt.lowercase()
@@ -62,9 +62,9 @@ internal object LocalDreamIllustriousPrompt {
         }
         val eraPrefixSafe = if (eraAsBackground.isBlank()) "" else "$eraAsBackground, "
         val positiveRaw = if (action && act.isNotBlank()) {
-            "$QUALITY, $people$identityBit, $act, erotic facial expression, active sexual pose, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
+            "$QUALITY, $people$identityBit, $act, selected sex act clearly readable, active consensual adult pose, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
         } else if (request.nsfw) {
-            "$QUALITY, $people$identityBit, provocative full-body nude pose, hips angled toward viewer, one hand on thigh or torso, nipples, pussy or penis according to subject, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
+            "$QUALITY, $people$identityBit, provocative full-body nude pose, nipples, pussy or penis according to subject, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
         } else {
             "masterpiece, best quality, $people$identityBit, fully clothed, $eraPrefixSafe$safeMaterial$humanLock$chimeraLock"
         }
@@ -74,12 +74,14 @@ internal object LocalDreamIllustriousPrompt {
         } else {
             buildString {
                 append(NEGATIVE)
+                val selectedActNegative = actionNegative(source)
+                if (selectedActNegative.isNotBlank()) append(", ").append(selectedActNegative)
                 if (!chimeric) append(", furry, anthro")
             }
         }
         val safeCacheSuffix = if (safeRequest) "|material-v2" else ""
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v6$safeCacheSuffix",
+            cacheKey = "${request.cacheKey}|ld-illust-v7$safeCacheSuffix",
             positivePrompt = positive,
             negativePrompt = negative,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
@@ -89,25 +91,34 @@ internal object LocalDreamIllustriousPrompt {
     }
 
     private fun looksLikeAct(source: String): Boolean = listOf(
-        "footjob", "oral sex", "blowjob", "cunnilingus", "vaginal sex", "anal sex",
-        "bukkake", "masturbation", "bdsm", "futanari",
+        "footjob", "handjob", "blowjob", "cunnilingus", "69:", "sixty-nine",
+        "vaginal sex", "anal sex", "paizuri", "scissoring", "tribadism",
+        "mutual masturbation", "bukkake", "facial:", "creampie", "masturbation",
+        "bdsm", "mmf threesome", "ffm threesome", "futanari",
     ).any(source::contains)
 
     private fun countWomen(source: String): Int = when {
-        source.contains("two nude adult women") || source.contains("2girls") -> 2
+        source.contains("ffm threesome") || source.contains("two adult women and one adult man") -> 2
+        source.contains("mmf threesome") || source.contains("one adult woman and two adult men") -> 1
+        source.contains("bukkake") -> 1
+        source.contains("two nude adult women") || source.contains("two adult women") || source.contains("2girls") -> 2
         source.contains("adult woman") || source.contains("1girl") -> 1
         else -> 0
     }
 
     private fun countMen(source: String): Int = when {
-        source.contains("bukkake") || source.contains("several erect adult penises") -> 3
+        source.contains("bukkake") || source.contains("several confirmed adult men") || source.contains("several adult men") -> 3
+        source.contains("mmf threesome") || source.contains("one adult woman and two adult men") -> 2
+        source.contains("ffm threesome") || source.contains("two adult women and one adult man") -> 1
         source.contains("adult man") || source.contains("1boy") -> 1
         else -> 0
     }
 
     private fun peopleTag(girls: Int, men: Int, action: Boolean, nsfw: Boolean): String = when {
-        girls >= 2 && men <= 0 -> "2girls, adult women"
-        girls >= 1 && men >= 3 -> "1girl, adult woman, multiple adult men"
+        girls >= 1 && men >= 3 -> "1girl, adult woman, multiple boys, adult men"
+        girls >= 2 && men >= 1 -> "2girls, adult women, 1boy, adult man"
+        girls >= 1 && men >= 2 -> "1girl, adult woman, 2boys, adult men"
+        girls >= 2 -> "2girls, adult women"
         girls >= 1 && men >= 1 -> "1girl, adult woman, 1boy, adult man"
         girls >= 1 -> "1girl, adult woman"
         men >= 1 -> "1boy, adult man"
@@ -116,30 +127,64 @@ internal object LocalDreamIllustriousPrompt {
     }
 
     private fun actTags(source: String): String = when {
+        source.contains("mmf threesome") ->
+            "mmf threesome, 1girl, 2boys, exactly three adults, all three participating, explicit group sex"
+        source.contains("ffm threesome") ->
+            "ffm threesome, 2girls, 1boy, exactly three adults, all three participating, explicit group sex"
+        source.contains("sixty-nine") || source.contains("69:") ->
+            "69, sixty nine position, mutual oral sex, both adults giving oral simultaneously"
+        source.contains("mutual masturbation") ->
+            "mutual masturbation, two adults, hands on genitals, simultaneous manual stimulation"
+        source.contains("cunnilingus") ->
+            "cunnilingus, mouth on pussy, tongue on vulva, oral sex, hips and face visible"
+        source.contains("paizuri") ->
+            "paizuri, breast sex, penis between breasts, breasts around penis, explicit contact"
+        source.contains("scissoring") || source.contains("tribadism") ->
+            "scissoring, tribadism, 2girls, vulva to vulva contact, intertwined legs, hips touching"
+        source.contains("handjob") ->
+            "handjob, hand stroking penis or genitals, manual stimulation, explicit contact"
         source.contains("footjob") ->
-            "footjob, soles, toes, pussy, clitoris, legs up, looking at viewer"
+            "footjob, bare feet on genitals, soles, toes, explicit foot stimulation"
         source.contains("bukkake") ->
-            "bukkake, facial, cum on face, cum on breasts, penis, kneeling, open mouth"
+            "bukkake, multiple adult men, group climax, semen on face and torso, kneeling adult"
+        source.contains("facial:") || source.contains("facial finish") ->
+            "facial, ejaculation on face, semen on face, receiving adult face centered"
+        source.contains("creampie") ->
+            "creampie, vaginal sex, internal ejaculation, post climax vaginal contact"
         source.contains("futanari") ->
-            "futanari, penis, ejaculation, cum, breasts, orgasm"
-        source.contains("masturbation") ->
-            if (source.contains("clitoris") || source.contains("pussy") || source.contains("vulva")) {
-                "masturbation, female masturbation, pussy, fingering, orgasm"
-            } else {
-                "masturbation, penis, ejaculation"
-            }
+            "futanari, adult woman, penis, ejaculation, breasts, orgasm"
         source.contains("bdsm") ->
-            "bdsm, bondage, collar, rope, nude, pussy"
-        source.contains("anal") ->
-            "anal, anal sex, from behind, ass, penis, sex"
-        source.contains("oral") || source.contains("blowjob") || source.contains("cunnilingus") ->
-            if (source.contains("cunnilingus") || source.contains("vulva")) {
-                "cunnilingus, pussy, oral"
-            } else {
-                "blowjob, oral, penis, kneeling"
-            }
-        source.contains("vaginal") ->
-            "sex, vaginal, penis, pussy, missionary"
+            "bdsm, consensual bondage, collar, rope, adult dominance and submission, nude"
+        source.contains("anal sex") || source.startsWith("anal") ->
+            "anal sex, anal penetration, from behind, ass, explicit adult sex"
+        source.contains("blowjob") || source.contains("oral sex") ->
+            "blowjob, mouth on penis, oral sex, kneeling or lying adult"
+        source.contains("vaginal sex") || source.contains("vaginal") ->
+            "vaginal sex, vaginal penetration, joined hips, explicit adult sex"
+        source.contains("masturbation") ->
+            "solo masturbation, one adult, own hand on genitals, no partner"
+        else -> ""
+    }
+
+    private fun actionNegative(source: String): String = when {
+        source.contains("mmf threesome") -> "solo, couple only, ffm, only two people"
+        source.contains("ffm threesome") -> "solo, couple only, mmf, only two people"
+        source.contains("sixty-nine") || source.contains("69:") -> "one way oral, standing sex, kissing only"
+        source.contains("mutual masturbation") -> "single person, penetration, oral sex, footjob"
+        source.contains("cunnilingus") -> "blowjob, footjob, vaginal penetration, anal penetration"
+        source.contains("paizuri") -> "handjob, blowjob, vaginal penetration, anal penetration"
+        source.contains("scissoring") || source.contains("tribadism") -> "male only, penis penetration, standing pose, kissing only"
+        source.contains("handjob") -> "footjob, blowjob, vaginal penetration, anal penetration"
+        source.contains("footjob") -> "handjob, blowjob, vaginal penetration, anal penetration"
+        source.contains("bukkake") -> "single man, only two people, dry face, no visible climax"
+        source.contains("facial:") || source.contains("facial finish") -> "bukkake crowd, dry face, vaginal sex as main act"
+        source.contains("creampie") -> "facial, external ejaculation, condom, no vaginal contact"
+        source.contains("futanari") -> "no penis, ordinary female nude, clothed"
+        source.contains("bdsm") -> "no restraints, vanilla standing nude, fashion pose"
+        source.contains("anal sex") || source.startsWith("anal") -> "vaginal penetration, blowjob, footjob"
+        source.contains("blowjob") || source.contains("oral sex") -> "cunnilingus, footjob, vaginal penetration, anal penetration"
+        source.contains("vaginal sex") || source.contains("vaginal") -> "anal penetration, blowjob, footjob"
+        source.contains("masturbation") -> "second person, group sex, penetration, oral sex"
         else -> ""
     }
 
