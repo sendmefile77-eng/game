@@ -3,8 +3,8 @@ package com.sendmefile77.chronosphere.horde
 /**
  * Local Dream is running WAI Illustrious (or a DMD2 merge of it), not a Horde worker.
  * Long documentary prompts collapse; this rewrite keeps the act AND a visible era set.
- * Adult/portrait frames lead with the human subject so a tent or domestication tag
- * cannot become an empty-room or animal picture.
+ * Adult/portrait frames lead with the person (human or chimera) so a tent or
+ * domestication tag cannot become an empty-room or animal picture.
  */
 internal object LocalDreamIllustriousPrompt {
     private const val QUALITY =
@@ -16,7 +16,7 @@ internal object LocalDreamIllustriousPrompt {
             "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli, " +
             "modern bedroom, drywall, tiled bathroom, porcelain toilet, smartphone, neon lights, " +
             "skyscraper, marble palace, greek columns, office, hospital, empty white background, " +
-            "dog, puppy, wolf, cat, horse, livestock, animal only, no humans, empty room, vacant tent, furry, bestiality"
+            "dog, puppy, wolf as subject, livestock, animal only, no humans, empty room, vacant tent, bestiality"
 
     private const val SAFE_NEGATIVE =
         "lowres, worst quality, bad anatomy, extra limbs, extra fingers, text, watermark, duplicate person, " +
@@ -42,7 +42,12 @@ internal object LocalDreamIllustriousPrompt {
         } else {
             ""
         }
-        val humanLock = if (!safeRequest || portrait) ", ${HordeAdultSubjectGuard.HUMAN_LOCK}" else ""
+        val identity = HordeAdultSubjectGuard.identityFragment(source)
+        val identityBit = if (identity.isNotBlank()) ", $identity" else ""
+        val chimeric = HordeAdultSubjectGuard.looksChimeric(source)
+        val humanLock = if (!safeRequest || portrait) ", ${HordeAdultSubjectGuard.PERSON_LOCK}" else ""
+        val chimeraLock = if ((!safeRequest || portrait) && chimeric) ", ${HordeAdultSubjectGuard.CHIMERA_LOCK}" else ""
+        val identityLock = if (!safeRequest || portrait) ", ${HordeAdultSubjectGuard.IDENTITY_LOCK}" else ""
         val eroticLock = if (!safeRequest) ", ${HordeAdultSubjectGuard.EROTIC_LOCK}" else ""
         val eraAsBackground = if (!safeRequest || portrait) {
             era.removePrefix("wide shot, ").takeIf { it.isNotBlank() }?.let { "background $it" }.orEmpty()
@@ -51,18 +56,26 @@ internal object LocalDreamIllustriousPrompt {
         }
         val eraPrefixSafe = if (eraAsBackground.isBlank()) "" else "$eraAsBackground, "
         val positiveRaw = if (action && act.isNotBlank()) {
-            "$QUALITY, $people, $act, $eraPrefixSafe$adultCue$humanLock$eroticLock"
+            "$QUALITY, $people$identityBit, $act, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock"
         } else if (request.nsfw) {
-            "$QUALITY, $people, standing, nipples, pussy, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$eroticLock"
+            "$QUALITY, $people$identityBit, standing, nipples, pussy, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock"
         } else {
-            "masterpiece, best quality, $people, fully clothed, $eraPrefixSafe$safeMaterial$humanLock"
+            "masterpiece, best quality, $people$identityBit, fully clothed, $eraPrefixSafe$safeMaterial$humanLock$chimeraLock"
         }
         val positive = HordeAdultSubjectGuard.sanitize(positiveRaw)
+        val negative = if (safeRequest) {
+            SAFE_NEGATIVE
+        } else {
+            buildString {
+                append(NEGATIVE)
+                if (!chimeric) append(", furry, anthro")
+            }
+        }
         val safeCacheSuffix = if (safeRequest) "|material-v2" else ""
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v4$safeCacheSuffix",
+            cacheKey = "${request.cacheKey}|ld-illust-v5$safeCacheSuffix",
             positivePrompt = positive,
-            negativePrompt = if (safeRequest) SAFE_NEGATIVE else NEGATIVE,
+            negativePrompt = negative,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
             saveResultAsReference = request.saveResultAsReference && !request.nsfw && !action,
             referenceDenoisingStrength = if (action) 0.92 else request.referenceDenoisingStrength,
