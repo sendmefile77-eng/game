@@ -1,6 +1,7 @@
 package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
+import com.sendmefile77.chronosphere.civilization.InternalPoliticsEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.economy.EconomyEngine
@@ -49,7 +50,9 @@ internal fun createConfiguredWorldStart(
         ),
     )
     val positionedWithClimate = refreshStartingClimateTags(positioned, map)
-    val configuredWorld = WorldSetupApplier.applyWorld(positionedWithClimate, setup)
+    val configuredWorld = InternalPoliticsEngine.reconcile(
+        WorldSetupApplier.applyWorld(positionedWithClimate, setup),
+    )
     val session = GameSession(
         world = map,
         resources = resources,
