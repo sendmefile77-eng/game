@@ -1,14 +1,11 @@
 package com.sendmefile77.chronosphere
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -56,7 +53,6 @@ fun CharacterCardPanel(
     val storedAction = remember(person.id) { AdultActionSelectionStore.get(person.id) }
     var localActionSequence by remember(person.id) { mutableStateOf(storedAction?.sequence ?: 0) }
     var chosenActionType by remember(person.id) { mutableStateOf(storedAction?.type) }
-    var actionMenuOpen by remember(person.id) { mutableStateOf(false) }
     val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
     val displayScene = scene
     val dynasty = person.dynastyId?.let { dynastyId -> people.dynasties.firstOrNull { it.id == dynastyId }?.name }
@@ -202,7 +198,7 @@ fun CharacterCardPanel(
                         Text("Інтимна сцена", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             visibleActionPlan?.let(::sceneContextLine)
-                                ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED) livingNorms.setting else "Відкрийте дорослу сцену цього віку",
+                                ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED) livingNorms.setting else "Відкрийте дорослу сцену цього персонажа",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -221,6 +217,7 @@ fun CharacterCardPanel(
                     Button(
                         onClick = {
                             val nextType = visibleActionPlan?.type
+                                ?: chosenActionType
                                 ?: livingNorms.allowedActs.firstOrNull()
                                 ?: AdultActionType.MASTURBATION
                             val stored = AdultActionSelectionStore.remember(person.id, nextType)
@@ -232,32 +229,38 @@ fun CharacterCardPanel(
                         modifier = Modifier.weight(1f),
                         shape = ChronosphereSmallShape,
                     ) {
-                        Text("Наступна сцена")
+                        Text("Інша варіація")
                     }
                 }
-                val allowedMenu = adultActionMenuItems().filter { livingNorms.allows(it.type) }
-                if (allowedMenu.size > 1) {
-                    Box {
-                        OutlinedButton(
-                            onClick = { actionMenuOpen = true },
-                            enabled = controlsEnabled,
-                            shape = ChronosphereSmallShape,
-                        ) {
-                            Text("Інший звичай")
-                        }
-                        DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
-                            allowedMenu.forEach { item ->
-                                DropdownMenuItem(
-                                    text = { Text(item.label) },
-                                    onClick = {
-                                        val stored = AdultActionSelectionStore.remember(person.id, item.type)
-                                        chosenActionType = stored.type
-                                        localActionSequence = stored.sequence
-                                        onAdultAction()
-                                        actionMenuOpen = false
-                                    },
-                                )
+
+                Text(
+                    "Оберіть сцену",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Усі 18+ практики доступні вручну; звичаї епохи визначають контекст і те, що в цьому суспільстві вважають нормою або табу.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                adultActionMenuItems().chunked(2).forEach { rowItems ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowItems.forEach { item ->
+                            AdultActionQuickButton(
+                                label = item.label,
+                                selected = (visibleActionPlan?.type ?: chosenActionType) == item.type,
+                                enabled = controlsEnabled,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                val stored = AdultActionSelectionStore.remember(person.id, item.type)
+                                chosenActionType = stored.type
+                                localActionSequence = stored.sequence
+                                onAdultAction()
                             }
+                        }
+                        if (rowItems.size == 1) {
+                            Column(modifier = Modifier.weight(1f)) {}
                         }
                     }
                 }
@@ -296,14 +299,43 @@ private data class AdultActionMenuItem(val type: AdultActionType, val label: Str
 
 private fun adultActionMenuItems(): List<AdultActionMenuItem> = listOf(
     AdultActionMenuItem(AdultActionType.FOOTJOB, "Футджоб"),
-    AdultActionMenuItem(AdultActionType.ORAL, "Мінет"),
+    AdultActionMenuItem(AdultActionType.ORAL, "Орал"),
     AdultActionMenuItem(AdultActionType.VAGINAL, "Вагінал"),
     AdultActionMenuItem(AdultActionType.ANAL, "Анал"),
     AdultActionMenuItem(AdultActionType.BUKKAKE, "Буккаке"),
-    AdultActionMenuItem(AdultActionType.MASTURBATION, "Мастурбація"),
+    AdultActionMenuItem(AdultActionType.MASTURBATION, "Соло"),
     AdultActionMenuItem(AdultActionType.BDSM, "BDSM"),
-    AdultActionMenuItem(AdultActionType.FUTANARI_ORGASM, "Футанарі оргазм"),
+    AdultActionMenuItem(AdultActionType.FUTANARI_ORGASM, "Футанарі"),
 )
+
+@Composable
+private fun AdultActionQuickButton(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = ChronosphereSmallShape,
+        ) {
+            Text(label, maxLines = 1)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = ChronosphereSmallShape,
+        ) {
+            Text(label, maxLines = 1)
+        }
+    }
+}
 
 private fun actionCaption(plan: AdultActionPlan): String {
     val label = adultActionMenuItems().firstOrNull { it.type == plan.type }?.label
