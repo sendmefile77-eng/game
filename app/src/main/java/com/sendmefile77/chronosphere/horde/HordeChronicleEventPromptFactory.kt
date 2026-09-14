@@ -6,7 +6,7 @@ import com.sendmefile77.chronosphere.history.ActiveHistoricalContextRegistry
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 
-internal const val CHRONICLE_EVENT_CACHE_SCHEMA = "horde-chronicle-event-v9-persistent-era-choice"
+internal const val CHRONICLE_EVENT_CACHE_SCHEMA = "horde-chronicle-event-v10-war-era-subject"
 
 /** Wide chronicle frame: era city life with the material consequences of player choices visible. */
 object HordeChronicleEventPromptFactory {
@@ -27,6 +27,10 @@ object HordeChronicleEventPromptFactory {
         "INTERVENTION_WAR_RAID",
     )
 
+    private val warCodes = setOf(
+        "WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED", "INTERVENTION_WAR_RAID",
+    )
+
     fun latestSignificant(events: List<SimulationEvent>): SimulationEvent? =
         events.asReversed().firstOrNull { it.code in significantCodes }
 
@@ -39,11 +43,14 @@ object HordeChronicleEventPromptFactory {
         val choiceVisual = HordeHistoricalVisualPrompt.eraChoiceFragment(event.facts["choiceId"])
         val choiceLabel = event.facts["choiceLabel"]?.takeIf { it.isNotBlank() }
         val persistentTags = persistentHistoricalTags(event, people, economy)
-        val persistentVisual = HordeHistoricalVisualPrompt.fragment(persistentTags, era)
+        val persistentVisualRaw = HordeHistoricalVisualPrompt.fragment(persistentTags, era)
+        val persistentVisual = if (erotic) HordeAdultSubjectGuard.sanitize(persistentVisualRaw) else persistentVisualRaw
         val persistentSignature = HordeHistoricalVisualPrompt.signature(persistentTags)
+        val warFrame = event.code in warCodes
+        val eraReward = event.code == "ERA_ADVANCED"
 
-        val positive = buildList {
-            add("masterpiece, best quality, anime illustration, cinematic wide establishing shot of a living settlement")
+        val positiveRaw = buildList {
+            add("masterpiece, best quality, anime illustration, cinematic wide establishing shot")
             add(HordeEraVisual.materialCulture(era))
             add(HordeEraVisual.distinctiveMarker(era))
             add(sceneWork(event, era, settlement))
@@ -62,30 +69,39 @@ object HordeChronicleEventPromptFactory {
                 }
             }
             if (erotic) {
-                add(HordeEraVisual.cityErotica(era))
-                val adultOverlay = HordeAdultVisualEnrichment.fragment(
-                    persistentTags,
-                    era,
-                    HordeAdultVisualEnrichment.Kind.CHRONICLE,
-                )
-                if (adultOverlay.isNotBlank()) {
-                    add("adult custom must stay inside this settlement's way of life: $adultOverlay")
+                add(HordeAdultSubjectGuard.PERSON_LOCK)
+                if (warFrame) {
+                    add(warErotica(era))
+                } else if (eraReward) {
+                    add(eraRewardErotica(era))
+                } else {
+                    add(HordeEraVisual.cityErotica(era))
+                    val adultOverlay = HordeAdultVisualEnrichment.fragment(
+                        persistentTags,
+                        era,
+                        HordeAdultVisualEnrichment.Kind.CHRONICLE,
+                    )
+                    if (adultOverlay.isNotBlank()) {
+                        add("adult custom must stay inside this settlement's way of life: $adultOverlay")
+                    }
+                    add("explicit consensual adult sex in the same frame as ordinary city work")
+                    add("nude adult woman and nude adult man, visible breasts, nipples, penis, vagina, wet skin")
+                    add("other clothed workers continue their jobs around them, no one shocked")
                 }
-                add("explicit consensual adult sex in the same frame as ordinary city work")
-                add("nude adult woman and nude adult man, visible breasts, nipples, penis, vagina, wet skin")
-                add("other clothed workers continue their jobs around them, no one shocked")
             } else {
                 add("everyday public work, fully clothed adults, no sexual content")
             }
-            add("crowded readable street, environmental storytelling, complete connected bodies")
+            add("readable human or humanoid bodies as the subject, environmental storytelling, complete connected bodies")
             add("natural era-correct light, detailed materials, no text, no UI, no modern bathroom")
         }.joinToString(", ")
+        val positive = if (erotic) HordeAdultSubjectGuard.sanitize(positiveRaw) else positiveRaw
 
         val negative = buildList {
             add("worst quality, low quality, blurry, bad anatomy, extra limbs, duplicate people")
             add("disconnected limbs, floating head, cropped face, text, watermark, collage, split screen")
             add("oversaturated, overcooked, burnt colors, neon cyberpunk")
             addAll(HordeEraVisual.negatives(era).take(10))
+            addAll(HordeAdultSubjectGuard.animalSubjectNegatives(chimeric = false).take(12))
             if (hasMinor) add("nudity, explicit sex, sexualized minor")
             add("child, loli, shota, underage")
         }.joinToString(", ")
@@ -179,13 +195,100 @@ object HordeChronicleEventPromptFactory {
         return when {
             choice != null -> "a century-defining change is being adopted in everyday life, $work"
             event.code == "SETTLEMENT_FOUNDED" || event.code == "COLONY_FOUNDED" -> "first permanent shelters rising, $work"
-            event.code == "WAR_STARTED" -> "militia gathering at the edge of the working street, $work"
-            event.code == "CITY_CAPTURED" -> "new banners over the same working street, $work"
-            event.code == "ERA_ADVANCED" -> "new tools appearing in ordinary hands, $work"
+            event.code == "WAR_STARTED" -> warMuster(era, place)
+            event.code == "WAR_CASUALTIES" -> warAftermath(era, place)
+            event.code == "CITY_CAPTURED" -> warCapture(era, place)
+            event.code == "INTERVENTION_WAR_RAID" -> warRaid(era, place)
+            event.code == "PEACE_TREATY" -> "adult envoys meeting under era-correct standards $place, weapons grounded"
+            event.code == "ERA_ADVANCED" -> eraRewardScene(era, place, work)
             event.code == "RULER_SUCCEEDED" || event.code == "DYNASTY_FOUNDED" -> "a new leader walking the same working street, $work"
             event.code == "ADULT_SOCIAL_EVENT" -> "public erotic custom happening in the work yard, $work"
             else -> work
         }
+    }
+
+    private fun warMuster(era: TechnologyEra?, place: String): String = when (era) {
+        TechnologyEra.TRIBAL ->
+            "war tableau: adult fighters mustering at the camp edge $place, spears and hide shields, people filling the frame"
+        TechnologyEra.AGRARIAN, TechnologyEra.URBAN ->
+            "war tableau: adult militia gathering on the packed street $place, clubs and slings, banners of raw cloth"
+        TechnologyEra.METALLURGIC ->
+            "war tableau: bronze weapons issued beside the forge $place, adult fighters in rank"
+        TechnologyEra.MEDIEVAL ->
+            "war tableau: levy and retainers at the castle-town gate $place, polearms and mail"
+        TechnologyEra.EARLY_INDUSTRIAL, TechnologyEra.INDUSTRIAL ->
+            "war tableau: conscripts and factory smoke $place, rifles stacked, adult bodies in kit"
+        TechnologyEra.ELECTRIC, TechnologyEra.INFORMATION ->
+            "war tableau: uniformed adults deploying through the city $place"
+        TechnologyEra.SPACEFARING ->
+            "war tableau: armed crew in a habitat lock $place, vacuum-ready kit"
+        null -> "war tableau: adult fighters gathering $place"
+    }
+
+    private fun warAftermath(era: TechnologyEra?, place: String): String =
+        "aftermath of fighting $place: exhausted and wounded adult bodies in an era-correct camp, people remain the subject, ${era?.name ?: "early"} material world"
+
+    private fun warCapture(era: TechnologyEra?, place: String): String =
+        "captured gate and street $place, new banners over the same working settlement, adult victors and residents in one frame, ${era?.name ?: "early"} kit"
+
+    private fun warRaid(era: TechnologyEra?, place: String): String =
+        "raid in progress $place: adult raiders crossing the working edge of the settlement with era-correct weapons"
+
+    private fun eraRewardScene(era: TechnologyEra?, place: String, work: String): String = when (era) {
+        TechnologyEra.TRIBAL ->
+            "epochal reward tableau $place: the tribal age arriving as a living camp, new hearths and hide architecture, adult bodies of this age standing in the new world"
+        TechnologyEra.AGRARIAN ->
+            "epochal reward tableau $place: fields and grain stores now define daily life, new tools in adult hands"
+        TechnologyEra.URBAN ->
+            "epochal reward tableau $place: the first dense street of this city age, workshops and packed houses"
+        TechnologyEra.METALLURGIC ->
+            "epochal reward tableau $place: forge-light and new metal tools appearing in ordinary adult hands"
+        TechnologyEra.MEDIEVAL ->
+            "epochal reward tableau $place: estate and guild street of the new age, timber halls risen"
+        TechnologyEra.EARLY_INDUSTRIAL, TechnologyEra.INDUSTRIAL ->
+            "epochal reward tableau $place: mills, chimneys and brick yards of the industrial age now standing"
+        TechnologyEra.ELECTRIC ->
+            "epochal reward tableau $place: wired light reaching the street for the first time"
+        TechnologyEra.INFORMATION ->
+            "epochal reward tableau $place: screens and civic terminals of the information age in public use"
+        TechnologyEra.SPACEFARING ->
+            "epochal reward tableau $place: the habitat concourse of the off-world age, viewports and sealed air"
+        null -> "epochal reward tableau: new tools appearing in ordinary hands, $work"
+    }
+
+    private fun warErotica(era: TechnologyEra?): String = buildString {
+        append("adult war-camp intimacy: nude or half-stripped adult fighters and camp followers, ")
+        append("visible breasts, nipples, penis, vagina, sex or displayed bodies after the muster, ")
+        append("weapons and era kit still in the same frame, people first never animals, ")
+        append(
+            when (era) {
+                TechnologyEra.TRIBAL -> "hide bedding and spears beside the sex"
+                TechnologyEra.METALLURGIC -> "forge-heat and bronze beside the sex"
+                TechnologyEra.MEDIEVAL -> "gate-yard and mail piled while bodies couple"
+                TechnologyEra.INDUSTRIAL, TechnologyEra.EARLY_INDUSTRIAL -> "kit bags and factory brick behind the sex"
+                TechnologyEra.SPACEFARING -> "bulkhead bunk intimacy after the lock alarm"
+                else -> "war-camp sex inside this era's material world"
+            },
+        )
+    }
+
+    private fun eraRewardErotica(era: TechnologyEra?): String = buildString {
+        append("epochal body reward: nude adult woman and nude adult man of the new age, ")
+        append("visible breasts, nipples, penis, vagina, wet skin, explicit consensual sex, ")
+        append("they use or stand among the new tools so the era change stays readable, ")
+        append(
+            when (era) {
+                TechnologyEra.TRIBAL -> "ochre and hides on skin beside the new hearth"
+                TechnologyEra.AGRARIAN -> "grain dust and yard dirt on bare skin"
+                TechnologyEra.URBAN -> "market-lane sex as the city age begins"
+                TechnologyEra.METALLURGIC -> "soot and new bronze against bare skin"
+                TechnologyEra.MEDIEVAL -> "hall or guild-lane sex of the estate age"
+                TechnologyEra.INDUSTRIAL, TechnologyEra.EARLY_INDUSTRIAL -> "after-whistle tenement sex of the machine age"
+                TechnologyEra.INFORMATION -> "screen-lit apartment sex of the networked age"
+                TechnologyEra.SPACEFARING -> "module-bunk sex of the off-world age"
+                else -> "new-age bodies inside the new material world"
+            },
+        )
     }
 
     private val HISTORY_PREFIXES = listOf(
