@@ -102,24 +102,8 @@ internal fun WorldPlayPanel(
         actionNonce += 1
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                civilization.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                economy?.era?.displayNameUk ?: "Епоха формується",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary,
-            )
-        }
-        if (civilizationCount > 1) {
+    if (civilizationCount > 1) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             OutlinedButton(onClick = onNextCivilization, enabled = !isAdvancing, shape = ChronosphereSmallShape) {
                 Text("Інша держава")
             }
