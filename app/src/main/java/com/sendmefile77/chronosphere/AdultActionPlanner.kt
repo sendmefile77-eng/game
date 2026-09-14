@@ -1,10 +1,12 @@
 package com.sendmefile77.chronosphere
 
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.people.PersonRelationship
 import com.sendmefile77.chronosphere.people.RelationshipKind
+import com.sendmefile77.chronosphere.people.SocialProfile
 
 enum class AdultActionType {
     FOOTJOB,
@@ -35,6 +37,9 @@ data class AdultActionPlan(
     val sequence: Int,
     val primary: AdultActionParticipant,
     val partner: AdultActionParticipant?,
+    val bond: RelationshipKind? = null,
+    val setting: String = "",
+    val mood: String = "",
 ) {
     init {
         require(sequence > 0)
@@ -49,6 +54,8 @@ data class AdultActionPlan(
             sequence.toString(),
             primary.personId,
             partner?.personId ?: "solo",
+            bond?.name ?: "none",
+            setting.take(24),
         ).joinToString(":")
 }
 
@@ -64,16 +71,26 @@ object AdultActionPlanner {
         people: PeopleState,
         sequence: Int,
         preferredType: AdultActionType? = null,
+        technologyEra: TechnologyEra? = null,
+        profile: SocialProfile? = people.profile(person.civilizationId),
+        cultureTags: Set<String> = profile?.tags.orEmpty(),
     ): AdultActionPlan? {
         val age = person.ageYearsAt(tick)
         if (age < 18 || sequence <= 0) return null
+        if (!person.isAlive) return null
 
-        val rawType = preferredType ?: pickType(person.id, tick, sequence)
+        val norms = AdultIntimateNorms.resolve(technologyEra, profile, cultureTags, person.role)
+        val requested = preferredType?.takeIf { norms.allows(it) }
+        val rawType = requested ?: AdultIntimateNorms.defaultAct(norms, person.id, tick, sequence)
         val partner = when (rawType) {
             AdultActionType.MASTURBATION -> null
-            else -> pickPartner(person, tick, people, sequence)
+            else -> pickPartner(person, tick, people, sequence, norms)
         }
         val type = normalizeType(rawType, person.biologicalSex, partner?.biologicalSex)
+            .let { if (norms.allows(it)) it else norms.allowedActs.first() }
+        val bond = partner?.let { other ->
+            people.relationships.firstOrNull { it.involves(person.id) && it.involves(other.id) }?.kind
+        }
 
         return AdultActionPlan(
             type = type,
@@ -84,7 +101,7 @@ object AdultActionPlanner {
                 ageYears = age,
                 sex = person.biologicalSex,
             ),
-            partner = partner?.let { other ->
+            partner = partner?.takeIf { it.isAlive && it.ageYearsAt(tick) >= 18 }?.let { other ->
                 AdultActionParticipant(
                     personId = other.id,
                     name = other.name,
@@ -92,6 +109,9 @@ object AdultActionPlanner {
                     sex = other.biologicalSex,
                 )
             },
+            bond = bond,
+            setting = norms.setting,
+            mood = norms.mood,
         )
     }
 
@@ -106,6 +126,7 @@ object AdultActionPlanner {
         tick: Long,
         people: PeopleState,
         sequence: Int,
+        norms: AdultIntimateNorms? = null,
     ): NotablePerson? {
         val forbiddenIds = people.relationships
             .filter { it.involves(person.id) && it.kind in forbiddenPartnerKinds }
@@ -139,9 +160,19 @@ object AdultActionPlanner {
             }
             .toList()
 
-        choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
-        choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
-        choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
+        val preferred = norms?.preferredBond ?: RelationshipKind.LOVER
+        if (preferred == RelationshipKind.PARTNER) {
+            choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
+            choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
+        } else {
+            choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
+            choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
+        }
+        if ((norms?.affairChance ?: 0.2) >= 0.35) {
+            choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
+        } else {
+            choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
+        }
         choose(
             people.featuredPeople(person.civilizationId, tick)
                 .filter { it.civilizationId == person.civilizationId }
@@ -155,7 +186,7 @@ object AdultActionPlanner {
             "living-local",
         )?.let { return it }
         return choose(
-            people.persons.filter { it.civilizationId != person.civilizationId }.sortedByDescending { it.prestige },
+            people.persons.filter { it.civilizationId != person.civilizationId && it.isAlive }.sortedByDescending { it.prestige },
             "foreign-fallback",
         )
     }
@@ -183,4 +214,7 @@ object AdultActionPlanner {
 
     private fun PersonRelationship.otherId(personId: String): String =
         if (personA == personId) personB else personA
+
+    private fun PersonRelationship.involves(first: String, second: String): Boolean =
+        involves(first) && involves(second)
 }
