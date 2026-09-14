@@ -48,6 +48,7 @@ class LocalDreamIllustriousPromptTest {
         assertEquals(5.5, local.cfgScale, 0.0001)
         assertEquals(24, horde.steps)
         assertTrue(local.cacheKey.contains("|ld-illust-v3"))
+        assertFalse(local.cacheKey.contains("|material-v1"))
         assertTrue(local.cacheKey.contains("ld-pack-illustrious"))
     }
 
@@ -66,5 +67,30 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.negativePrompt.contains("kiss"))
         assertTrue(local.positivePrompt.contains("hide tent"))
         assertTrue(local.positivePrompt.contains("prehistoric tribal camp"))
+        assertFalse(local.cacheKey.contains("|material-v1"))
+    }
+
+    @Test
+    fun safePortraitKeepsConcreteHistoricalChoicesAfterIllustriousCompression() {
+        val local = LocalDreamIllustriousPrompt.apply(
+            HordeImageRequest(
+                cacheKey = "horde-resolved-scene-v11|safe-information-ruler",
+                positivePrompt = "information-age society, contemporary city street, data-rich civic control rooms and automated public infrastructure, homes and small local spaces functioning as workplaces and classrooms, telepresence screens and reduced commuter traffic, ubiquitous connected devices and public network terminals, fully clothed",
+                nsfw = false,
+                ageYears = 38,
+                seed = "safe-seed",
+                referenceCacheKey = "horde-character-reference-v5|safe-information-ruler",
+                saveResultAsReference = true,
+            ),
+        )
+
+        assertFalse(local.nsfw)
+        assertTrue(local.positivePrompt.contains("civic control room"))
+        assertTrue(local.positivePrompt.contains("telepresence"))
+        assertTrue(local.positivePrompt.contains("connected devices"))
+        assertTrue(local.positivePrompt.contains("fully clothed"))
+        assertTrue(local.cacheKey.contains("|material-v1"))
+        assertTrue(local.saveResultAsReference)
+        assertTrue(local.referenceCacheKey?.contains("safe-information-ruler") == true)
     }
 }
