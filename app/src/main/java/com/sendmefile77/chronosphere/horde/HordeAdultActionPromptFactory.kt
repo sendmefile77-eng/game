@@ -16,21 +16,44 @@ object HordeAdultActionPromptFactory {
         require(plan.partner == null || plan.partner.ageYears >= 18)
         val identity = HordeCharacterVisualProfile.from(plan.primary.personId)
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
+        val chimeric = morphology.signature != "baseline" && morphology.promptFragment.isNotBlank()
         val base = HordeResolvedScenePromptFactory.create(scene = scene.copy(wardrobeState = WardrobeState.UNDRESSED), characterKey = plan.primary.personId, ageYears = plan.primary.ageYears, visualTags = visualTags, visualNumeric = visualNumeric, technologyEra = technologyEra)
         val partnerIdentity = plan.partner?.let { HordeCharacterVisualProfile.from(it.personId) }
         val eraName = technologyEra?.name ?: "UNSPECIFIED"
         val recipeSetting = adultVisual?.settingKey?.takeIf { it.isNotBlank() }?.let { "structured scene setting ${it.replace('.', ' ').replace('-', ' ')}" }
         val partnerLine = plan.partner?.let { partner -> "second confirmed adult age ${partner.ageYears}, ${partnerIdentity?.promptFragment}, fully nude" }
-        val historicalBase = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
+        val historicalBase = HordeAdultSubjectGuard.sanitize(HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra))
         val adultOverlay = HordeAdultVisualEnrichment.fragment(visualTags, technologyEra, HordeAdultVisualEnrichment.Kind.SCENE)
         val adultSignature = HordeAdultVisualEnrichment.signature(visualTags)
-        val positive = listOf(actionPrompt(plan), actLock(plan.type), cameraPrompt(plan), "explicit uncensored adult sex, adults 18+", "primary adult face locked: ${identity.promptFragment}", partnerLine, "completely nude, genitals visible, sexual contact readable at a glance", HordeEraVisual.intimateInterior(technologyEra), HordeEraVisual.distinctiveMarker(technologyEra), HordeEraVisual.materialCulture(technologyEra), historicalBase.takeIf { it.isNotBlank() }, adultOverlay.takeIf { it.isNotBlank() }, recipeSetting, morphology.promptFragment.takeIf { it.isNotBlank() }, "environment matches era $eraName, no modern kitchen, no tiled bathroom", "no text in image").filter { !it.isNullOrBlank() }.joinToString(", ")
+        val positiveRaw = listOf(
+            actionPrompt(plan),
+            actLock(plan.type),
+            cameraPrompt(plan),
+            "explicit uncensored adult sex, adults 18+",
+            HordeAdultSubjectGuard.PERSON_LOCK,
+            HordeAdultSubjectGuard.IDENTITY_LOCK,
+            if (chimeric) HordeAdultSubjectGuard.CHIMERA_LOCK else null,
+            "primary adult face locked: ${identity.promptFragment}",
+            partnerLine,
+            "completely nude, genitals visible, sexual contact readable at a glance",
+            HordeEraVisual.intimateInterior(technologyEra),
+            HordeEraVisual.distinctiveMarker(technologyEra),
+            HordeEraVisual.materialCulture(technologyEra),
+            historicalBase.takeIf { it.isNotBlank() },
+            adultOverlay.takeIf { it.isNotBlank() },
+            recipeSetting,
+            morphology.promptFragment.takeIf { it.isNotBlank() },
+            "environment matches era $eraName, no modern kitchen, no tiled bathroom",
+            "no text in image",
+        ).filter { !it.isNullOrBlank() }.joinToString(", ")
+        val positive = HordeAdultSubjectGuard.sanitize(positiveRaw)
         return base.copy(
-            cacheKey = listOf("horde-adult-action-v9", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none", adultSignature).joinToString("|"),
+            cacheKey = listOf("horde-adult-action-v10", plan.cacheToken, identity.signature, morphology.signature, eraName, adultVisual?.recipeId ?: "none", adultVisual?.settingKey ?: "none", adultSignature).joinToString("|"),
             positivePrompt = positive,
             negativePrompt = buildList {
                 add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
                 addAll(listOf("child", "minor", "teen", "underage", "loli", "shota", "clothing", "dress", "robe", "shirt", "pants", "underwear", "armor", "censored", "mosaic", "black bars", "standing idle portrait", "passport photo", "studio portrait", "posed fashion nude", "just standing", "arms at sides", "standing side by side", "cheek to cheek", "two girls posing", "face close-up only", "kissing as the main subject", "no sexual contact", "closed mouth far from genitals", "bust crop", "portrait crop", "missing feet", "cropped head", "wrong person", "identity change", "wrong sex act", "mismatched sex act", "modern kitchen", "kitchen counter", "office interior"))
+                addAll(HordeAdultSubjectGuard.animalSubjectNegatives(chimeric))
                 addAll(wrongActNegatives(plan.type))
                 addAll(HordeEraVisual.negatives(technologyEra))
                 if (plan.type == AdultActionType.BUKKAKE) { add("single person"); add("solo portrait") } else if (!plan.solo) { add("single person"); add("solo portrait"); add("only one body"); add("crowded group of three or more people") } else { add("unrelated extra people") }
@@ -38,7 +61,7 @@ object HordeAdultActionPromptFactory {
             nsfw = true,
             width = if (plan.type == AdultActionType.BUKKAKE || plan.type == AdultActionType.BDSM) 896 else if (plan.type == AdultActionType.FOOTJOB) 832 else if (plan.solo) 768 else 832,
             height = if (plan.type == AdultActionType.BUKKAKE) 1152 else if (plan.type == AdultActionType.FOOTJOB) 1216 else if (plan.solo) 1152 else 1216,
-            steps = 24, cfgScale = 6.0, seed = "${base.seed}:action-v9:$eraName:${plan.cacheToken}", preferredModels = nsfwModels, qualityPriority = true, referenceCacheKey = base.referenceCacheKey, saveResultAsReference = false, referenceDenoisingStrength = 0.34,
+            steps = 24, cfgScale = 6.0, seed = "${base.seed}:action-v10:$eraName:${plan.cacheToken}", preferredModels = nsfwModels, qualityPriority = true, referenceCacheKey = base.referenceCacheKey, saveResultAsReference = false, referenceDenoisingStrength = 0.34,
         )
     }
 
