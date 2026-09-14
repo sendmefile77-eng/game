@@ -53,9 +53,12 @@ fun CharacterCardPanel(
     val storedAction = remember(person.id) { AdultActionSelectionStore.get(person.id) }
     var localActionSequence by remember(person.id) { mutableStateOf(storedAction?.sequence ?: 0) }
     var chosenActionType by remember(person.id) { mutableStateOf(storedAction?.type) }
+    var showMoreAdultActions by remember(person.id) { mutableStateOf(false) }
     val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
     val displayScene = scene
-    val dynasty = person.dynastyId?.let { dynastyId -> people.dynasties.firstOrNull { it.id == dynastyId }?.name }
+    val dynasty = person.dynastyId?.let { dynastyId ->
+        people.dynasties.firstOrNull { it.id == dynastyId }?.name
+    }
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
     val mergedVisualTags = remember(descriptor?.tags, civilizationVisualTags) {
@@ -91,7 +94,16 @@ fun CharacterCardPanel(
         tags = livingProfile?.tags.orEmpty() + civilizationVisualTags,
         role = person.role,
     )
-    val actionPlan = remember(person.id, tick, people, resolvedActionSequence, age, chosenActionType, technologyEra, livingProfile) {
+    val actionPlan = remember(
+        person.id,
+        tick,
+        people,
+        resolvedActionSequence,
+        age,
+        chosenActionType,
+        technologyEra,
+        livingProfile,
+    ) {
         if (age >= 18 && resolvedActionSequence > 0) {
             AdultActionPlanner.plan(
                 person = person,
@@ -159,7 +171,12 @@ fun CharacterCardPanel(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("ПЕРСОНАЖ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Black)
+            Text(
+                "ПЕРСОНАЖ",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Black,
+            )
             Text(person.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 StatusPill(roleLabel(person.role), color = MaterialTheme.colorScheme.primary)
@@ -198,13 +215,20 @@ fun CharacterCardPanel(
                         Text("Інтимна сцена", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             visibleActionPlan?.let(::sceneContextLine)
-                                ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED) livingNorms.setting else "Відкрийте дорослу сцену цього персонажа",
+                                ?: if (displayScene.wardrobeState == WardrobeState.UNDRESSED) {
+                                    livingNorms.setting
+                                } else {
+                                    "Відкрийте дорослу сцену цього персонажа"
+                                },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    visibleActionPlan?.let { StatusPill(actionCaption(it), color = MaterialTheme.colorScheme.secondary) }
+                    visibleActionPlan?.let {
+                        StatusPill(actionCaption(it), color = MaterialTheme.colorScheme.secondary)
+                    }
                 }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onToggleWardrobe,
@@ -240,29 +264,44 @@ fun CharacterCardPanel(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Усі 18+ практики доступні вручну; звичаї епохи визначають контекст і те, що в цьому суспільстві вважають нормою або табу.",
+                    "Ручний вибір має пріоритет: звичаї епохи змінюють контекст і табу, але не підміняють обрану практику.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                adultActionMenuItems().chunked(2).forEach { rowItems ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowItems.forEach { item ->
-                            AdultActionQuickButton(
-                                label = item.label,
-                                selected = (visibleActionPlan?.type ?: chosenActionType) == item.type,
-                                enabled = controlsEnabled,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                val stored = AdultActionSelectionStore.remember(person.id, item.type)
-                                chosenActionType = stored.type
-                                localActionSequence = stored.sequence
-                                onAdultAction()
-                            }
-                        }
-                        if (rowItems.size == 1) {
-                            Column(modifier = Modifier.weight(1f)) {}
-                        }
-                    }
+
+                AdultActionGrid(
+                    items = quickAdultActionMenuItems(),
+                    selected = visibleActionPlan?.type ?: chosenActionType,
+                    enabled = controlsEnabled,
+                    onSelect = { type ->
+                        val stored = AdultActionSelectionStore.remember(person.id, type)
+                        chosenActionType = stored.type
+                        localActionSequence = stored.sequence
+                        onAdultAction()
+                    },
+                )
+
+                OutlinedButton(
+                    onClick = { showMoreAdultActions = !showMoreAdultActions },
+                    enabled = controlsEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ChronosphereSmallShape,
+                ) {
+                    Text(if (showMoreAdultActions) "Менше" else "Ще практики")
+                }
+
+                if (showMoreAdultActions) {
+                    AdultActionGrid(
+                        items = extendedAdultActionMenuItems(),
+                        selected = visibleActionPlan?.type ?: chosenActionType,
+                        enabled = controlsEnabled,
+                        onSelect = { type ->
+                            val stored = AdultActionSelectionStore.remember(person.id, type)
+                            chosenActionType = stored.type
+                            localActionSequence = stored.sequence
+                            onAdultAction()
+                        },
+                    )
                 }
             }
         }
@@ -286,27 +325,82 @@ fun CharacterCardPanel(
                 morphology?.let { InfoLine("Тіло", it) }
             }
             if (relationships.isNotEmpty()) {
-                Text("Зв’язки", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Зв’язки",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 relationships.forEach { relationship ->
-                    Text(relationship, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        relationship,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
     }
 }
 
-private data class AdultActionMenuItem(val type: AdultActionType, val label: String)
+private data class AdultActionMenuItem(
+    val type: AdultActionType,
+    val label: String,
+    val quick: Boolean = false,
+)
 
 private fun adultActionMenuItems(): List<AdultActionMenuItem> = listOf(
-    AdultActionMenuItem(AdultActionType.FOOTJOB, "Футджоб"),
-    AdultActionMenuItem(AdultActionType.ORAL, "Орал"),
-    AdultActionMenuItem(AdultActionType.VAGINAL, "Вагінал"),
-    AdultActionMenuItem(AdultActionType.ANAL, "Анал"),
+    AdultActionMenuItem(AdultActionType.ORAL, "Мінет", quick = true),
+    AdultActionMenuItem(AdultActionType.VAGINAL, "Вагінал", quick = true),
+    AdultActionMenuItem(AdultActionType.ANAL, "Анал", quick = true),
+    AdultActionMenuItem(AdultActionType.FOOTJOB, "Футджоб", quick = true),
+    AdultActionMenuItem(AdultActionType.BDSM, "BDSM", quick = true),
+    AdultActionMenuItem(AdultActionType.MASTURBATION, "Соло", quick = true),
+    AdultActionMenuItem(AdultActionType.HANDJOB, "Хендджоб"),
+    AdultActionMenuItem(AdultActionType.CUNNILINGUS, "Кунілінгус"),
+    AdultActionMenuItem(AdultActionType.SIXTY_NINE, "69"),
+    AdultActionMenuItem(AdultActionType.PAIZURI, "Пайзурі"),
+    AdultActionMenuItem(AdultActionType.SCISSORING, "Трайбадизм"),
+    AdultActionMenuItem(AdultActionType.MUTUAL_MASTURBATION, "Взаємно"),
     AdultActionMenuItem(AdultActionType.BUKKAKE, "Буккаке"),
-    AdultActionMenuItem(AdultActionType.MASTURBATION, "Соло"),
-    AdultActionMenuItem(AdultActionType.BDSM, "BDSM"),
+    AdultActionMenuItem(AdultActionType.FACIAL, "Фейшл"),
+    AdultActionMenuItem(AdultActionType.CREAMPIE, "Кремпай"),
+    AdultActionMenuItem(AdultActionType.MMF, "MMF"),
+    AdultActionMenuItem(AdultActionType.FFM, "FFM"),
     AdultActionMenuItem(AdultActionType.FUTANARI_ORGASM, "Футанарі"),
 )
+
+private fun quickAdultActionMenuItems(): List<AdultActionMenuItem> =
+    adultActionMenuItems().filter { it.quick }
+
+private fun extendedAdultActionMenuItems(): List<AdultActionMenuItem> =
+    adultActionMenuItems().filterNot { it.quick }
+
+@Composable
+private fun AdultActionGrid(
+    items: List<AdultActionMenuItem>,
+    selected: AdultActionType?,
+    enabled: Boolean,
+    onSelect: (AdultActionType) -> Unit,
+) {
+    items.chunked(2).forEach { rowItems ->
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            rowItems.forEach { item ->
+                AdultActionQuickButton(
+                    label = item.label,
+                    selected = selected == item.type,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    onSelect(item.type)
+                }
+            }
+            if (rowItems.size == 1) {
+                Column(modifier = Modifier.weight(1f)) {}
+            }
+        }
+    }
+}
 
 @Composable
 private fun AdultActionQuickButton(
@@ -351,8 +445,11 @@ private fun sceneContextLine(plan: AdultActionPlan): String {
         RelationshipKind.ALLY -> "союз"
         else -> null
     }
-    return listOfNotNull(who, bond, plan.setting.takeIf { it.isNotBlank() }?.substringBefore(';'))
-        .joinToString(" · ")
+    return listOfNotNull(
+        who,
+        bond,
+        plan.setting.takeIf { it.isNotBlank() }?.substringBefore(';'),
+    ).joinToString(" · ")
 }
 
 private fun roleLabel(role: PersonRole): String = when (role) {
