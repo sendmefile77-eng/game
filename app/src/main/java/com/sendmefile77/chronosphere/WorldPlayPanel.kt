@@ -27,7 +27,6 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.evolution.EvolutionState
 import com.sendmefile77.chronosphere.evolution.PlayerEvolutionInterventionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
-import com.sendmefile77.chronosphere.llm.LocalLlmWorldAdvisorCard
 import com.sendmefile77.chronosphere.people.PeopleState
 
 /**
@@ -58,12 +57,9 @@ internal fun WorldPlayPanel(
         pendingDecisionTitle = pendingDecisionTitle,
     )
     val neighbors = briefing.neighbors
-    val ruler = peopleState.ruler(civilization.id)
-    val societyProfile = peopleState.profile(civilization.id)
     var actionNonce by remember(session.state.tick) { mutableIntStateOf(0) }
     var showDiplomacy by remember(civilization.id) { mutableStateOf(false) }
     var showEvolution by remember(civilization.id) { mutableStateOf(false) }
-    var showDetails by remember(civilization.id) { mutableStateOf(false) }
     var selectedCounterpartId by remember(civilization.id, session.state.tick, civilizationCount) {
         mutableStateOf(GameSituation.defaultCounterpartId(session.state, civilization.id))
     }
@@ -358,84 +354,6 @@ internal fun WorldPlayPanel(
             }
         }
     }
-
-    PanelCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Деталі держави", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Правитель · культура · устрій · Qwen",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { showDetails = !showDetails }) {
-                    Text(if (showDetails) "Згорнути" else "Відкрити")
-                }
-            }
-
-            if (showDetails) {
-                ruler?.let {
-                    InfoLine("Правитель", "${it.name} · ${it.ageYearsAt(session.state.tick)} р.")
-                }
-                val cultureTags = (civilization.cultureTags + societyProfile?.tags.orEmpty())
-                    .asSequence()
-                    .filterNot { it.startsWith("era-choice:") || it.startsWith("foundation:") || it.startsWith("policy:") || it.startsWith("hist:") }
-                    .distinct()
-                    .take(8)
-                    .map(::displayTag)
-                    .toList()
-                InfoLine(
-                    "Культура",
-                    cultureTags.joinToString(" · ").ifBlank { "Власна традиція ще формується" },
-                )
-                societyProfile?.let {
-                    InfoLine("Соціальна напруга", String.format("%.0f%%", it.socialTension.coerceIn(0.0, 1.0) * 100.0))
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MetricTile("Розвиток", qualityBand(civilization.technology), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
-                    if (economy != null) {
-                        MetricTile("Ресурси", shortageBand(economy.shortageIndex), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
-                        MetricTile("Торгівля", tradeBand(economy.tradeBalance), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
-                    }
-                }
-                if (representativeLineage != null) {
-                    val body = representativeLineage.bodyPlan
-                    InfoLine(
-                        "Біологія",
-                        buildString {
-                            append(representativeLineage.label)
-                            append(" · рук ").append(body.armPairs * 2)
-                            append(" · ніг ").append(body.legPairs * 2)
-                            append(" · очей ").append(body.eyeCount)
-                            if (body.hasTail) append(" · хвіст")
-                        },
-                    )
-                }
-
-                StateInstitutionPanel(
-                    state = session.state,
-                    civilization = civilization,
-                    hasPendingDecision = pendingDecisionTitle != null,
-                    isAdvancing = isAdvancing,
-                    onQueue = ::queueAction,
-                )
-
-                LocalLlmWorldAdvisorCard(
-                    state = session.state,
-                    civilization = civilization,
-                    economyState = economyState,
-                    briefing = briefing,
-                    enabled = !isAdvancing,
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -455,11 +373,6 @@ private fun CompactCommandButton(
         Text(label, maxLines = 1)
     }
 }
-
-private fun displayTag(value: String): String = value
-    .substringAfter(':', value)
-    .replace('_', ' ')
-    .replace('-', ' ')
 
 private fun qualityBand(value: Double): String = when {
     value >= 0.78 -> "висока"
