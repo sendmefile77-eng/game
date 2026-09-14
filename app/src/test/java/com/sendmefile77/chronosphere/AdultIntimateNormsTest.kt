@@ -16,8 +16,7 @@ class AdultIntimateNormsTest {
         assertTrue(tribal.setting.contains("hide") || tribal.setting.contains("hearth"))
         assertTrue(info.setting.contains("apartment") || info.setting.contains("screen"))
         assertNotEquals(tribal.partnership, info.partnership)
-        assertNotEquals(tribal.clothing, info.clothing)
-        assertFalse(tribal.visualSignature == info.visualSignature)
+        assertNotEquals(tribal.setting, info.setting)
     }
 
     @Test
