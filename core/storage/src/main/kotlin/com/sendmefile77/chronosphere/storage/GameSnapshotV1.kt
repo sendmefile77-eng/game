@@ -41,7 +41,7 @@ object GameSnapshotV1 {
             appendLine(listOf("ALLY", esc(a.id), esc(a.civilizationA), esc(a.civilizationB), a.startedTick).joinToString("\t"))
         }
         state.taxPolicies.forEach { policy ->
-            appendLine(listOf("TAX", esc(policy.civilizationId), policy.kind.name, policy.changedTick).joinToString("\t"))
+            appendLine(listOf("TAX", esc(policy.civilizationId), policy.kind.name, policy.changedTick, policy.playerPriorityUntilTick).joinToString("\t"))
         }
         state.eliteFactions.forEach { faction ->
             appendLine(listOf("ELITE", esc(faction.id), esc(faction.civilizationId), faction.kind.name, faction.influence, faction.loyalty, faction.lastUpdatedTick).joinToString("\t"))
@@ -104,7 +104,12 @@ object GameSnapshotV1 {
         }
         val taxPolicies = rows.filter { it.startsWith("TAX\t") }.map { row ->
             val p = row.split('\t')
-            CivilizationTaxPolicy(unesc(p[1]), TaxPolicyKind.valueOf(p[2]), p[3].toLong())
+            CivilizationTaxPolicy(
+                civilizationId = unesc(p[1]),
+                kind = TaxPolicyKind.valueOf(p[2]),
+                changedTick = p[3].toLong(),
+                playerPriorityUntilTick = p.getOrElse(4) { "0" }.toLong(),
+            )
         }
         val eliteFactions = rows.filter { it.startsWith("ELITE\t") }.map { row ->
             val p = row.split('\t')
