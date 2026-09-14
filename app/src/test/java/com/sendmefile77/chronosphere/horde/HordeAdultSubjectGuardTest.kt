@@ -22,4 +22,26 @@ class HordeAdultSubjectGuardTest {
         assertFalse(assembled.contains("animal pen margin"))
         assertTrue(assembled.contains("human") || assembled.contains("leather") || assembled.contains("shelter"))
     }
+
+    @Test
+    fun personLockAllowsChimeraAndForbidsQuadrupedSubject() {
+        assertTrue(HordeAdultSubjectGuard.PERSON_LOCK.contains("chimera"))
+        assertTrue(HordeAdultSubjectGuard.PERSON_LOCK.contains("never a quadruped"))
+        assertTrue(HordeAdultSubjectGuard.looksChimeric("exactly 4 arms, visible anatomical tail, natural scales"))
+        assertFalse(HordeAdultSubjectGuard.looksChimeric("fair skin, long wavy hair"))
+        assertFalse(HordeAdultSubjectGuard.animalSubjectNegatives(chimeric = true).contains("furry"))
+        assertTrue(HordeAdultSubjectGuard.animalSubjectNegatives(chimeric = false).contains("furry"))
+    }
+
+    @Test
+    fun identityFragmentKeepsFaceAndMorphology() {
+        val fragment = HordeAdultSubjectGuard.identityFragment(
+            "female, olive skin, dark brown long wavy hair, hazel eyes, oval face, athletic build, exactly 4 arms, clearly visible anatomical tail",
+        )
+        assertTrue(fragment.contains("olive skin"))
+        assertTrue(fragment.contains("dark brown long wavy hair"))
+        assertTrue(fragment.contains("hazel eyes"))
+        assertTrue(fragment.contains("exactly 4 arms"))
+        assertTrue(fragment.contains("tail"))
+    }
 }
