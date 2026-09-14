@@ -6,6 +6,8 @@ import com.sendmefile77.chronosphere.civilization.CivilizationTaxPolicy
 import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
 import com.sendmefile77.chronosphere.civilization.EliteFactionKind
 import com.sendmefile77.chronosphere.civilization.EliteFactionState
+import com.sendmefile77.chronosphere.civilization.InstitutionKind
+import com.sendmefile77.chronosphere.civilization.InstitutionState
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.ProvinceState
 import com.sendmefile77.chronosphere.civilization.RebellionState
@@ -49,6 +51,9 @@ object GameSnapshotV1 {
         }
         state.rebellions.forEach { rebellion ->
             appendLine(listOf("REB", esc(rebellion.id), esc(rebellion.civilizationId), esc(rebellion.provinceId), rebellion.startedTick, rebellion.lastUpdatedTick, rebellion.severity, rebellion.status.name, rebellion.endedTick?.toString().orEmpty()).joinToString("\t"))
+        }
+        state.institutions.forEach { institution ->
+            appendLine(listOf("INST", esc(institution.id), esc(institution.civilizationId), institution.kind.name, institution.capacity, institution.legitimacy, institution.lastUpdatedTick).joinToString("\t"))
         }
         state.recentEvents.forEach { event ->
             appendLine(
@@ -138,6 +143,17 @@ object GameSnapshotV1 {
                 endedTick = p.getOrElse(8) { "" }.takeIf { it.isNotBlank() }?.toLong(),
             )
         }
+        val institutions = rows.filter { it.startsWith("INST\t") }.map { row ->
+            val p = row.split('\t')
+            InstitutionState(
+                id = unesc(p[1]),
+                civilizationId = unesc(p[2]),
+                kind = InstitutionKind.valueOf(p[3]),
+                capacity = p[4].toDouble(),
+                legitimacy = p[5].toDouble(),
+                lastUpdatedTick = p[6].toLong(),
+            )
+        }
         val events = rows.filter { it.startsWith("EVT\t") }.map { row ->
             val p = row.split('\t')
             require(p.size >= 8) { "Malformed EVT row" }
@@ -164,6 +180,7 @@ object GameSnapshotV1 {
             eliteFactions = eliteFactions,
             provinces = provinces,
             rebellions = rebellions,
+            institutions = institutions,
         )
     }
 
