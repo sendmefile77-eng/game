@@ -4,7 +4,7 @@ import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
-internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v13"
+internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v14"
 internal const val CHARACTER_REFERENCE_CACHE_SCHEMA = "horde-character-reference-v5"
 
 object HordeResolvedScenePromptFactory {
@@ -106,7 +106,11 @@ object HordeResolvedScenePromptFactory {
             add("detailed realistic face attached naturally to the body")
             add("high-frequency skin and hair detail, visible pores and natural texture, crisp eyes and facial features")
             add("realistic skin, hair, fabric and material detail")
-            add("natural standing or seated pose with believable weight and posture")
+            if (undressed) {
+                add("confident sensual full-body pose, hips and torso deliberately presented to camera, direct erotic gaze, sexually charged posture rather than a neutral fashion stance")
+            } else {
+                add("natural standing or seated pose with believable weight and posture")
+            }
             add("documentary cinematic realism, not a sculpture, mannequin or 3D character render")
             add("environment and objects strictly consistent with the technological era")
             if (ageYears < 18) add("strictly nonsexual age-appropriate presentation")
@@ -156,6 +160,9 @@ object HordeResolvedScenePromptFactory {
                 add("fabric over hips")
                 add("tasteful implied nude")
                 add("artistic shadow covering genitals")
+                add("cute pose")
+                add("innocent expression")
+                add("shy schoolgirl pose")
             }
             if (ageYears < 18) {
                 add("nudity")
