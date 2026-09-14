@@ -1,5 +1,12 @@
 package com.sendmefile77.chronosphere.horde
 
+import com.sendmefile77.chronosphere.AdultActionParticipant
+import com.sendmefile77.chronosphere.AdultActionPlan
+import com.sendmefile77.chronosphere.AdultActionType
+import com.sendmefile77.chronosphere.economy.TechnologyEra
+import com.sendmefile77.chronosphere.people.BiologicalSex
+import com.sendmefile77.chronosphere.scene.ResolvedScene
+import com.sendmefile77.chronosphere.scene.WardrobeState
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,6 +24,29 @@ class LocalDreamIllustriousPromptTest {
     @After
     fun restoreDefault() {
         LocalDreamModelPackRuntime.select(LocalDreamModelPacks.illustrious)
+    }
+
+    @Test
+    fun selectedFootjobStaysFootjobAcrossFactoryAndLocalDream() {
+        val plan = AdultActionPlan(
+            type = AdultActionType.FOOTJOB,
+            sequence = 1,
+            primary = AdultActionParticipant("adult-a", "A", 28, BiologicalSex.FEMALE),
+            partner = AdultActionParticipant("adult-b", "B", 31, BiologicalSex.MALE),
+        )
+        val horde = HordeAdultActionPromptFactory.create(
+            scene = adultScene(),
+            plan = plan,
+            technologyEra = TechnologyEra.TRIBAL,
+        )
+        val local = LocalDreamIllustriousPrompt.apply(horde)
+
+        assertTrue(horde.positivePrompt.startsWith("FOOTJOB:"))
+        assertTrue(local.positivePrompt.contains("footjob"))
+        assertTrue(local.positivePrompt.contains("bare feet"))
+        assertFalse(local.positivePrompt.contains("blowjob"))
+        assertTrue(local.negativePrompt.contains("blowjob"))
+        assertTrue(local.positivePrompt.contains("prehistoric tribal camp"))
     }
 
     @Test
@@ -147,4 +177,20 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.saveResultAsReference)
         assertTrue(local.referenceCacheKey?.contains("safe-information-ruler") == true)
     }
+
+    private fun adultScene() = ResolvedScene(
+        "card",
+        "card.undressed.human",
+        "base",
+        1,
+        "card",
+        WardrobeState.UNDRESSED,
+        "rig.human.card",
+        "pose.card.neutral",
+        "bg.card.neutral",
+        "cam.card.full",
+        "light.card.soft",
+        emptyList(),
+        false,
+    )
 }
