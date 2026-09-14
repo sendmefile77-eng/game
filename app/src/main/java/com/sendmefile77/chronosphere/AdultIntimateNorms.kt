@@ -21,6 +21,11 @@ data class AdultIntimateNorms(
     val affairChance: Double,
     val fertilityEmphasis: Double,
     val scandalSensitivity: Double,
+    val courtship: String = "",
+    val eliteVsCommon: String = "",
+    val clothing: String = "",
+    val conflict: String = "",
+    val visualSignature: String = "",
 ) {
     enum class PartnershipForm { CAMP_SHARE, HOUSEHOLD, RANKED_HOUSEHOLD, MONOGAMOUS, SERIAL, NETWORKED }
     enum class BodyPublicness { SHARED_CIRCLE, YARD, RANK_GATED, PRIVATE_ROOM, MEDIATED, MODULE }
@@ -45,26 +50,29 @@ data class AdultIntimateNorms(
             val lowered = tags.map { it.lowercase() }.toSet()
 
             val acts = base.allowedActs.toMutableList()
-            if (piety >= 0.72 || "puritan" in lowered || "cloister" in lowered) {
+            if (piety >= 0.72 || hasAny(lowered, "puritan", "cloister", "policy:ritual_culture")) {
                 acts.removeAll(listOf(AdultActionType.BUKKAKE, AdultActionType.BDSM, AdultActionType.FUTANARI_ORGASM))
             }
             if (openness < 0.28 && privacy >= 0.62) {
                 acts.remove(AdultActionType.BUKKAKE)
             }
-            if (openness >= 0.72 || "publicness:communal" in lowered || "body-norm:painted-nude" in lowered) {
+            if (openness >= 0.72 || hasAny(lowered, "publicness:communal", "body-norm:painted-nude", "policy:seasonal_fairs")) {
                 if (AdultActionType.VAGINAL !in acts) acts.add(0, AdultActionType.VAGINAL)
             }
             if (role == PersonRole.CLERGY && piety >= 0.55) {
                 acts.removeAll(listOf(AdultActionType.BUKKAKE, AdultActionType.BDSM))
             }
-            if (role == PersonRole.GENERAL || "war" in lowered || "martial" in lowered) {
+            if (role == PersonRole.GENERAL || hasAny(lowered, "war", "martial", "policy:warrior_elite", "at_war")) {
                 if (AdultActionType.BDSM !in acts) acts += AdultActionType.BDSM
+            }
+            if (hasAny(lowered, "policy:open_networks", "policy:broadcast_society") && AdultActionType.MASTURBATION !in acts) {
+                acts += AdultActionType.MASTURBATION
             }
             if (acts.isEmpty()) acts += AdultActionType.VAGINAL
 
             val partnership = when {
                 pair >= 0.72 && jealousy >= 0.6 -> PartnershipForm.MONOGAMOUS
-                era in setOf(TechnologyEra.INFORMATION) && privacy < 0.4 -> PartnershipForm.NETWORKED
+                era == TechnologyEra.INFORMATION && privacy < 0.4 -> PartnershipForm.NETWORKED
                 hierarchy >= 0.7 && era in setOf(TechnologyEra.MEDIEVAL, TechnologyEra.METALLURGIC, TechnologyEra.AGRARIAN) ->
                     PartnershipForm.RANKED_HOUSEHOLD
                 era == TechnologyEra.TRIBAL -> PartnershipForm.CAMP_SHARE
@@ -91,14 +99,19 @@ data class AdultIntimateNorms(
                 era = era,
                 partnership = partnership,
                 bodyPublicness = publicness,
-                setting = settingLine(era, publicness),
+                setting = settingLine(era, publicness, role),
                 mood = moodLine(era, role, openness, piety),
-                tabooSummary = tabooLine(era, piety, openness),
+                tabooSummary = tabooLine(era, piety, openness, lowered),
                 allowedActs = acts.distinct(),
                 preferredBond = if (pair >= 0.6) RelationshipKind.PARTNER else RelationshipKind.LOVER,
                 affairChance = affair,
                 fertilityEmphasis = fertility,
                 scandalSensitivity = scandal,
+                courtship = courtshipLine(era, pair, hierarchy),
+                eliteVsCommon = eliteLine(era, hierarchy, role),
+                clothing = clothingLine(era, publicness, openness),
+                conflict = conflictLine(era, piety, jealousy, lowered),
+                visualSignature = visualLine(era, publicness),
             )
         }
 
@@ -153,31 +166,39 @@ data class AdultIntimateNorms(
                 era = era,
                 partnership = partnership,
                 bodyPublicness = publicness,
-                setting = settingLine(era, publicness),
+                setting = settingLine(era, publicness, null),
                 mood = moodLine(era, null, 0.5, 0.5),
-                tabooSummary = tabooLine(era, 0.5, 0.5),
+                tabooSummary = tabooLine(era, 0.5, 0.5, emptySet()),
                 allowedActs = acts,
                 preferredBond = RelationshipKind.PARTNER,
                 affairChance = 0.2,
                 fertilityEmphasis = 0.5,
                 scandalSensitivity = 0.4,
+                courtship = courtshipLine(era, 0.55, 0.45),
+                eliteVsCommon = eliteLine(era, 0.45, null),
+                clothing = clothingLine(era, publicness, 0.5),
+                conflict = conflictLine(era, 0.5, 0.45, emptySet()),
+                visualSignature = visualLine(era, publicness),
             )
         }
 
-        private fun settingLine(era: TechnologyEra?, publicness: BodyPublicness): String = when (era) {
-            TechnologyEra.TRIBAL -> when (publicness) {
-                BodyPublicness.SHARED_CIRCLE -> "hide tent and hearth circle, camp-mates may remain nearby"
-                else -> "inner hide sleeping shelter, packed earth, stacked furs"
+        private fun settingLine(era: TechnologyEra?, publicness: BodyPublicness, role: PersonRole?): String {
+            val rank = if (role == PersonRole.RULER || role == PersonRole.HEIR) "elite chamber of this age, " else ""
+            return rank + when (era) {
+                TechnologyEra.TRIBAL -> when (publicness) {
+                    BodyPublicness.SHARED_CIRCLE -> "hide tent and hearth circle, camp-mates may remain nearby"
+                    else -> "inner hide sleeping shelter, packed earth, stacked furs"
+                }
+                TechnologyEra.AGRARIAN -> "household bed off the yard, grain baskets and field tools in reach"
+                TechnologyEra.URBAN -> "craft-quarter room above the street, clay lamps, market cloth"
+                TechnologyEra.METALLURGIC -> "workshop dwelling beside the forge, soot and rank metal"
+                TechnologyEra.MEDIEVAL -> "timber solar or rope-bed chamber, estate rank at the door"
+                TechnologyEra.EARLY_INDUSTRIAL, TechnologyEra.INDUSTRIAL -> "rented tenement room, brick, after-shift quiet"
+                TechnologyEra.ELECTRIC -> "wired apartment, ceiling bulb, radio in the corner"
+                TechnologyEra.INFORMATION -> "ordinary current apartment, screens face-down, city window"
+                TechnologyEra.SPACEFARING -> "sealed crew cabin, padded bulkheads, oval viewport"
+                null -> "era-correct private shelter"
             }
-            TechnologyEra.AGRARIAN -> "household bed off the yard, grain baskets and field tools in reach"
-            TechnologyEra.URBAN -> "craft-quarter room above the street, clay lamps, market cloth"
-            TechnologyEra.METALLURGIC -> "workshop dwelling beside the forge, soot and rank metal"
-            TechnologyEra.MEDIEVAL -> "timber solar or rope-bed chamber, estate rank at the door"
-            TechnologyEra.EARLY_INDUSTRIAL, TechnologyEra.INDUSTRIAL -> "rented tenement room, brick, after-shift quiet"
-            TechnologyEra.ELECTRIC -> "wired apartment, ceiling bulb, radio in the corner"
-            TechnologyEra.INFORMATION -> "ordinary current apartment, screens face-down, city window"
-            TechnologyEra.SPACEFARING -> "sealed crew cabin, padded bulkheads, oval viewport"
-            null -> "era-correct private shelter"
         }
 
         private fun moodLine(era: TechnologyEra?, role: PersonRole?, openness: Double, piety: Double): String {
@@ -199,13 +220,67 @@ data class AdultIntimateNorms(
             return listOfNotNull(roleMood, eraMood).joinToString(", ")
         }
 
-        private fun tabooLine(era: TechnologyEra?, piety: Double, openness: Double): String = when {
+        private fun tabooLine(era: TechnologyEra?, piety: Double, openness: Double, tags: Set<String>): String = when {
             piety >= 0.75 && openness < 0.4 -> "public display and rank-mixing sex are punished"
+            hasAny(tags, "policy:ritual_culture", "puritan") -> "rite and kinship decide who may be seen unclothed"
             era == TechnologyEra.MEDIEVAL -> "estate rank decides who may watch or speak of it"
             era == TechnologyEra.TRIBAL -> "the camp treats bodies as ordinary, not hidden"
             era == TechnologyEra.INFORMATION -> "the feed can turn a private act into a civic fact"
             else -> "norms follow this society's piety and privacy"
         }
+
+        private fun courtshipLine(era: TechnologyEra?, pair: Double, hierarchy: Double): String = when {
+            hierarchy >= 0.7 && era in setOf(TechnologyEra.MEDIEVAL, TechnologyEra.METALLURGIC) ->
+                "match arranged through house and dowry before the bed is used"
+            pair >= 0.7 -> "long pairing, gifts and shared work before sex"
+            era == TechnologyEra.TRIBAL -> "shared heat and visible pairing inside the camp"
+            era == TechnologyEra.INFORMATION -> "messages and short meetings before the apartment"
+            else -> "ordinary courtship of this age before the act"
+        }
+
+        private fun eliteLine(era: TechnologyEra?, hierarchy: Double, role: PersonRole?): String = when {
+            role == PersonRole.RULER || role == PersonRole.HEIR ->
+                "dynastic bed is a political room, not only a private one"
+            hierarchy >= 0.7 -> "rank keeps a closed room; common people use yard, loft or rented bed"
+            era == TechnologyEra.TRIBAL -> "almost no elite privacy: the fire is shared"
+            else -> "rank shades the room more than the act"
+        }
+
+        private fun clothingLine(era: TechnologyEra?, publicness: BodyPublicness, openness: Double): String = when {
+            publicness == BodyPublicness.SHARED_CIRCLE || openness >= 0.78 -> when (era) {
+                TechnologyEra.TRIBAL -> "ochre, hide straps, bodies otherwise bare"
+                TechnologyEra.AGRARIAN -> "work cloth dropped at the threshold"
+                else -> "clothing left in a heap, skin as the public fact"
+            }
+            era == TechnologyEra.MEDIEVAL -> "linen and wool peeled to the rope bed"
+            era == TechnologyEra.METALLURGIC -> "soot-stained work cloth, apron off beside the forge"
+            era == TechnologyEra.INDUSTRIAL || era == TechnologyEra.EARLY_INDUSTRIAL -> "factory shift clothes on a chair"
+            era == TechnologyEra.SPACEFARING -> "crew undersuit peeled to webbing"
+            else -> "era-correct underclothes discarded before contact"
+        }
+
+        private fun conflictLine(era: TechnologyEra?, piety: Double, jealousy: Double, tags: Set<String>): String = when {
+            hasAny(tags, "at_war", "war", "martial") -> "homecoming urgency, kit still in reach"
+            piety >= 0.7 && jealousy >= 0.6 -> "discovery would cost name and standing"
+            era == TechnologyEra.INFORMATION -> "a recording or a neighbor can make this civic"
+            else -> "ordinary risk of being overheard"
+        }
+
+        private fun visualLine(era: TechnologyEra?, publicness: BodyPublicness): String = when (era) {
+            TechnologyEra.TRIBAL -> "smoke hole, ochre traces, stacked hides, bone charms"
+            TechnologyEra.AGRARIAN -> "thatch beams, clay jars, straw pallet, yard light"
+            TechnologyEra.URBAN -> "mudbrick slit window, clay lamp, market cloth"
+            TechnologyEra.METALLURGIC -> "furnace glow, hammered plates, soot on timber"
+            TechnologyEra.MEDIEVAL -> "rope bed, iron candleholder, heavy shutter"
+            TechnologyEra.EARLY_INDUSTRIAL, TechnologyEra.INDUSTRIAL -> "iron bedframe, brick, oil lamp or gas pipe"
+            TechnologyEra.ELECTRIC -> "wired bulb, bakelite radio, wallpaper"
+            TechnologyEra.INFORMATION -> "current apartment fixtures, dark screens, city glass"
+            TechnologyEra.SPACEFARING -> "viewport, padded hatch, cabin webbing"
+            null -> "era-correct props in the same room as the bodies"
+        } + if (publicness == BodyPublicness.SHARED_CIRCLE) ", other adults remain in the same circle" else ""
+
+        private fun hasAny(tags: Set<String>, vararg keys: String): Boolean =
+            keys.any { key -> tags.any { it.contains(key) } }
 
         private fun stableHash(key: String): Long {
             var hash = -3750763034362895579L
