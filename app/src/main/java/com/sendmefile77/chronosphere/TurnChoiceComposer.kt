@@ -16,7 +16,7 @@ internal object TurnChoiceComposer {
     ): ChronicleDecision {
         val fork = historicalDecision ?: CenturyDilemmaCatalog.fromEraDecision(eraDecision)
         val era = EraExperience.eraFromDecision(eraDecision)
-        val chapter = era?.let(EraExperience::chapter)
+        val chapter = era?.let { EraExperience.chapter(it) }
 
         return eraDecision.copy(
             titleUk = eraDecision.titleUk,
