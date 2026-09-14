@@ -11,6 +11,13 @@ internal object HordeHistoricalVisualPrompt {
             .sorted()
             .firstOrNull()
 
+        fun eraRelevant(raw: String): Boolean {
+            val slug = HordeHistoricalTagEra.canonical(raw)
+            val origin = HordeVisualEraChoiceIndex.eraForSlug(slug) ?: return true
+            val era = technologyEra ?: return true
+            return origin.ordinal >= (era.ordinal - 1).coerceAtLeast(0)
+        }
+
         data class EraChoice(val family: String, val slug: String)
 
         val eraChoices = tags.asSequence()
@@ -23,16 +30,16 @@ internal object HordeHistoricalVisualPrompt {
 
         val parts = linkedSetOf<String>()
 
-        // Current way of life first: these families replace the previous choice and therefore
-        // describe what the civilization actually looks like now.
+        // Current ways of life replace their previous family choice, so they describe what the
+        // civilization actually looks like now even if that tradition began centuries ago.
         eraChoices.asSequence()
             .filterNot { it.family == "breakthrough" }
             .sortedBy { it.family }
             .take(3)
             .forEach { parts += HordeDecisionVisualCue.forSlug(it.slug) }
 
-        // Breakthroughs accumulate forever in history. Only recent-era breakthroughs should be
-        // foregrounded, otherwise an industrial civilization keeps receiving stone-age props.
+        // Breakthroughs accumulate forever. Only current/recent-era breakthroughs are foregrounded;
+        // otherwise an industrial civilization keeps receiving stone-age props in every portrait.
         eraChoices.asSequence()
             .filter { it.family == "breakthrough" }
             .filter { HordeVisualEraChoiceIndex.shouldEmphasizeBreakthrough(it.slug, technologyEra) }
@@ -50,10 +57,7 @@ internal object HordeHistoricalVisualPrompt {
         tags.asSequence()
             .filter { it.startsWith("foundation:") }
             .map { it.removePrefix("foundation:") }
-            .filter { value ->
-                val origin = HordeVisualEraChoiceIndex.eraForSlug(value)
-                origin == null || technologyEra == null || origin.ordinal >= (technologyEra.ordinal - 1).coerceAtLeast(0)
-            }
+            .filter(::eraRelevant)
             .sorted()
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forHistoricalTag("foundation:", it) }
@@ -61,12 +65,13 @@ internal object HordeHistoricalVisualPrompt {
         tags.asSequence()
             .filter { it.startsWith("hist:") }
             .map { it.removePrefix("hist:") }
+            .filter(::eraRelevant)
             .sorted()
             .take(2)
             .forEach { parts += HordeDecisionVisualCue.forHistoricalTag("hist:", it) }
 
         // Existing presentation/customisation tags stay compatible. This layer does not define or
-        // reinterpret adult content; it merely preserves the already supplied visual descriptors.
+        // reinterpret adult content; it only preserves descriptors already supplied by that layer.
         value("cloth:")?.let { parts += "clothing/material tradition ${humanize(it)}" }
         value("jewel:")?.let { parts += "jewellery tradition ${humanize(it)}" }
         value("hair:")?.let { parts += "historical hairstyle ${humanize(it)}" }
@@ -80,8 +85,8 @@ internal object HordeHistoricalVisualPrompt {
     }
 
     /**
-     * Compatibility name retained for callers. It now understands both era choices and the new
-     * century dilemmas, so a dilemma's chosen response can drive the Chronicle image as well.
+     * Compatibility name retained for callers. It now understands both era choices and century
+     * dilemmas, so a dilemma response can drive its Chronicle image instead of being text-only.
      */
     fun eraChoiceFragment(choiceId: String?): String = HordeDecisionVisualCue.forChoiceId(choiceId)
 
@@ -98,7 +103,7 @@ internal object HordeHistoricalVisualPrompt {
 
     private fun humanize(value: String): String = value.replace('_', ' ').replace('-', ' ').replace('+', ' ')
 
-    private const val SIGNATURE_SCHEMA = "material-visual-v2"
+    private const val SIGNATURE_SCHEMA = "material-visual-v3"
     private const val MAX_PARTS = 11
 
     private val PREFIXES = listOf(
