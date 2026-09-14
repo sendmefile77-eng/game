@@ -10,12 +10,22 @@ import com.sendmefile77.chronosphere.people.SocialProfile
 
 enum class AdultActionType {
     FOOTJOB,
+    HANDJOB,
     ORAL,
+    CUNNILINGUS,
+    SIXTY_NINE,
     VAGINAL,
     ANAL,
+    PAIZURI,
+    SCISSORING,
+    MUTUAL_MASTURBATION,
     BUKKAKE,
+    FACIAL,
+    CREAMPIE,
     MASTURBATION,
     BDSM,
+    MMF,
+    FFM,
     FUTANARI_ORGASM,
 }
 
@@ -48,9 +58,17 @@ data class AdultActionPlan(
 
     val solo: Boolean get() = partner == null
 
+    val sceneMode: String
+        get() = when (type) {
+            AdultActionType.BUKKAKE, AdultActionType.MMF, AdultActionType.FFM -> "group"
+            AdultActionType.MASTURBATION -> "solo"
+            else -> if (solo) "solo" else "pair"
+        }
+
     val cacheToken: String
         get() = listOf(
             type.name,
+            sceneMode,
             sequence.toString(),
             primary.personId,
             partner?.personId ?: "solo",
@@ -180,11 +198,7 @@ object AdultActionPlanner {
             choose(relatedPeople(RelationshipKind.LOVER), "lover")?.let { return it }
             choose(relatedPeople(RelationshipKind.PARTNER), "partner")?.let { return it }
         }
-        if ((norms?.affairChance ?: 0.2) >= 0.35) {
-            choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
-        } else {
-            choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
-        }
+        choose(relatedPeople(RelationshipKind.ALLY), "ally")?.let { return it }
         choose(
             people.featuredPeople(person.civilizationId, tick)
                 .filter { it.civilizationId == person.civilizationId }
