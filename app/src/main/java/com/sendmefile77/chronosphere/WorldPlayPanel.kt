@@ -188,6 +188,13 @@ internal fun WorldPlayPanel(
         }
     }
 
+    StateInstitutionPanel(
+        state = session.state,
+        civilization = civilization,
+        isAdvancing = isAdvancing,
+        onQueue = ::queueAction,
+    )
+
     if (neighbors.isNotEmpty()) {
         SectionHeader(title = "Дипломатія", eyebrow = "Швидка дія")
         PanelCard {
