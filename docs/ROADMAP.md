@@ -83,6 +83,15 @@
 - [x] G-008 procedural raster pack evaluated and rejected as final visual layer; it is not a release dependency.
 - [ ] High-quality portrait renderer remains a replaceable post-v0.1 presentation layer and must be proven by a real visual prototype before integration.
 
+## Stage 6H — Historical causality and world memory
+- [x] Conservative deterministic cause → consequence links for supported event chains.
+- [x] Persistent historical legacies for war, territorial loss, scarcity, migration, dynastic change, technological transition and population change.
+- [x] Causal memory follows alternate-history branches through `HistoricalMemoryState`.
+- [x] Save/load persists causal links and legacies while remaining compatible with older V1 memory snapshots.
+- [x] Existing Chronicle “ПРИЧИНИ” card reads the active branch's persistent historical memory.
+- [x] Regression tests cover duplicate suppression, war escalation, shortage-driven migration and save round-trips.
+- [ ] Expand causal rules only when the simulation provides a defensible factual relationship; never infer arbitrary story causation from temporal proximity alone.
+
 ## v0.1 Playable milestone
 - [x] Map-first observer sandbox.
 - [x] Time advancement and interventions.
