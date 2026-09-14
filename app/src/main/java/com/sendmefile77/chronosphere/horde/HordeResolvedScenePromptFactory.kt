@@ -42,6 +42,7 @@ object HordeResolvedScenePromptFactory {
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
         val historicalVisual = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
         val historicalSignature = HordeHistoricalVisualPrompt.signature(visualTags)
+        val adultSignature = if (undressed) HordeAdultVisualEnrichment.signature(visualTags) else ""
         val agePhrase = when {
             ageYears < 13 -> "child age $ageYears"
             ageYears < 18 -> "teenager age $ageYears"
@@ -82,6 +83,13 @@ object HordeResolvedScenePromptFactory {
             add(HordeEraVisual.materialCulture(technologyEra))
             add(HordeEraVisual.portraitInterior(technologyEra))
             if (historicalVisual.isNotBlank()) add(historicalVisual)
+            if (undressed) {
+                HordeAdultVisualEnrichment.fragment(
+                    visualTags,
+                    technologyEra,
+                    HordeAdultVisualEnrichment.Kind.PORTRAIT,
+                ).takeIf { it.isNotBlank() }?.let(::add)
+            }
             add(wardrobe)
             add(camera)
             add("one anatomically coherent continuous body")
@@ -164,6 +172,7 @@ object HordeResolvedScenePromptFactory {
             morphology.signature,
             eraSignature,
             historicalSignature,
+            adultSignature,
             ageYears.toString(),
             scene.sceneKey,
             scene.styleId,
