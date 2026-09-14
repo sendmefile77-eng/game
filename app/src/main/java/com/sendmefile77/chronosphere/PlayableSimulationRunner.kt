@@ -2,6 +2,7 @@ package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.adultcontracts.AdultModule
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
+import com.sendmefile77.chronosphere.civilization.InternalPoliticsEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.economy.EconomyEngine
@@ -113,6 +114,7 @@ internal class PlayableSimulationRunner(
                     )
                 }
             }
+            worldState = InternalPoliticsEngine.reconcile(worldState)
             rememberNewEvents(worldState)
             var people = currentPeople
             var economy = currentEconomy
@@ -124,9 +126,11 @@ internal class PlayableSimulationRunner(
                 val fromTick = worldState.tick
 
                 val civilizationNext = HistoricalCommitmentEngine.applyRecurring(
-                    applyConfiguredCultureDynamics(
-                        consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
-                        months = step,
+                    InternalPoliticsEngine.advance(
+                        applyConfiguredCultureDynamics(
+                            consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
+                            months = step,
+                        ),
                     ),
                     months = step,
                 )
@@ -169,7 +173,7 @@ internal class PlayableSimulationRunner(
                     economy = economyAtTick,
                 )
 
-                worldState = societyResult.world
+                worldState = InternalPoliticsEngine.reconcile(societyResult.world)
                 people = societyResult.people.copy(tick = worldState.tick)
                 economy = economyAtTick
                 evolution = evolutionAtTick.copy(tick = worldState.tick)
@@ -290,11 +294,13 @@ internal class PlayableSimulationRunner(
                 .thenByDescending { it.population }
                 .thenBy { it.id },
         )
-        return world.copy(
-            settlements = retained,
-            recentEvents = world.recentEvents.filterNot { event ->
-                event.locationId in removedIds && event.code in NOISY_MINOR_SETTLEMENT_EVENTS
-            }.takeLast(96),
+        return InternalPoliticsEngine.reconcile(
+            world.copy(
+                settlements = retained,
+                recentEvents = world.recentEvents.filterNot { event ->
+                    event.locationId in removedIds && event.code in NOISY_MINOR_SETTLEMENT_EVENTS
+                }.takeLast(96),
+            ),
         )
     }
 
