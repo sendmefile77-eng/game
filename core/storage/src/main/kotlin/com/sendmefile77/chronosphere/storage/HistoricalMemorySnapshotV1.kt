@@ -2,10 +2,14 @@ package com.sendmefile77.chronosphere.storage
 
 import com.sendmefile77.chronosphere.history.CivilizationFoundation
 import com.sendmefile77.chronosphere.history.FoundationKind
+import com.sendmefile77.chronosphere.history.HistoricalCausalLink
+import com.sendmefile77.chronosphere.history.HistoricalCausalRelation
 import com.sendmefile77.chronosphere.history.HistoricalCommitment
 import com.sendmefile77.chronosphere.history.HistoricalCommitmentStatus
 import com.sendmefile77.chronosphere.history.HistoricalConsequence
 import com.sendmefile77.chronosphere.history.HistoricalConsequenceStatus
+import com.sendmefile77.chronosphere.history.HistoricalLegacy
+import com.sendmefile77.chronosphere.history.HistoricalLegacyKind
 import com.sendmefile77.chronosphere.history.HistoricalMemoryState
 import com.sendmefile77.chronosphere.history.HistoricalProcess
 import com.sendmefile77.chronosphere.history.HistoricalProcessKind
@@ -93,6 +97,36 @@ object HistoricalMemorySnapshotV1 {
                 ).joinToString("\t"),
             )
         }
+        state.causalLinks.forEach { link ->
+            appendLine(
+                listOf(
+                    "CAUSAL",
+                    esc(link.id),
+                    packList(link.civilizationIds.sorted()),
+                    esc(link.causeEventId),
+                    esc(link.effectEventId),
+                    link.causeTick,
+                    link.effectTick,
+                    link.relation.name,
+                    esc(link.titleUk),
+                ).joinToString("\t"),
+            )
+        }
+        state.legacies.forEach { legacy ->
+            appendLine(
+                listOf(
+                    "LEGACY",
+                    esc(legacy.id),
+                    packList(legacy.civilizationIds.sorted()),
+                    legacy.kind.name,
+                    esc(legacy.titleUk),
+                    legacy.originTick,
+                    legacy.lastReinforcedTick,
+                    legacy.strength,
+                    packList(legacy.sourceEventIds),
+                ).joinToString("\t"),
+            )
+        }
     }
 
     fun decode(text: String): HistoricalMemoryState {
@@ -168,6 +202,34 @@ object HistoricalMemorySnapshotV1 {
                 endedTick = p[10].takeIf { it.isNotBlank() }?.toLong(),
             )
         }
+        val causalLinks = lines.filter { it.startsWith("CAUSAL\t") }.map { row ->
+            val p = row.split('\t')
+            require(p.size >= 9) { "Malformed CAUSAL row" }
+            HistoricalCausalLink(
+                id = unesc(p[1]),
+                civilizationIds = unpackList(p[2]).toSet(),
+                causeEventId = unesc(p[3]),
+                effectEventId = unesc(p[4]),
+                causeTick = p[5].toLong(),
+                effectTick = p[6].toLong(),
+                relation = HistoricalCausalRelation.valueOf(p[7]),
+                titleUk = unesc(p[8]),
+            )
+        }
+        val legacies = lines.filter { it.startsWith("LEGACY\t") }.map { row ->
+            val p = row.split('\t')
+            require(p.size >= 9) { "Malformed LEGACY row" }
+            HistoricalLegacy(
+                id = unesc(p[1]),
+                civilizationIds = unpackList(p[2]).toSet(),
+                kind = HistoricalLegacyKind.valueOf(p[3]),
+                titleUk = unesc(p[4]),
+                originTick = p[5].toLong(),
+                lastReinforcedTick = p[6].toLong(),
+                strength = p[7].toDouble(),
+                sourceEventIds = unpackList(p[8]),
+            )
+        }
 
         return HistoricalMemoryState(
             worldSeed = worldSeed,
@@ -178,6 +240,8 @@ object HistoricalMemorySnapshotV1 {
             commitments = commitments,
             lastProcessedTick = lastProcessedTick,
             processedEventIdsAtLastTick = processedIds,
+            causalLinks = causalLinks,
+            legacies = legacies,
         )
     }
 

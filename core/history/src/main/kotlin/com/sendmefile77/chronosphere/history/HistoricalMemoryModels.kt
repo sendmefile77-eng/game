@@ -121,6 +121,65 @@ data class HistoricalCommitment(
     }
 }
 
+enum class HistoricalCausalRelation {
+    ESCALATION,
+    RESOLUTION,
+    PRESSURE,
+    DISPLACEMENT,
+    TRANSITION,
+    REINFORCEMENT,
+}
+
+data class HistoricalCausalLink(
+    val id: String,
+    val civilizationIds: Set<String>,
+    val causeEventId: String,
+    val effectEventId: String,
+    val causeTick: Long,
+    val effectTick: Long,
+    val relation: HistoricalCausalRelation,
+    val titleUk: String,
+) {
+    init {
+        require(id.isNotBlank())
+        require(civilizationIds.isNotEmpty())
+        require(causeEventId.isNotBlank() && effectEventId.isNotBlank())
+        require(causeEventId != effectEventId)
+        require(causeTick >= 0L && effectTick >= causeTick)
+        require(titleUk.isNotBlank())
+    }
+}
+
+enum class HistoricalLegacyKind {
+    WAR_MEMORY,
+    TERRITORIAL_MEMORY,
+    SCARCITY_MEMORY,
+    MIGRATION_MEMORY,
+    DYNASTIC_MEMORY,
+    POPULATION_MEMORY,
+    TECHNOLOGICAL_MEMORY,
+}
+
+data class HistoricalLegacy(
+    val id: String,
+    val civilizationIds: Set<String>,
+    val kind: HistoricalLegacyKind,
+    val titleUk: String,
+    val originTick: Long,
+    val lastReinforcedTick: Long,
+    val strength: Double,
+    val sourceEventIds: List<String>,
+) {
+    init {
+        require(id.isNotBlank())
+        require(civilizationIds.isNotEmpty())
+        require(titleUk.isNotBlank())
+        require(originTick >= 0L && lastReinforcedTick >= originTick)
+        require(strength.isFinite() && strength in 0.0..1.0)
+        require(sourceEventIds.isNotEmpty())
+    }
+}
+
 data class HistoricalMemoryState(
     val worldSeed: Long,
     val tick: Long,
@@ -130,6 +189,8 @@ data class HistoricalMemoryState(
     val commitments: List<HistoricalCommitment> = emptyList(),
     val lastProcessedTick: Long = -1L,
     val processedEventIdsAtLastTick: Set<String> = emptySet(),
+    val causalLinks: List<HistoricalCausalLink> = emptyList(),
+    val legacies: List<HistoricalLegacy> = emptyList(),
 ) {
     init {
         require(tick >= 0L)
@@ -144,6 +205,12 @@ data class HistoricalMemoryState(
 
     fun activeCommitmentsFor(civilizationId: String): List<HistoricalCommitment> =
         commitments.filter { it.civilizationId == civilizationId && it.status == HistoricalCommitmentStatus.ACTIVE }
+
+    fun causalLinksFor(civilizationId: String): List<HistoricalCausalLink> =
+        causalLinks.filter { civilizationId in it.civilizationIds }
+
+    fun legaciesFor(civilizationId: String): List<HistoricalLegacy> =
+        legacies.filter { civilizationId in it.civilizationIds }
 }
 
 data class StructuralCommitmentDefinition(

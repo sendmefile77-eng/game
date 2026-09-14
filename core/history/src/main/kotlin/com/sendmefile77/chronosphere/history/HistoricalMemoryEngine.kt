@@ -35,11 +35,20 @@ object HistoricalMemoryEngine {
 
         var processes = base.processes
         var consequences = base.consequences
+        var causalLinks = base.causalLinks
+        var legacies = base.legacies
         newEvents.forEach { event ->
             val civilizationIds = civilizationIds(event, world, people)
             if (civilizationIds.isEmpty()) return@forEach
+            causalLinks = HistoricalProcessReducer.applyEventToCausalLinks(
+                existing = causalLinks,
+                event = event,
+                civilizationIds = civilizationIds,
+                recentEvents = world.recentEvents,
+            )
             processes = HistoricalProcessReducer.applyEventToProcesses(processes, event, civilizationIds, world)
             consequences = HistoricalProcessReducer.applyEventToConsequences(consequences, event, civilizationIds)
+            legacies = HistoricalProcessReducer.applyEventToLegacies(legacies, event, civilizationIds)
         }
 
         processes = HistoricalProcessReducer.ageProcesses(processes, world, economy)
@@ -60,6 +69,8 @@ object HistoricalMemoryEngine {
             commitments = commitments.sortedBy { it.originTick }.takeLast(96),
             lastProcessedTick = newestTick,
             processedEventIdsAtLastTick = newestIds,
+            causalLinks = causalLinks.sortedBy { it.effectTick }.takeLast(192),
+            legacies = legacies.sortedBy { it.lastReinforcedTick }.takeLast(96),
         )
     }
 
@@ -259,5 +270,4 @@ object HistoricalMemoryEngine {
         }
         return result
     }
-
 }
