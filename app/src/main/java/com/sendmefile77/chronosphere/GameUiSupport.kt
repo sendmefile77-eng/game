@@ -23,6 +23,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +42,8 @@ import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.HistoryComparator
 import com.sendmefile77.chronosphere.history.HistoryTimeline
 import com.sendmefile77.chronosphere.history.HistoryWorkspace
+import com.sendmefile77.chronosphere.horde.LocalDreamSettingsCard
+import com.sendmefile77.chronosphere.llm.TellamaSettingsCard
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.simulation.SimulationClock
 import com.sendmefile77.chronosphere.simulation.WorldSeed
@@ -377,6 +383,7 @@ internal fun ChroniclePanel(
     clock: SimulationClock,
     textGenerator: ChronicleTextGenerator,
 ) {
+    var showServices by remember(session.state.worldSeed) { mutableStateOf(false) }
     val names = session.state.civilizations.associate { it.id to it.name }
     SectionHeader(
         title = "Хроніка світу",
@@ -396,6 +403,31 @@ internal fun ChroniclePanel(
         civilizations = session.state.civilizations,
         clock = clock,
     )
+    PanelCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Локальні сервіси", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Генерація зображень і локальний текст",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { showServices = !showServices }) {
+                    Text(if (showServices) "Згорнути" else "Налаштувати")
+                }
+            }
+            if (showServices) {
+                LocalDreamSettingsCard(enabled = true)
+                TellamaSettingsCard(enabled = true)
+            }
+        }
+    }
 }
 
 @Composable
