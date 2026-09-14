@@ -20,10 +20,10 @@ class LocalDreamIllustriousPromptTest {
     }
 
     @Test
-    fun footjobKeepsEraAndDropsPortraitReference() {
+    fun footjobKeepsEraIdentityAndDropsIdlePortraitLanguage() {
         val horde = HordeImageRequest(
-            cacheKey = "horde-adult-action-v8|FOOTJOB:1:adult-a:adult-c",
-            positivePrompt = "FOOTJOB: two nude adult women, one lying back, hide tent, ochre, exact face match, natural standing or seated pose",
+            cacheKey = "horde-adult-action-v10|FOOTJOB:1:adult-a:adult-c",
+            positivePrompt = "FOOTJOB: two nude adult women, one lying back, hide tent, ochre, olive skin, dark brown long wavy hair, hazel eyes, oval face, exact face match, natural standing or seated pose",
             nsfw = true,
             ageYears = 24,
             steps = 24,
@@ -38,17 +38,18 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.positivePrompt.contains("hide tent"))
         assertTrue(local.positivePrompt.contains("ochre"))
         assertTrue(local.positivePrompt.contains("hearth fire"))
-        assertTrue(local.positivePrompt.contains("1girl") || local.positivePrompt.contains("2girls"))
-        assertTrue(local.positivePrompt.contains("adult human") || local.positivePrompt.contains("solo adult"))
+        assertTrue(local.positivePrompt.contains("olive skin"))
+        assertTrue(local.positivePrompt.contains("dark brown long wavy hair"))
+        assertTrue(local.positivePrompt.contains("hazel eyes"))
+        assertTrue(local.positivePrompt.contains("person of this lineage") || local.positivePrompt.contains("adult person"))
         assertFalse(local.positivePrompt.contains("tamed dogs"))
-        assertFalse(local.positivePrompt.contains("exact face match"))
         assertFalse(local.positivePrompt.contains("natural standing"))
         assertTrue(local.negativePrompt.contains("modern bedroom"))
         assertNull(local.referenceCacheKey)
         assertEquals(24, local.steps)
         assertEquals(5.5, local.cfgScale, 0.0001)
         assertEquals(24, horde.steps)
-        assertTrue(local.cacheKey.contains("|ld-illust-v4"))
+        assertTrue(local.cacheKey.contains("|ld-illust-v5"))
         assertFalse(local.cacheKey.contains("|material-v2"))
         assertTrue(local.cacheKey.contains("ld-pack-illustrious"))
     }
@@ -57,7 +58,7 @@ class LocalDreamIllustriousPromptTest {
     fun analDoesNotAskForAKissAndKeepsEra() {
         val local = LocalDreamIllustriousPrompt.apply(
             HordeImageRequest(
-                cacheKey = "horde-adult-action-v8|ANAL:1:a:c",
+                cacheKey = "horde-adult-action-v10|ANAL:1:a:c",
                 positivePrompt = "ANAL SEX: two nude adult women, kissing as fallback, hide tent",
                 nsfw = true,
                 ageYears = 24,
@@ -72,10 +73,28 @@ class LocalDreamIllustriousPromptTest {
     }
 
     @Test
+    fun chimericNudeKeepsExtraLimbsAndDropsFurryNegative() {
+        val local = LocalDreamIllustriousPrompt.apply(
+            HordeImageRequest(
+                cacheKey = "horde-resolved-scene-v13|chimera",
+                positivePrompt = "adult woman, olive skin, exactly 4 arms, clearly visible anatomical tail, natural scales covering the body, hide tent",
+                nsfw = true,
+                ageYears = 28,
+                seed = "seed",
+            ),
+        )
+        assertTrue(local.positivePrompt.contains("exactly 4 arms"))
+        assertTrue(local.positivePrompt.contains("tail"))
+        assertTrue(local.positivePrompt.contains("chimera"))
+        assertFalse(local.negativePrompt.contains("furry"))
+        assertTrue(local.negativePrompt.contains("dog"))
+    }
+
+    @Test
     fun safePortraitKeepsConcreteHistoricalChoicesAfterIllustriousCompression() {
         val local = LocalDreamIllustriousPrompt.apply(
             HordeImageRequest(
-                cacheKey = "horde-resolved-scene-v11|safe-information-ruler",
+                cacheKey = "horde-resolved-scene-v13|safe-information-ruler",
                 positivePrompt = "information-age society, contemporary city street, data-rich civic control rooms and automated public infrastructure, homes and small local spaces functioning as workplaces and classrooms, telepresence screens and reduced commuter traffic, ubiquitous connected devices and public network terminals, fully clothed",
                 nsfw = false,
                 ageYears = 38,
