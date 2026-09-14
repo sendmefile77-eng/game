@@ -4,42 +4,99 @@ package com.sendmefile77.chronosphere.horde
  * Adult-path adapter: historical domestication language from the SFW layer
  * ("tamed dogs", pens, herds) must never become the picture's subject.
  *
+ * A chimera / evolved humanoid *is* a valid subject. A quadruped animal is not.
+ * Erotic overlay must not replace the named face and body identity.
+ *
  * Does not rewrite [HordeDecisionVisualCue] / [LocalDreamMaterialCueBridge].
  * It only sanitizes already-assembled adult/portrait prompts.
  */
 internal object HordeAdultSubjectGuard {
     const val HUMAN_LOCK =
-        "solo adult human as the only subject, complete visible person filling the frame, " +
-            "a human adult body, not an animal, not an empty room"
+        "the only subject is an adult person of this lineage: a human or evolved humanoid chimera " +
+            "standing as a person, complete visible body filling the frame, never a quadruped animal, " +
+            "never an empty room"
+
+    const val PERSON_LOCK = HUMAN_LOCK
+
+    const val CHIMERA_LOCK =
+        "humanoid chimera person as the subject, bipedal adult body, extra limbs or tail or " +
+            "nonhuman covering belong to this one person, not a separate animal in frame"
+
+    const val IDENTITY_LOCK =
+        "keep this specific adult face and body identity; erotic action must not replace the person, " +
+            "same hair, same eyes, same skin, same face shape"
 
     const val EROTIC_LOCK =
-        "explicit adult nude human, visible breasts or chest, visible genitals, erotic body language"
+        "explicit adult nude person, visible breasts or chest, visible genitals, erotic body language"
 
-    val NEGATIVES = listOf(
-        "dog",
-        "puppy",
-        "wolf",
-        "fox",
-        "cat",
-        "horse",
-        "cow",
-        "goat",
-        "sheep",
-        "livestock as subject",
-        "animal only",
-        "animal as the main subject",
-        "no humans",
-        "no person",
-        "empty room",
-        "empty interior",
-        "vacant tent",
-        "still life",
-        "furry",
-        "anthro",
-        "bestiality",
-        "zoophilia",
-        "animal focus",
-    )
+    val NEGATIVES = animalSubjectNegatives(chimeric = false)
+
+    fun animalSubjectNegatives(chimeric: Boolean): List<String> = buildList {
+        addAll(
+            listOf(
+                "dog",
+                "puppy",
+                "wolf as subject",
+                "fox as subject",
+                "cat as subject",
+                "horse as subject",
+                "cow",
+                "goat",
+                "sheep",
+                "livestock as subject",
+                "animal only",
+                "animal as the main subject",
+                "quadruped as subject",
+                "no humans",
+                "no person",
+                "empty room",
+                "empty interior",
+                "vacant tent",
+                "still life",
+                "bestiality",
+                "zoophilia",
+                "animal focus",
+            ),
+        )
+        if (!chimeric) {
+            add("furry")
+            add("anthro")
+        }
+    }
+
+    fun looksChimeric(text: String): Boolean {
+        val source = text.lowercase()
+        return source.contains("exactly 3 arms") ||
+            source.contains("exactly 4 arms") ||
+            source.contains("exactly 6 arms") ||
+            source.contains("exactly 3 legs") ||
+            source.contains("exactly 4 legs") ||
+            source.contains("exactly 3 eyes") ||
+            source.contains("exactly 4 eyes") ||
+            source.contains("anatomical tail") ||
+            source.contains("natural scales") ||
+            source.contains("fine natural fur") ||
+            source.contains("chimera") ||
+            source.contains("nonstandard humanoid")
+    }
+
+    fun identityFragment(source: String): String {
+        val lower = source.lowercase()
+        val bits = linkedSetOf<String>()
+        SKIN.find(lower)?.value?.let(bits::add)
+        HAIR.find(lower)?.value?.let(bits::add)
+        EYES.find(lower)?.value?.let(bits::add)
+        FACE.find(lower)?.value?.let(bits::add)
+        BUILD.find(lower)?.value?.let(bits::add)
+        LIMB.findAll(lower).forEach { bits += it.value }
+        if (lower.contains("anatomical tail")) bits += "visible anatomical tail"
+        when {
+            lower.contains("natural scales") -> bits += "natural scales covering the body"
+            lower.contains("fine natural fur") -> bits += "fine natural fur covering the body"
+            lower.contains("dense natural body hair") -> bits += "dense natural body hair covering"
+        }
+        return bits.joinToString(", ")
+    }
 
     fun sanitize(prompt: String): String {
         var out = prompt
@@ -50,6 +107,20 @@ internal object HordeAdultSubjectGuard {
     }
 
     fun stripAnimalSubject(fragment: String): String = sanitize(fragment)
+
+    private val SKIN = Regex(
+        "fair skin|light olive skin|warm beige skin|olive skin|medium brown skin|deep brown skin",
+    )
+    private val HAIR = Regex(
+        "(?:black|dark brown|chestnut brown|auburn|dark blonde|blonde) " +
+            "(?:long straight|long wavy|shoulder-length wavy|chin-length bob|thick braided|" +
+            "shoulder-length straight|short textured|short wavy|medium-length swept back|" +
+            "close cropped|medium-length curly) hair",
+    )
+    private val EYES = Regex("(?:brown|dark brown|hazel|green|gray|blue) eyes")
+    private val FACE = Regex("(?:oval|angular|round|heart-shaped|long|square) face")
+    private val BUILD = Regex("(?:slender|lean|average|athletic|solid|broad) build")
+    private val LIMB = Regex("exactly \\d+ (?:arms|legs|eyes)")
 
     private val REPLACEMENTS = listOf(
         "tamed dogs or herd animals living beside people, leashes, pens, feed piles and animals assisting daily work"
