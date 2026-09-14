@@ -96,6 +96,7 @@ internal object GameAutoResume {
             val personId = requestedPersonId?.takeIf { id -> people.persons.any { it.id == id } }
             val panel = ui?.optString("panel")
                 ?.let { value -> GamePanel.entries.firstOrNull { it.name == value } }
+                ?.takeUnless { it == GamePanel.HISTORY }
                 ?: GamePanel.WORLD
 
             GameAutoResumeState(
