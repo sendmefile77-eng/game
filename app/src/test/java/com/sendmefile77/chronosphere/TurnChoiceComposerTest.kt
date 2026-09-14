@@ -36,6 +36,17 @@ class TurnChoiceComposerTest {
     }
 
     @Test
+    fun quietCenturyGetsMandatoryEraDilemma() {
+        val combined = TurnChoiceComposer.compose(eraDecision(), null)
+        val historical = combined.options.filterNot(TurnChoiceComposer::isEraOption)
+
+        assertEquals(3, historical.size)
+        assertEquals(1, TurnChoiceComposer.requiredHistoricalSources(combined).size)
+        assertTrue(combined.promptUk.contains("ЦЬОГО СТОЛІТТЯ"))
+        assertTrue(combined.promptUk.contains("Світ біля вогню"))
+    }
+
+    @Test
     fun playerCanSelectOneToThreeEraDirectionsButNeverFour() {
         val decision = eraDecision()
         var selected = emptySet<String>()
@@ -98,6 +109,23 @@ class TurnChoiceComposerTest {
             setOf("event-ruler"),
             selected.mapNotNull { id -> combined.options.firstOrNull { it.id == id }?.sourceEventId }.toSet(),
         )
+    }
+
+    @Test
+    fun focusedEraCourseHitsHarderThanBroadCourse() {
+        val one = EraStrategyBalance.apply(
+            listOf(option("era-tribal-breakthrough-fire", "player-century-choice-1200-civ-a-breakthrough")),
+        )
+        val three = EraStrategyBalance.apply(
+            listOf(
+                option("era-tribal-breakthrough-fire", "player-century-choice-1200-civ-a-breakthrough"),
+                option("era-tribal-subsistence-predator_hunters", "player-century-choice-1200-civ-a-subsistence"),
+                option("era-tribal-society-ritual_culture", "player-century-choice-1200-civ-a-society"),
+            ),
+        )
+
+        assertEquals(0.60, one.single().strength, 0.0001)
+        assertEquals(0.41, three.first().strength, 0.0001)
     }
 
     private fun eraDecision() = ChronicleDecision(
