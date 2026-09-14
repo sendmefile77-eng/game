@@ -14,6 +14,7 @@ import com.sendmefile77.chronosphere.civilization.Settlement
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
 import com.sendmefile77.chronosphere.people.PersonRole
+import com.sendmefile77.chronosphere.people.PersonRelationship
 import com.sendmefile77.chronosphere.people.RelationshipKind
 import com.sendmefile77.chronosphere.people.SocialProfile
 import org.junit.Assert.assertEquals
@@ -69,6 +70,37 @@ class SocietyEngineTest {
         assertEquals(world, result.world)
         assertEquals(people.copy(tick = 12L), result.people)
         assertTrue(result.events.isEmpty())
+    }
+
+    @Test
+    fun closedCultureSkipsNonCadenceYears() {
+        val world = sampleWorld(tick = 24L)
+        val people = samplePeople(tick = 0L).copy(
+            socialProfiles = listOf(
+                samplePeople(tick = 0L).profile("civ-a")!!.copy(bodyOpenness = 0.20),
+            ),
+        )
+        val result = SocietyEngine(RecordingModule()).advance(12L, world, people, null)
+        assertTrue(result.events.isEmpty())
+    }
+
+    @Test
+    fun affairAgainstAPartnerRaisesTension() {
+        val world = sampleWorld(tick = 12L)
+        val base = samplePeople(tick = 0L)
+        val third = NotablePerson("adult-c", "Кара", "civ-a", "city-a", null, -26L * 12L, null, PersonRole.NOTABLE, 0.44, 0.50)
+        val people = base.copy(
+            persons = base.persons + third,
+            relationships = listOf(
+                PersonRelationship("rel-partner-a-c", "adult-a", "adult-c", RelationshipKind.PARTNER, 0.70, 1L),
+            ),
+            socialProfiles = listOf(base.profile("civ-a")!!.copy(pairBonding = 0.20, bodyOpenness = 0.70)),
+        )
+        val result = SocietyEngine(RecordingModule()).advance(0L, world, people, null)
+        assertTrue(result.events.isNotEmpty())
+        assertEquals("scandal", result.events.single().facts["significance"])
+        assertTrue(result.people.profile("civ-a")!!.socialTension > people.profile("civ-a")!!.socialTension)
+        assertTrue(result.people.relationships.any { it.kind == RelationshipKind.RIVAL })
     }
 
     private class RecordingModule : AdultModule {
