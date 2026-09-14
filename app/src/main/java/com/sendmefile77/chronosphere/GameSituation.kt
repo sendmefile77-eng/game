@@ -2,6 +2,10 @@ package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.activeRebellionsFor
+import com.sendmefile77.chronosphere.civilization.internalPressure
+import com.sendmefile77.chronosphere.civilization.provincesFor
+import com.sendmefile77.chronosphere.civilization.taxPolicyFor
 import com.sendmefile77.chronosphere.economy.EconomyState
 
 data class GameObjective(
@@ -44,6 +48,14 @@ object GameSituation {
         val foodPer = food / people.toDouble()
         val hungry = foodPer < 0.45
         val fragile = civilization.stability < 0.38
+        val internalPressure = state.internalPressure(civilization.id)
+        val rebellions = state.activeRebellionsFor(civilization.id)
+        val provinces = state.provincesFor(civilization.id)
+        val worstProvince = provinces.maxByOrNull { it.unrest }
+        val worstProvinceName = worstProvince?.let { province ->
+            state.settlements.firstOrNull { it.id == province.settlementId }?.name
+        }
+        val taxPolicy = state.taxPolicyFor(civilization.id)
         val names = state.civilizations.associate { it.id to it.name }
         val wars = state.wars.mapNotNull { war ->
             when {
@@ -70,6 +82,8 @@ object GameSituation {
 
         val headline = when {
             pendingDecisionTitle != null -> "Історія ${civilization.name} дійшла до розвилки"
+            rebellions.isNotEmpty() -> "${civilization.name}: відкрите повстання${worstProvinceName?.let { " у $it" } ?: ""}"
+            internalPressure >= 0.68 -> "${civilization.name}: провінції й еліти тиснуть на центр"
             wars.isNotEmpty() -> "${civilization.name} у війні з ${wars.joinToString(", ")}"
             hungry -> "${civilization.name} на межі голоду"
             fragile -> "${civilization.name} хитається: низька стабільність"
@@ -78,12 +92,16 @@ object GameSituation {
         val pressure = buildList {
             add("їжа ${foodBand(foodPer)}")
             add("порядок ${stabilityBand(civilization.stability)}")
+            add("внутр. напруга ${pressureBand(internalPressure)}")
+            taxPolicy?.let { add("податки ${String.format("%.0f%%", it.rate * 100.0)}") }
             add("розвиток ${techBand(civilization.technology)}")
             if (economy != null) add("ресурси ${shortageBandLocal(economy.economy(civilization.id)?.shortageIndex)}")
         }.joinToString(" · ")
         val worst = neighbors.minByOrNull { it.relation }
         val hint = when {
             pendingDecisionTitle != null -> "Час призупинено. Відкрий «Хроніку» і обери відповідь на подію."
+            rebellions.isNotEmpty() -> "Відкрите повстання б'є по казні й стабільності. Підтримка порядку дає центру шанс повернути лояльність до того, як регіон відокремиться."
+            internalPressure >= 0.68 -> "Внутрішня напруга небезпечна. Підтримай порядок або зменшуй інші кризи: нестача, війна й високі збори підсилюють провінційне невдоволення."
             hungry -> "Заплануй «Резерви» і запусти час. Потім перевір, чи зникла нестача."
             wars.isNotEmpty() -> "Обери противника: можна виснажити його набігом або спробувати завершити війну миром."
             worst != null && worst.relation < -0.35 -> "Відносини з ${worst.name} небезпечні: посольство знижує напругу, війна відкриває фронт."
@@ -98,7 +116,18 @@ object GameSituation {
             allies = allies,
             neighbors = neighbors,
             latestEvent = latest,
-            objective = objective(state, civilization, foodPer, wars, neighbors, pendingDecisionTitle, rank),
+            objective = objective(
+                state = state,
+                civilization = civilization,
+                foodPer = foodPer,
+                wars = wars,
+                neighbors = neighbors,
+                pendingDecisionTitle = pendingDecisionTitle,
+                rank = rank,
+                internalPressure = internalPressure,
+                rebellions = rebellions.size,
+                worstProvinceName = worstProvinceName,
+            ),
         )
     }
 
@@ -140,6 +169,9 @@ object GameSituation {
         neighbors: List<NeighborStanding>,
         pendingDecisionTitle: String?,
         rank: Int,
+        internalPressure: Double,
+        rebellions: Int,
+        worstProvinceName: String?,
     ): GameObjective {
         val leader = state.civilizations.maxByOrNull { it.population }
         val hostile = neighbors.firstOrNull { !it.atWar && it.relation < -0.45 }
@@ -148,6 +180,18 @@ object GameSituation {
                 title = "Виріши історичну розвилку",
                 detail = pendingDecisionTitle,
                 meter = "час чекає на ваш вибір",
+                complete = false,
+            )
+            rebellions > 0 -> GameObjective(
+                title = "Не дай державі розколотися",
+                detail = "Повстання${worstProvinceName?.let { " у $it" } ?: ""} вже відкрите. Якщо центр не відновить контроль, провінція може створити окрему державу.",
+                meter = "$rebellions активн. повстань · напруга ${String.format("%.0f%%", internalPressure * 100.0)}",
+                complete = false,
+            )
+            internalPressure >= 0.68 -> GameObjective(
+                title = "Заспокой провінції та еліти",
+                detail = "Внутрішня напруга наближається до рівня відкритого заколоту. Війна, нестача й податковий тиск можуть прискорити кризу.",
+                meter = "внутрішня напруга ${String.format("%.0f%%", internalPressure * 100.0)}",
                 complete = false,
             )
             foodPer < 0.45 -> GameObjective(
@@ -208,6 +252,12 @@ object GameSituation {
         "ALLIANCE_FORMED" -> "Створено союз"
         "ALLIANCE_ENDED" -> "Союз розпався"
         "STATE_FOUNDED" -> "Постала нова держава"
+        "SECESSION" -> "Провінція відокремилася"
+        "TAXES_RAISED" -> "Податки підвищено"
+        "TAXES_LOWERED" -> "Податки знижено"
+        "PROVINCIAL_UNREST" -> "Провінційне невдоволення"
+        "REBELLION_STARTED" -> "Почалося повстання"
+        "REBELLION_SUPPRESSED" -> "Повстання придушено"
         "FOOD_SHORTAGE" -> "Нестача їжі"
         "SETTLEMENT_GROWTH" -> "Місто зросло"
         "CITY_CAPTURED" -> "Місто взято"
@@ -228,6 +278,13 @@ object GameSituation {
         value < 0.45 -> "напруга"
         value < 0.70 -> "тримається"
         else -> "міцний"
+    }
+
+    private fun pressureBand(value: Double): String = when {
+        value >= 0.82 -> "розкол"
+        value >= 0.68 -> "критична"
+        value >= 0.48 -> "помітна"
+        else -> "низька"
     }
 
     private fun techBand(value: Double): String = when {
