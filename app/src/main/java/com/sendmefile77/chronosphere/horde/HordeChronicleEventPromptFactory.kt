@@ -54,9 +54,23 @@ object HordeChronicleEventPromptFactory {
             if (choiceVisual.isNotBlank()) {
                 add("the newly chosen way of life must be unmistakably visible in the main action: $choiceVisual")
                 add("show the practical material consequence, not a symbolic icon or caption")
+                if (erotic) {
+                    val adultChoice = HordeAdultDecisionVisualCue.forChoiceId(event.facts["choiceId"])
+                    if (adultChoice.isNotBlank()) {
+                        add("the same choice also shapes the adult custom in this frame: $adultChoice")
+                    }
+                }
             }
             if (erotic) {
                 add(HordeEraVisual.cityErotica(era))
+                val adultOverlay = HordeAdultVisualEnrichment.fragment(
+                    persistentTags,
+                    era,
+                    HordeAdultVisualEnrichment.Kind.CHRONICLE,
+                )
+                if (adultOverlay.isNotBlank()) {
+                    add("adult custom must stay inside this settlement's way of life: $adultOverlay")
+                }
                 add("explicit consensual adult sex in the same frame as ordinary city work")
                 add("nude adult woman and nude adult man, visible breasts, nipples, penis, vagina, wet skin")
                 add("other clothed workers continue their jobs around them, no one shocked")
@@ -88,6 +102,7 @@ object HordeChronicleEventPromptFactory {
                 event.facts["choiceId"].orEmpty(),
                 choiceLabel.orEmpty(),
                 persistentSignature,
+                if (erotic) HordeAdultVisualEnrichment.signature(persistentTags) else "sfw",
                 event.actorIds.sorted().joinToString(","),
                 event.locationId.orEmpty(),
                 if (erotic) "nsfw" else "safe",
