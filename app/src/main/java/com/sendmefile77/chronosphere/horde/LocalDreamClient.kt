@@ -107,31 +107,7 @@ internal class LocalDreamClient(
         )
     }
 
-    private fun probeHealthBlocking(): LocalDreamStatus {
-        val health = probeHealthBlocking()
-        if (health.ok) return LocalDreamStatus.ready(LocalDreamProbeMethod.HEALTH)
-
-        val tokenize = probeTokenizeBlocking()
-        if (tokenize.ok) {
-            return LocalDreamStatus(
-                available = true,
-                probeMethod = LocalDreamProbeMethod.TOKENIZE,
-                detail = "backend відповів через /tokenize; /health недоступний",
-            )
-        }
-
-        val detail = listOfNotNull(health.detail, tokenize.detail)
-            .distinct()
-            .joinToString("; ")
-            .ifBlank { "backend 127.0.0.1:8081 не відповідає; відкрийте Local Dream і запустіть модель" }
-        return LocalDreamStatus(
-            available = false,
-            probeMethod = null,
-            detail = detail.take(MAX_STATUS_DETAIL_CHARS),
-        )
-    }
-
-    private fun probeHealthAttemptBlocking(): ProbeAttempt {
+    private fun probeHealthBlocking(): ProbeAttempt {
         val connection = runCatching {
             openConnection("$baseUrl/health", "GET", PROBE_TIMEOUT_MILLIS)
         }.getOrElse { return ProbeAttempt(false, probeFailureMessage("/health", it)) }
