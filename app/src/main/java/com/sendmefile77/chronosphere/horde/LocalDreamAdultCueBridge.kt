@@ -43,10 +43,10 @@ internal object LocalDreamAdultCueBridge {
         "port-room" to "port room liaison, dock warehouse, short-stay sex",
         "festival sex" to "festival sex just off the gathering, shared food nearby",
         "homecoming or pre-raid" to "homecoming sex, weapons in reach",
-        "tamed dogs" to "solo adult human in a hide shelter, leather straps on a post, no animal in frame",
+        "tamed dogs" to "adult person in a hide shelter, leather straps on a post, no living animal in frame",
         "animal pen" to "human sleeping shelter, adult nude body as the subject",
-        "animal_taming" to "adult human camp sex, domestication gear only as background",
-        "work with animals" to "work-worn adult human body",
-        "herd animals" to "herding tack stored aside, adult human subject",
+        "animal_taming" to "adult camp sex, domestication gear only as background",
+        "work with animals" to "work-worn adult person as the subject",
+        "herd animals" to "herding tack stored aside, adult person as the subject",
     )
 }
