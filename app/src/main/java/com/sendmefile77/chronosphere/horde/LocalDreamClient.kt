@@ -31,6 +31,9 @@ internal class LocalDreamClient(
     @Volatile
     private var availability: AvailabilityCache? = null
 
+    @Volatile
+    private var activeGeneration: ActiveGeneration? = null
+
     suspend fun status(force: Boolean = false): LocalDreamStatus {
         val now = System.nanoTime()
         availability?.takeIf { !force && elapsedMillis(it.checkedAtNanos, now) < AVAILABILITY_TTL_MILLIS }
@@ -42,6 +45,15 @@ internal class LocalDreamClient(
     }
 
     suspend fun isAvailable(force: Boolean = false): Boolean = status(force).available
+
+    /** Immediately drops the active HTTP stream when the owning scene has disappeared. */
+    fun cancelGeneration(cacheKeyPrefix: String) {
+        if (cacheKeyPrefix.isBlank()) return
+        val active = activeGeneration ?: return
+        if (active.cacheKey.startsWith(cacheKeyPrefix)) {
+            active.connection.disconnect()
+        }
+    }
 
     suspend fun generate(
         request: HordeImageRequest,
@@ -95,7 +107,31 @@ internal class LocalDreamClient(
         )
     }
 
-    private fun probeHealthBlocking(): ProbeAttempt {
+    private fun probeHealthBlocking(): LocalDreamStatus {
+        val health = probeHealthBlocking()
+        if (health.ok) return LocalDreamStatus.ready(LocalDreamProbeMethod.HEALTH)
+
+        val tokenize = probeTokenizeBlocking()
+        if (tokenize.ok) {
+            return LocalDreamStatus(
+                available = true,
+                probeMethod = LocalDreamProbeMethod.TOKENIZE,
+                detail = "backend відповів через /tokenize; /health недоступний",
+            )
+        }
+
+        val detail = listOfNotNull(health.detail, tokenize.detail)
+            .distinct()
+            .joinToString("; ")
+            .ifBlank { "backend 127.0.0.1:8081 не відповідає; відкрийте Local Dream і запустіть модель" }
+        return LocalDreamStatus(
+            available = false,
+            probeMethod = null,
+            detail = detail.take(MAX_STATUS_DETAIL_CHARS),
+        )
+    }
+
+    private fun probeHealthAttemptBlocking(): ProbeAttempt {
         val connection = runCatching {
             openConnection("$baseUrl/health", "GET", PROBE_TIMEOUT_MILLIS)
         }.getOrElse { return ProbeAttempt(false, probeFailureMessage("/health", it)) }
@@ -163,6 +199,8 @@ internal class LocalDreamClient(
             doOutput = true
             setRequestProperty("Accept", "text/event-stream, application/json")
         }
+        val active = ActiveGeneration(request.cacheKey, connection)
+        activeGeneration = active
 
         try {
             connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
@@ -195,6 +233,7 @@ internal class LocalDreamClient(
             }
             throw LocalDreamGenerationException("Local Dream завершив потік без готового зображення")
         } finally {
+            if (activeGeneration === active) activeGeneration = null
             connection.disconnect()
         }
     }
@@ -389,6 +428,11 @@ internal class LocalDreamClient(
     private data class AvailabilityCache(
         val checkedAtNanos: Long,
         val status: LocalDreamStatus,
+    )
+
+    private data class ActiveGeneration(
+        val cacheKey: String,
+        val connection: HttpURLConnection,
     )
 
     companion object {
