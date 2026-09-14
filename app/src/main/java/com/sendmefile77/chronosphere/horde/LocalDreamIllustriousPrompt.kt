@@ -32,14 +32,16 @@ internal object LocalDreamIllustriousPrompt {
         val eraPrefix = if (era.isBlank()) "" else "$era, "
         // Non-adult only: keep a few material consequences of the civilization's actual history
         // after Illustrious compresses the much longer documentary prompt. Adult branches below are
-        // intentionally unchanged and remain owned by the separate adult enrichment layer.
+        // owned by the adult enrichment layer and keep a short historical intimacy cue.
         val safeRequest = !action && !request.nsfw
         val safeMaterial = if (safeRequest) LocalDreamMaterialCueBridge.fragment(source) else ""
         val safeMaterialSuffix = if (safeMaterial.isBlank()) "" else ", $safeMaterial"
+        val adultCue = if (!safeRequest) LocalDreamAdultCueBridge.fragment(source) else ""
+        val adultCueSuffix = if (adultCue.isBlank()) "" else ", $adultCue"
         val positive = if (action && act.isNotBlank()) {
-            "$QUALITY, $eraPrefix$people, $act"
+            "$QUALITY, $eraPrefix$people, $act$adultCueSuffix"
         } else if (request.nsfw) {
-            "$QUALITY, ${eraPrefix}$people, standing, nipples, pussy, navel"
+            "$QUALITY, ${eraPrefix}$people, standing, nipples, pussy, navel$adultCueSuffix"
         } else {
             "masterpiece, best quality, ${eraPrefix}$people, fully clothed$safeMaterialSuffix"
         }
