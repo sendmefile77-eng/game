@@ -92,10 +92,10 @@ class HistoricalMemorySnapshotV1Test {
 
     @Test
     fun oldSnapshotWithoutCausalRowsStillLoads() {
-        val legacyV1 = """
-            CHRONOSPHERE_HISTORICAL_MEMORY_V1
-            STATE\t77\t120\t-1\t
-        """.trimIndent()
+        val legacyV1 = listOf(
+            "CHRONOSPHERE_HISTORICAL_MEMORY_V1",
+            "STATE\t77\t120\t-1\t",
+        ).joinToString("\n")
 
         val decoded = HistoricalMemorySnapshotV1.decode(legacyV1)
 
