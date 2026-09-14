@@ -92,6 +92,18 @@
 - [x] Regression tests cover duplicate suppression, war escalation, shortage-driven migration and save round-trips.
 - [ ] Expand causal rules only when the simulation provides a defensible factual relationship; never infer arbitrary story causation from temporal proximity alone.
 
+## Stage 6P — Internal politics and state cohesion
+- [x] Deterministic tax regimes affect treasury, compliance and political pressure.
+- [x] Landholder, merchant, military and bureaucratic elites have independent influence and loyalty.
+- [x] Every settlement has a persistent provincial loyalty, unrest, autonomy and tax-burden state.
+- [x] War, scarcity, distance, taxation and elite disloyalty can produce provincial unrest and rebellion.
+- [x] Mature severe rebellions can become real successor states with transferred settlement, population, treasury and diplomacy.
+- [x] Tax, unrest, rebellion and secession events feed the historical causality / world-memory layer.
+- [x] V1 saves persist internal politics through optional backward-compatible rows.
+- [x] The playable briefing surfaces internal pressure, taxes and rebellion danger.
+- [x] Regression tests cover politics reconciliation, batch independence, secession and save round-trips.
+- [ ] Direct player tax/institution policy controls remain a later extension; autonomous state policy already runs in simulation.
+
 ## v0.1 Playable milestone
 - [x] Map-first observer sandbox.
 - [x] Time advancement and interventions.
