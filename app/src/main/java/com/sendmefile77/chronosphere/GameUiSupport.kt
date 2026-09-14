@@ -23,10 +23,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +62,6 @@ internal fun ChronosphereTopBar(year: Int, branchName: String, onNewWorld: () ->
                         listOf(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
                             Color.Transparent,
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.02f),
                         ),
                     ),
                 )
@@ -74,45 +69,23 @@ internal fun ChronosphereTopBar(year: Int, branchName: String, onNewWorld: () ->
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     "ХРОНОСФЕРА",
                     style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 1.0.sp),
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "$year рік",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text("·", color = MaterialTheme.colorScheme.outline)
-                    Text(
-                        branchName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            TextButton(
-                onClick = onNewWorld,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            ) {
                 Text(
-                    "Новий світ",
+                    "$year рік · $branchName",
                     maxLines = 1,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            TextButton(onClick = onNewWorld, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)) {
+                Text("Новий світ", maxLines = 1, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -134,10 +107,7 @@ internal fun WorldMapSummary(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
         shadowElevation = 3.dp,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 "СВІТ · ${compactNumber(totalPopulation)}",
                 style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.35.sp),
@@ -208,23 +178,13 @@ internal fun MapGestureHint(modifier: Modifier = Modifier) {
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)),
     ) {
-        Column(
+        Text(
+            "МАПА · щипок · 2× огляд",
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            Text(
-                "МАПА",
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.65.sp),
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                "щипок · 2× огляд",
-                maxLines = 1,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+            maxLines = 1,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -252,6 +212,7 @@ internal fun TimeButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Primary navigation deliberately contains only the three things the player repeatedly uses. */
 @Composable
 internal fun GameTabs(selectedPanel: GamePanel, enabled: Boolean, onSelect: (GamePanel) -> Unit) {
     Surface(
@@ -265,16 +226,15 @@ internal fun GameTabs(selectedPanel: GamePanel, enabled: Boolean, onSelect: (Gam
             modifier = Modifier.fillMaxWidth().padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            GameTab("Світ", GamePanel.WORLD, selectedPanel, enabled, onSelect)
+            GameTab("Гра", GamePanel.WORLD, selectedPanel, enabled, onSelect)
             GameTab("Люди", GamePanel.PERSON, selectedPanel, enabled, onSelect)
-            GameTab("Час", GamePanel.HISTORY, selectedPanel, enabled, onSelect)
             GameTab("Хроніка", GamePanel.CHRONICLE, selectedPanel, enabled, onSelect)
         }
     }
 }
 
 @Composable
-internal fun RowScope.GameTab(
+private fun RowScope.GameTab(
     label: String,
     panel: GamePanel,
     selectedPanel: GamePanel,
@@ -285,7 +245,7 @@ internal fun RowScope.GameTab(
     Surface(
         modifier = Modifier
             .weight(1f)
-            .height(48.dp)
+            .height(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled) { onSelect(panel) },
         color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.17f) else Color.Transparent,
@@ -304,8 +264,8 @@ internal fun RowScope.GameTab(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 5.dp)
-                        .width(24.dp)
+                        .padding(bottom = 4.dp)
+                        .width(22.dp)
                         .height(2.dp)
                         .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(100.dp)),
                 )
@@ -342,6 +302,10 @@ internal fun InterventionButton(label: String, modifier: Modifier, enabled: Bool
     ) { Text(label, maxLines = 1) }
 }
 
+/**
+ * Kept for save compatibility and advanced timeline work, but intentionally removed from primary
+ * navigation. Normal play no longer asks the player to manage branches between every century.
+ */
 @Composable
 internal fun HistoryPanel(
     workspace: HistoryWorkspace,
@@ -355,43 +319,21 @@ internal fun HistoryPanel(
     onSave: () -> Unit,
     onLoad: () -> Unit,
 ) {
-    SectionHeader(
-        title = "Машина часу",
-        eyebrow = "Часова лінія",
-    )
+    SectionHeader(title = "Машина часу", eyebrow = "Додатковий інструмент", trailing = "$timeYear")
     PanelCard(accent = MaterialTheme.colorScheme.secondary) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        branchDisplayName(workspace.activeBranch.name),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "${workspace.branches.size} ліній · ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }} збережених моментів",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                StatusPill("активна", color = MaterialTheme.colorScheme.secondary)
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Text(branchDisplayName(workspace.activeBranch.name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "${workspace.branches.size} ліній · ${workspace.checkpoints.count { it.branchId == workspace.activeBranchId }} збережених моментів",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onCheckpoint, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Момент") }
+                OutlinedButton(onClick = onFork, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Нова гілка") }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onCheckpoint, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) {
-                    Text("Зберегти момент")
-                }
-                OutlinedButton(onClick = onFork, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) {
-                    Text("Нова гілка")
-                }
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onRestore, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) {
-                    Text("Повернутися")
-                }
+                OutlinedButton(onClick = onRestore, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Повернутися") }
                 OutlinedButton(
                     onClick = onNextBranch,
                     enabled = !isAdvancing && workspace.branches.size > 1,
@@ -405,33 +347,24 @@ internal fun HistoryPanel(
     val originalState = workspace.branches.firstOrNull { it.id == HistoryTimeline.ROOT_BRANCH_ID }?.state ?: workspace.activeState
     val divergence = HistoryComparator.compare(originalState, session.state)
     PanelCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Відмінність від початкової історії", fontWeight = FontWeight.SemiBold)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Відхилення від початкової історії", fontWeight = FontWeight.SemiBold)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricTile("Населення", signedNumber(divergence.populationDelta), Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
                 MetricTile("Міста", signedNumber(divergence.settlementDelta), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
             }
-            MetricTile(
-                "Технологічний зсув",
-                String.format("%+.3f", divergence.averageTechnologyDelta),
-                Modifier.fillMaxWidth(),
-                MaterialTheme.colorScheme.primary,
+            Text(
+                "Технологічний зсув ${String.format("%+.3f", divergence.averageTechnologyDelta)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 
-    PanelCard(accent = MaterialTheme.colorScheme.primary) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text("Збереження світу", fontWeight = FontWeight.SemiBold)
-            Text(
-                "Зберігаються активний світ і всі часові гілки.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onSave, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Зберегти") }
-                OutlinedButton(onClick = onLoad, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Завантажити") }
-            }
+    PanelCard {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onSave, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Зберегти") }
+            OutlinedButton(onClick = onLoad, enabled = !isAdvancing, modifier = Modifier.weight(1f), shape = ChronosphereSmallShape) { Text("Завантажити") }
         }
     }
 }
@@ -444,15 +377,12 @@ internal fun ChroniclePanel(
     clock: SimulationClock,
     textGenerator: ChronicleTextGenerator,
 ) {
-    var showFacts by remember(session.state.worldSeed) { mutableStateOf(false) }
     val names = session.state.civilizations.associate { it.id to it.name }
-
     SectionHeader(
         title = "Хроніка світу",
-        eyebrow = "Жива історія",
+        eyebrow = "Історія, наслідки й сцени",
         trailing = "${session.state.recentEvents.size} подій",
     )
-
     ChronicleHordeEventCard(
         events = session.state.recentEvents,
         peopleState = peopleState,
@@ -461,44 +391,11 @@ internal fun ChroniclePanel(
         textGenerator = textGenerator,
         civilizationNames = names,
     )
-
     GeneratedImageGalleryPanel(
         worldSeed = session.state.worldSeed,
         civilizations = session.state.civilizations,
         clock = clock,
     )
-
-    PanelCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Літопис фактів", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Технічна довідка, не основна історія.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { showFacts = !showFacts }) { Text(if (showFacts) "Сховати" else "Показати") }
-            }
-            if (showFacts) {
-                val events = session.state.recentEvents.takeLast(8).reversed()
-                if (events.isEmpty()) {
-                    Text("Світ ще не накопичив значущих подій", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    events.forEach { event ->
-                        val eventTime = clock.at(event.tick)
-                        val narrative = ChroniclePresentation.narrative(event, textGenerator)
-                        Text(
-                            "${eventTime.year} · ${narrative.title} — ${narrative.hook}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
