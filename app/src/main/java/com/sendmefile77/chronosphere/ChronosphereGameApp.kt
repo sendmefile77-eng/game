@@ -579,7 +579,7 @@ fun ChronosphereGameApp() {
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        "${selectedEconomy?.era?.displayNameUk ?: "Епоха формується"} · ${time.year} рік",
+                                        selectedEconomy?.era?.displayNameUk ?: "Епоха формується",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
