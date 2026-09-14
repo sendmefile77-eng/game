@@ -3,6 +3,7 @@ package com.sendmefile77.chronosphere
 import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.activeRebellionsFor
+import com.sendmefile77.chronosphere.civilization.institutionStrength
 import com.sendmefile77.chronosphere.civilization.internalPressure
 import com.sendmefile77.chronosphere.civilization.provincesFor
 import com.sendmefile77.chronosphere.civilization.taxPolicyFor
@@ -49,6 +50,7 @@ object GameSituation {
         val hungry = foodPer < 0.45
         val fragile = civilization.stability < 0.38
         val internalPressure = state.internalPressure(civilization.id)
+        val institutionStrength = state.institutionStrength(civilization.id)
         val rebellions = state.activeRebellionsFor(civilization.id)
         val provinces = state.provincesFor(civilization.id)
         val worstProvince = provinces.maxByOrNull { it.unrest }
@@ -94,19 +96,20 @@ object GameSituation {
             add("порядок ${stabilityBand(civilization.stability)}")
             add("внутр. напруга ${pressureBand(internalPressure)}")
             taxPolicy?.let { add("податки ${String.format("%.0f%%", it.rate * 100.0)}") }
+            add("інститути ${institutionBand(institutionStrength)}")
             add("розвиток ${techBand(civilization.technology)}")
             if (economy != null) add("ресурси ${shortageBandLocal(economy.economy(civilization.id)?.shortageIndex)}")
         }.joinToString(" · ")
         val worst = neighbors.minByOrNull { it.relation }
         val hint = when {
             pendingDecisionTitle != null -> "Час призупинено. Відкрий «Хроніку» і обери відповідь на подію."
-            rebellions.isNotEmpty() -> "Відкрите повстання б'є по казні й стабільності. Підтримка порядку дає центру шанс повернути лояльність до того, як регіон відокремиться."
-            internalPressure >= 0.68 -> "Внутрішня напруга небезпечна. Підтримай порядок або зменшуй інші кризи: нестача, війна й високі збори підсилюють провінційне невдоволення."
+            rebellions.isNotEmpty() -> "Відкрите повстання б'є по казні й стабільності. Підтримка порядку та сильні інститути дають центру шанс повернути лояльність до того, як регіон відокремиться."
+            internalPressure >= 0.68 -> "Внутрішня напруга небезпечна. Знижуй кризовий тиск або реформуй слабкі інститути: нестача, війна й високі збори підсилюють провінційне невдоволення."
             hungry -> "Заплануй «Резерви» і запусти час. Потім перевір, чи зникла нестача."
             wars.isNotEmpty() -> "Обери противника: можна виснажити його набігом або спробувати завершити війну миром."
             worst != null && worst.relation < -0.35 -> "Відносини з ${worst.name} небезпечні: посольство знижує напругу, війна відкриває фронт."
-            fragile -> "Заплануй «Порядок» або «Свято» і дай світові час відреагувати."
-            else -> "На хід є одна команда. Можна діяти всередині держави, через дипломатію або просто пропустити час."
+            fragile -> "Заплануй «Порядок», «Свято» або реформу інститутів і дай світові час відреагувати."
+            else -> "На хід є одна команда. Можна змінити податки, реформувати інститути, діяти через дипломатію або просто пропустити час."
         }
         return GameBriefing(
             headline = headline,
@@ -232,7 +235,7 @@ object GameSituation {
             )
             else -> GameObjective(
                 title = "Сформуй власну довгу стратегію",
-                detail = "Гострої кризи немає. Можеш будувати союзи, накопичувати казну, прискорювати розвиток або не втручатися.",
+                detail = "Гострої кризи немає. Можеш будувати союзи, накопичувати казну, змінювати податки, реформувати інститути або не втручатися.",
                 meter = "стабільний період",
                 complete = true,
             )
@@ -247,6 +250,9 @@ object GameSituation {
         "INTERVENTION_WAR_RAID" -> "Набіг"
         "INTERVENTION_FESTIVAL" -> "Свято"
         "INTERVENTION_EMBASSY" -> "Посольство"
+        "INTERVENTION_TAX_LOWER" -> "Податки знижено за рішенням влади"
+        "INTERVENTION_TAX_RAISE" -> "Податки підвищено за рішенням влади"
+        "INTERVENTION_INSTITUTION_REFORM" -> "Проведено інституційну реформу"
         "WAR_STARTED" -> "Оголошено війну"
         "PEACE_TREATY" -> "Укладено мир"
         "ALLIANCE_FORMED" -> "Створено союз"
@@ -285,6 +291,13 @@ object GameSituation {
         value >= 0.68 -> "критична"
         value >= 0.48 -> "помітна"
         else -> "низька"
+    }
+
+    private fun institutionBand(value: Double): String = when {
+        value >= 0.75 -> "сильні"
+        value >= 0.55 -> "стійкі"
+        value >= 0.35 -> "слабкі"
+        else -> "зародкові"
     }
 
     private fun techBand(value: Double): String = when {
