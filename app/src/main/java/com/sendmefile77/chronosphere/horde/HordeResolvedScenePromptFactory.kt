@@ -40,7 +40,7 @@ object HordeResolvedScenePromptFactory {
 
         val identity = HordeCharacterVisualProfile.from(characterKey)
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
-        val historicalVisual = HordeHistoricalVisualPrompt.fragment(visualTags)
+        val historicalVisual = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
         val historicalSignature = HordeHistoricalVisualPrompt.signature(visualTags)
         val agePhrase = when {
             ageYears < 13 -> "child age $ageYears"
