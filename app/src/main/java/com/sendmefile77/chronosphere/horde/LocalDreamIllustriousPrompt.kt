@@ -13,7 +13,8 @@ internal object LocalDreamIllustriousPrompt {
     private const val NEGATIVE =
         "lowres, worst quality, bad anatomy, extra limbs, extra fingers, text, watermark, " +
             "clothed, dress, panties, bra, standing idle, standing side by side, " +
-            "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli, " +
+            "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli, shota, " +
+            "teen, underage, schoolgirl, kawaii, moe, chibi, baby face, childlike face, childlike proportions, " +
             "modern bedroom, drywall, tiled bathroom, porcelain toilet, smartphone, neon lights, " +
             "skyscraper, marble palace, greek columns, office, hospital, empty white background, " +
             "dog, puppy, wolf as subject, livestock, animal only, no humans, empty room, vacant tent, bestiality"
@@ -23,6 +24,10 @@ internal object LocalDreamIllustriousPrompt {
             "floating head, disconnected body, 3d, plastic doll, child, loli, shota, nudity, explicit sex, " +
             "anachronistic props, unexplained modern objects, neon cyberpunk, empty white background, " +
             "dog, puppy, animal only, no humans, empty room, vacant tent"
+
+    private const val ADULT_PRESENTATION =
+        "unmistakably adult woman or man, mature adult facial features, adult body proportions, " +
+            "confident sensual expression, direct erotic gaze, parted lips, sexually charged body language"
 
     fun apply(request: HordeImageRequest): HordeImageRequest {
         val source = request.positivePrompt.lowercase()
@@ -49,6 +54,7 @@ internal object LocalDreamIllustriousPrompt {
         val chimeraLock = if ((!safeRequest || portrait) && chimeric) ", ${HordeAdultSubjectGuard.CHIMERA_LOCK}" else ""
         val identityLock = if (!safeRequest || portrait) ", ${HordeAdultSubjectGuard.IDENTITY_LOCK}" else ""
         val eroticLock = if (!safeRequest) ", ${HordeAdultSubjectGuard.EROTIC_LOCK}" else ""
+        val matureLock = if (!safeRequest) ", $ADULT_PRESENTATION" else ""
         val eraAsBackground = if (!safeRequest || portrait) {
             era.removePrefix("wide shot, ").takeIf { it.isNotBlank() }?.let { "background $it" }.orEmpty()
         } else {
@@ -56,9 +62,9 @@ internal object LocalDreamIllustriousPrompt {
         }
         val eraPrefixSafe = if (eraAsBackground.isBlank()) "" else "$eraAsBackground, "
         val positiveRaw = if (action && act.isNotBlank()) {
-            "$QUALITY, $people$identityBit, $act, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock"
+            "$QUALITY, $people$identityBit, $act, erotic facial expression, active sexual pose, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
         } else if (request.nsfw) {
-            "$QUALITY, $people$identityBit, standing, nipples, pussy, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock"
+            "$QUALITY, $people$identityBit, provocative full-body nude pose, hips angled toward viewer, one hand on thigh or torso, nipples, pussy or penis according to subject, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$chimeraLock$identityLock$eroticLock$matureLock"
         } else {
             "masterpiece, best quality, $people$identityBit, fully clothed, $eraPrefixSafe$safeMaterial$humanLock$chimeraLock"
         }
@@ -73,7 +79,7 @@ internal object LocalDreamIllustriousPrompt {
         }
         val safeCacheSuffix = if (safeRequest) "|material-v2" else ""
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v5$safeCacheSuffix",
+            cacheKey = "${request.cacheKey}|ld-illust-v6$safeCacheSuffix",
             positivePrompt = positive,
             negativePrompt = negative,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
@@ -100,12 +106,12 @@ internal object LocalDreamIllustriousPrompt {
     }
 
     private fun peopleTag(girls: Int, men: Int, action: Boolean, nsfw: Boolean): String = when {
-        girls >= 2 && men <= 0 -> "2girls"
-        girls >= 1 && men >= 3 -> "1girl, multiple boys"
-        girls >= 1 && men >= 1 -> "1girl, 1boy"
-        girls >= 1 -> "1girl"
-        men >= 1 -> "1boy"
-        action || nsfw -> "1girl"
+        girls >= 2 && men <= 0 -> "2girls, adult women"
+        girls >= 1 && men >= 3 -> "1girl, adult woman, multiple adult men"
+        girls >= 1 && men >= 1 -> "1girl, adult woman, 1boy, adult man"
+        girls >= 1 -> "1girl, adult woman"
+        men >= 1 -> "1boy, adult man"
+        action || nsfw -> "1girl, adult woman"
         else -> "1girl"
     }
 
