@@ -1,5 +1,6 @@
 package com.sendmefile77.chronosphere.horde
 
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
@@ -83,6 +84,28 @@ class HordeResolvedScenePromptFactoryTest {
         assertTrue(request.saveResultAsReference)
         assertFalse(request.nsfw)
         assertTrue(request.qualityPriority)
+    }
+
+    @Test
+    fun dressedPortraitCarriesEraAndCivilizationChoicesIntoTheEnvironment() {
+        val request = HordeResolvedScenePromptFactory.create(
+            scene = scene(WardrobeState.DRESSED),
+            characterKey = "person-information-ruler",
+            ageYears = 39,
+            visualTags = setOf(
+                "era-choice:society:algorithmic_governance",
+                "era-choice:mobility:remote_life",
+                "policy:open_networks",
+                "era-choice:breakthrough:fire",
+            ),
+            technologyEra = TechnologyEra.INFORMATION,
+        )
+
+        assertFalse(request.nsfw)
+        assertTrue(request.positivePrompt.contains("civic control rooms"))
+        assertTrue(request.positivePrompt.contains("telepresence"))
+        assertTrue(request.positivePrompt.contains("connected devices"))
+        assertFalse(request.positivePrompt.contains("charred cooking stones"))
     }
 
     @Test
