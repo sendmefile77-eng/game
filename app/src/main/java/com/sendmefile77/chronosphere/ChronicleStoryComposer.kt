@@ -32,7 +32,15 @@ internal object ChroniclePresentation {
         val participants = event.facts["participants"]?.takeIf { it.isNotBlank() }
         val eraName = era?.displayNameUk?.lowercase()
         return when (event.code) {
-            "ADULT_SOCIAL_EVENT" -> adultNarrative(civilization, settlement, participants, event.facts["eventCode"], era)
+            "ADULT_SOCIAL_EVENT" -> adultNarrative(
+                civilization,
+                settlement,
+                participants,
+                event.facts["eventCode"],
+                era,
+                event.facts["scandal"],
+                event.facts["significance"],
+            )
             "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> ChronicleNarrative(
                 title = listOfNotNull(civilization, settlement).joinToString(" · ").ifBlank { "Нове осідлення" },
                 hook = ChronicleEraVoice.foundingHook(era, civilization, settlement),
@@ -70,15 +78,33 @@ internal object ChroniclePresentation {
         participants: String?,
         code: String?,
         era: TechnologyEra?,
+        scandal: String?,
+        significance: String?,
     ): ChronicleNarrative {
         val practice = socialPracticeName(code, era)
         val where = settlement ?: civilization ?: "поселенні"
         val who = participants ?: "двоє повнолітніх"
+        val kind = significance ?: if (scandal != null) "scandal" else "liaison"
+        val title = when (kind) {
+            "scandal" -> "$where · скандал"
+            "union" -> "$where · союз"
+            "dynastic" -> "$where · династичне ложе"
+            "norm-shift" -> "$where · зміна звичаю"
+            else -> "$where · $practice"
+        }
         return ChronicleNarrative(
-            title = "$where · $practice",
-            hook = ChronicleEraVoice.eroticHook(era, who, where),
+            title = title,
+            hook = when (kind) {
+                "scandal" -> ChronicleEraVoice.scandalHook(era, who, where)
+                "union", "dynastic" -> ChronicleEraVoice.unionHook(era, who, where)
+                else -> ChronicleEraVoice.eroticHook(era, who, where)
+            },
             body = ChronicleEraVoice.eroticBody(era, who, where, practice),
-            significance = ChronicleEraVoice.eroticWhy(era, who),
+            significance = when (kind) {
+                "scandal" -> ChronicleEraVoice.scandalWhy(era, who)
+                "union", "dynastic" -> ChronicleEraVoice.unionWhy(era, who)
+                else -> ChronicleEraVoice.eroticWhy(era, who)
+            },
             changes = listOf("Учасники: $who", "Звичай: $practice"),
         )
     }
@@ -216,6 +242,18 @@ internal object ChronicleEraVoice {
 
     fun eroticWhy(era: TechnologyEra?, who: String): String =
         "Імена $who залишаються в пам'яті не через указ, а через те, кого бачили голим у центрі осередку. ${texture(era)}"
+
+    fun scandalHook(era: TechnologyEra?, who: String, where: String): String =
+        "$who порушили пару в $where. Це вже не приватна ніч — від цього залежить напруга в домі і на майдані."
+
+    fun scandalWhy(era: TechnologyEra?, who: String): String =
+        "Скандал навколо $who змінює репутацію і ревнощі в оселі. ${texture(era)}"
+
+    fun unionHook(era: TechnologyEra?, who: String, where: String): String =
+        "$who закріплюють союз у $where. Ліжко тут читають як політичний факт, не лише як тіло."
+
+    fun unionWhy(era: TechnologyEra?, who: String): String =
+        "Союз $who тримає спадкоємців, союзників і право говорити від імені дому. ${texture(era)}"
 
     fun cityLead(era: TechnologyEra?, civ: String, settlement: String?): String {
         val where = settlement ?: civ
