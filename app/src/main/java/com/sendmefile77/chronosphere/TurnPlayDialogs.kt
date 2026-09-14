@@ -39,6 +39,8 @@ internal fun TurnDecisionDialog(
     onConfirm: (List<ChronicleDecisionOption>) -> Unit,
 ) {
     val multi = EraTurnChoiceCatalog.isEraTurn(decision)
+    val era = remember(decision) { EraExperience.eraFromDecision(decision) }
+    val chapter = remember(era) { era?.let(EraExperience::chapter) }
     var selectedIds by remember(decision.eventId) { mutableStateOf(emptySet<String>()) }
     val selected = decision.options.filter { it.id in selectedIds }
     val selectedEra = selected.filter(TurnChoiceComposer::isEraOption)
@@ -101,7 +103,7 @@ internal fun TurnDecisionDialog(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
                 ) {
                     Text(
-                        if (multi) "Після підтвердження світ без додаткового натискання проживе наступні 100 років."
+                        if (multi) "Одна дилема + 1–3 напрями. Потім світ проживе століття без додаткового підтвердження."
                         else "Це рішення одразу змінить подальший хід історії.",
                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
@@ -120,9 +122,10 @@ internal fun TurnDecisionDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (multi) {
+                if (multi && chapter != null) {
+                    EraChapterCard(chapter)
                     Text(
-                        "Відкриття накопичуються. Спосіб життя, суспільний курс і мобільність замінюють попередній вибір тієї ж сім’ї.",
+                        "Відкриття накопичуються назавжди. Спосіб життя, суспільний курс і мобільність замінюють попередній вибір тієї ж сім’ї — тому держава справді набуває власної історичної траєкторії.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -134,8 +137,8 @@ internal fun TurnDecisionDialog(
                     val eraOption = TurnChoiceComposer.isEraOption(option)
                     if (!eraOption && !shownHistoricalHeader) {
                         DecisionSectionHeader(
-                            title = "Історична розвилка",
-                            subtitle = "обов’язково",
+                            title = "Дилема століття",
+                            subtitle = "оберіть одну відповідь",
                             color = MaterialTheme.colorScheme.error,
                         )
                         shownHistoricalHeader = true
@@ -169,14 +172,14 @@ internal fun TurnDecisionDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "Обрано напрямів ${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
+                                "Напрямів ${selectedEra.size}/${TurnChoiceComposer.MAX_ERA_CHOICES}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.secondary,
                                 fontWeight = FontWeight.Bold,
                             )
                             if (requiredEventSources.isNotEmpty()) {
                                 Text(
-                                    if (historicalReady) "Подію вирішено" else "Потрібна відповідь",
+                                    if (historicalReady) "Дилему вирішено" else "Потрібна відповідь",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (historicalReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold,
@@ -209,6 +212,49 @@ internal fun TurnDecisionDialog(
             }
         },
     )
+}
+
+@Composable
+private fun EraChapterCard(chapter: EraChapter) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.075f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.30f)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                chapter.subtitle.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                chapter.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                chapter.everyday,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "РИЗИК ДОБИ · ${chapter.danger}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.92f),
+            )
+            Text(
+                "НАСТУПНИЙ ПОРІГ · ${chapter.horizon}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
 }
 
 @Composable
@@ -333,6 +379,19 @@ internal fun TurnConsequenceDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+                ) {
+                    Text(
+                        EraExperience.centuryOutcome(report),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MetricTile(
                         "Населення",
@@ -397,7 +456,7 @@ internal fun TurnConsequenceDialog(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
             ) {
-                Text("ЗАКРИТИ", fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                Text("ПРОДОВЖИТИ ІСТОРІЮ", fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
             }
         },
     )
