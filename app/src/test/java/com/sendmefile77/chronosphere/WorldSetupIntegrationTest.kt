@@ -52,11 +52,16 @@ class WorldSetupIntegrationTest {
         assertEquals(1, setup.tribes.size)
 
         val start = createConfiguredWorldStart(setup, generator, hydrology, resources, peopleEngine)
+        val civilizationId = start.session.state.civilizations.single().id
 
         assertEquals(1, start.session.state.civilizations.size)
         assertEquals(1, start.session.state.settlements.map { it.civilizationId }.distinct().size)
         assertEquals(1, start.people.socialProfiles.size)
         assertEquals(setup.tribes.single().name, start.session.state.civilizations.single().name)
+        assertEquals(4, start.session.state.institutions.count { it.civilizationId == civilizationId })
+        assertTrue(start.session.state.taxPolicies.any { it.civilizationId == civilizationId })
+        assertTrue(start.session.state.provinces.any { it.civilizationId == civilizationId })
+        assertEquals(4, start.session.state.eliteFactions.count { it.civilizationId == civilizationId })
     }
 
     @Test

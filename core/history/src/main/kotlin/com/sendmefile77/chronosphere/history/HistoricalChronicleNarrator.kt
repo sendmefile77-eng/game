@@ -115,7 +115,9 @@ object HistoricalChronicleNarrator {
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> HistoricalProcessKind.DYNASTIC_TRANSITION
         "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> HistoricalProcessKind.POPULATION_DIVERGENCE
-        "TAXES_RAISED", "TAXES_LOWERED", "PROVINCIAL_UNREST", "REBELLION_STARTED", "REBELLION_SUPPRESSED", "SECESSION" -> HistoricalProcessKind.INTERNAL_CRISIS
+        "TAXES_RAISED", "TAXES_LOWERED", "INTERVENTION_TAX_RAISE", "INTERVENTION_TAX_LOWER",
+        "PROVINCIAL_UNREST", "REBELLION_STARTED", "REBELLION_SUPPRESSED", "SECESSION" -> HistoricalProcessKind.INTERNAL_CRISIS
+        "INTERVENTION_INSTITUTION_REFORM" -> HistoricalProcessKind.INSTITUTIONAL_TRANSITION
         else -> null
     }
 
@@ -129,6 +131,7 @@ object HistoricalChronicleNarrator {
         HistoricalProcessKind.DYNASTIC_TRANSITION -> "Династичний перехід"
         HistoricalProcessKind.POPULATION_DIVERGENCE -> "Зміна населення"
         HistoricalProcessKind.INTERNAL_CRISIS -> "Внутрішня політична криза"
+        HistoricalProcessKind.INSTITUTIONAL_TRANSITION -> "Інституційна перебудова"
     }
 
     private fun eventCause(code: String): String = when (code) {
@@ -147,8 +150,9 @@ object HistoricalChronicleNarrator {
         "ERA_ADVANCED" -> "переходу технологічного рубежу"
         "INTERVENTION_TECH_BOOST" -> "свідомої ставки на розвиток"
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> "зміни влади"
-        "TAXES_RAISED" -> "посилення податкового тиску"
-        "TAXES_LOWERED" -> "податкового послаблення"
+        "TAXES_RAISED", "INTERVENTION_TAX_RAISE" -> "посилення податкового тиску"
+        "TAXES_LOWERED", "INTERVENTION_TAX_LOWER" -> "податкового послаблення"
+        "INTERVENTION_INSTITUTION_REFORM" -> "реформи державного інституту"
         "PROVINCIAL_UNREST" -> "провінційного невдоволення"
         "REBELLION_STARTED" -> "початку повстання"
         "REBELLION_SUPPRESSED" -> "придушення повстання"
@@ -165,8 +169,9 @@ object HistoricalChronicleNarrator {
         "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "гострої нестачі"
         "MIGRATION" -> "переміщення населення"
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> "закріплення нової влади"
-        "TAXES_RAISED" -> "підвищення податкового навантаження"
-        "TAXES_LOWERED" -> "податкового послаблення"
+        "TAXES_RAISED", "INTERVENTION_TAX_RAISE" -> "підвищення податкового навантаження"
+        "TAXES_LOWERED", "INTERVENTION_TAX_LOWER" -> "податкового послаблення"
+        "INTERVENTION_INSTITUTION_REFORM" -> "посилення державного інституту"
         "PROVINCIAL_UNREST" -> "відкритого регіонального невдоволення"
         "REBELLION_STARTED" -> "відкритого повстання"
         "REBELLION_SUPPRESSED" -> "відновлення контролю центру"

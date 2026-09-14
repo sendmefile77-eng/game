@@ -14,10 +14,12 @@ data class CivilizationTaxPolicy(
     val civilizationId: String,
     val kind: TaxPolicyKind = TaxPolicyKind.BALANCED,
     val changedTick: Long = 0L,
+    val playerPriorityUntilTick: Long = 0L,
 ) {
     init {
         require(civilizationId.isNotBlank())
         require(changedTick >= 0L)
+        require(playerPriorityUntilTick >= 0L)
     }
 
     val rate: Double get() = kind.rate

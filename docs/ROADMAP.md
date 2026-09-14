@@ -58,7 +58,7 @@
 - [x] Technology-era progression through material prerequisites.
 - [x] Economy state branches with alternate history and persists in history saves.
 - [x] Economy/era observer summary and chronicle events.
-- [ ] Institutions and taxation policies controlled by simulation/player choices.
+- [x] Institutions and taxation policies controlled by simulation/player choices.
 - [ ] Infrastructure growth and urban transformation visible on the map.
 
 ## Stage 5E — Evolution and population lineages
@@ -102,7 +102,12 @@
 - [x] V1 saves persist internal politics through optional backward-compatible rows.
 - [x] The playable briefing surfaces internal pressure, taxes and rebellion danger.
 - [x] Regression tests cover politics reconciliation, batch independence, secession and save round-trips.
-- [ ] Direct player tax/institution policy controls remain a later extension; autonomous state policy already runs in simulation.
+- [x] Council, administration, courts and military command evolve as persistent state institutions.
+- [x] Institutions affect tax collection, elite loyalty, provincial cohesion, rebellion pressure and stability.
+- [x] Players can raise/lower taxes one step or reform the weakest institution through the normal one-command-per-turn loop.
+- [x] Player-selected tax policy receives a temporary priority window before autonomous policy adaptation resumes.
+- [x] Institution reform is recorded as an institutional historical transition and persistent legacy.
+- [x] V1 saves persist institutions and player tax-policy priority while older rows remain valid.
 
 ## v0.1 Playable milestone
 - [x] Map-first observer sandbox.
@@ -125,7 +130,7 @@
 
 ## Stage 7 — Industrial and global civilization (post-v0.1)
 - industrialization and mass logistics;
-- institutions, taxation and infrastructure;
+- advanced institutions, fiscal systems and infrastructure;
 - global diplomacy/blocs;
 - large wars and systemic crises;
 - modern infrastructure and advanced technologies;

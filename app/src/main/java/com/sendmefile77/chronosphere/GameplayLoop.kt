@@ -1,6 +1,8 @@
 package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
+import com.sendmefile77.chronosphere.civilization.TaxPolicyKind
+import com.sendmefile77.chronosphere.civilization.taxPolicyFor
 import com.sendmefile77.chronosphere.economy.EconomyState
 import com.sendmefile77.chronosphere.history.InterventionKind
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -213,6 +215,9 @@ internal object GameplayLoop {
         InterventionKind.MAKE_PEACE -> 4.0
         InterventionKind.FORM_ALLIANCE -> 8.0 + strength * 8.0
         InterventionKind.EMBASSY -> 5.0 + strength * 7.0
+        InterventionKind.INSTITUTION_REFORM -> 18.0 + strength * 18.0
+        InterventionKind.TAX_LOWER,
+        InterventionKind.TAX_RAISE,
         InterventionKind.DROUGHT -> 0.0
     }
 
@@ -225,7 +230,8 @@ internal object GameplayLoop {
         val cost = when (kind) {
             InterventionKind.HARVEST_AID,
             InterventionKind.TECHNOLOGY_BOOST,
-            InterventionKind.STABILITY_SUPPORT -> treasuryCost(kind, strength)
+            InterventionKind.STABILITY_SUPPORT,
+            InterventionKind.INSTITUTION_REFORM -> treasuryCost(kind, strength)
             else -> 0.0
         }
         if (cost <= 0.0) return state
@@ -260,6 +266,13 @@ internal object GameplayLoop {
         if (actionSpent(state)) return GameplayActionGate(false, "Команду цього ходу вже використано", cost)
         if (queuedAction(state) != null) return GameplayActionGate(false, "Команду вже заплановано — прокрутіть час або скасуйте її", cost)
         if (actor.treasury + 1e-9 < cost) return GameplayActionGate(false, "Потрібно ${cost.toInt()} казни", cost)
+        val taxPolicy = state.taxPolicyFor(civilizationId)?.kind ?: TaxPolicyKind.BALANCED
+        if (kind == InterventionKind.TAX_LOWER && taxPolicy == TaxPolicyKind.RELIEF) {
+            return GameplayActionGate(false, "Податки вже на мінімальному рівні", cost)
+        }
+        if (kind == InterventionKind.TAX_RAISE && taxPolicy == TaxPolicyKind.EXTRACTION) {
+            return GameplayActionGate(false, "Податки вже на максимальному рівні", cost)
+        }
         if (kind !in diplomaticKinds) return GameplayActionGate(true, treasuryCost = cost)
         val targetId = targetCivilizationId ?: return GameplayActionGate(false, "Оберіть іншу державу", cost)
         if (targetId == civilizationId || state.civilizations.none { it.id == targetId }) {
@@ -366,7 +379,7 @@ internal object GameplayLoop {
             "WAR_STARTED" -> if (counterpart != null) "Почалася війна з $counterpart" else "Почалася війна"
             "PEACE_TREATY" -> if (counterpart != null) "Укладено мир з $counterpart" else "Укладено мир"
             "ALLIANCE_FORMED" -> if (counterpart != null) "Створено союз з $counterpart" else "Створено союз"
-            "STATE_FOUNDED" -> event.facts["civilization"]?.let { "Постала нова держава: $it" } ?: "Постала нова держава"
+            "STATE_FOUNDED", "SECESSION" -> event.facts["civilization"]?.let { "Постала нова держава: $it" } ?: "Постала нова держава"
             "CITY_CAPTURED" -> "Змінився контроль над містом $place".trim()
             "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "Загострився дефіцит ресурсів"
             "ERA_ADVANCED" -> "Держава перейшла до нової епохи"
@@ -374,6 +387,9 @@ internal object GameplayLoop {
             "DYNASTIC_BIRTH" -> "У правлячому домі народилося нове покоління"
             "ADULT_SOCIAL_EVENT" -> "Суспільний звичай став помітною подією століття"
             "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> "Засновано нове поселення"
+            "INTERVENTION_TAX_LOWER" -> "Держава знизила податковий тиск"
+            "INTERVENTION_TAX_RAISE" -> "Держава підвищила податки"
+            "INTERVENTION_INSTITUTION_REFORM" -> "Проведено реформу державного інституту"
             "PLAYER_EVOLUTION_DIVERGENCE" -> "Відокремилася нова біологічна лінія"
             "PLAYER_STRUCTURAL_MUTATION" -> "Закріпилася структурна мутація"
             "PLAYER_HYBRIDIZATION" -> "Сформувалася гібридна лінія"
