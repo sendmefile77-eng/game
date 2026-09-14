@@ -72,19 +72,29 @@ object HistoricalChronicleNarrator {
         val consequences = memory.consequences
             .filter { civilizationId in it.civilizationIds && it.status == HistoricalConsequenceStatus.OPEN }
             .sortedByDescending { it.originTick }
-        if (processes.isEmpty() && commitments.isEmpty() && consequences.isEmpty()) return null
+        val causalLinks = memory.causalLinksFor(civilizationId)
+            .sortedWith(compareByDescending<HistoricalCausalLink> { it.effectTick }.thenByDescending { it.causeTick })
+        val legacies = memory.legaciesFor(civilizationId)
+            .sortedWith(compareByDescending<HistoricalLegacy> { it.strength }.thenByDescending { it.lastReinforcedTick })
+        if (processes.isEmpty() && commitments.isEmpty() && consequences.isEmpty() && causalLinks.isEmpty() && legacies.isEmpty()) return null
 
         val primary = processes.firstOrNull()
+        val latestCausal = causalLinks.firstOrNull()
+        val strongestLegacy = legacies.firstOrNull()
         val body = when {
+            latestCausal != null -> "$civilizationName живе всередині причинного ланцюга: ${latestCausal.titleUk.lowercase()}. Ця залежність уже записана в історичній пам'яті й не зникне разом з останнім повідомленням хроники."
             primary != null -> "${primary.titleUk} формує теперішній стан $civilizationName. Стадія: ${stageLabel(primary.stage)}; сила процесу — ${intensityLabel(primary.intensity)}."
+            strongestLegacy != null -> "$civilizationName зберігає історичну пам'ять: ${strongestLegacy.titleUk.lowercase()}. Її вага — ${intensityLabel(strongestLegacy.strength)}."
             commitments.isNotEmpty() -> "$civilizationName і далі живе з наслідками раніше обраного курсу: ${commitments.first().titleUk}."
             else -> "У $civilizationName залишилися незакриті наслідки попередніх подій, які ще можуть змінити наступний хід історії."
         }
         val traces = buildList {
+            causalLinks.take(3).forEach { add("Причина → наслідок: ${it.titleUk}") }
             processes.take(2).forEach { add("${it.titleUk} · ${stageLabel(it.stage)}") }
-            commitments.take(2).forEach { add("Курс: ${it.titleUk} · ціна: ${it.recurringCostUk}") }
-            consequences.take(2).forEach { add("Незакритий наслідок: ${it.titleUk}") }
-        }
+            legacies.take(2).forEach { add("Пам'ять: ${it.titleUk} · ${intensityLabel(it.strength)}") }
+            commitments.take(1).forEach { add("Курс: ${it.titleUk} · ціна: ${it.recurringCostUk}") }
+            consequences.take(1).forEach { add("Незакритий наслідок: ${it.titleUk}") }
+        }.take(7)
         return HistoricalChronicleBridge("Чому світ став таким", body, traces)
     }
 
