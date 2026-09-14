@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -85,6 +86,21 @@ fun CharacterCardPanel(
         GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
     }
 
+    val ancestry = if (lineage != null && descriptor != null) {
+        descriptor.ancestry.entries.sortedByDescending { it.value }.take(4).joinToString(" · ") { (lineageId, share) ->
+            val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
+            "$label ${String.format("%.0f%%", share * 100.0)}"
+        }
+    } else ""
+    val morphology = if (descriptor != null) {
+        val covering = descriptor.bodyPlan.covering.name.lowercase()
+        buildString {
+            append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
+            if (descriptor.bodyPlan.hasTail) append(" · хвіст")
+            if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
+        }
+    } else null
+
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("ВИЗНАЧНА ОСОБА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
@@ -99,10 +115,21 @@ fun CharacterCardPanel(
         }
     }
 
-    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = mergedVisualTags, visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = visibleActionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
+    OfflineSceneView(
+        scene = displayScene,
+        characterKey = person.id,
+        ageYears = age,
+        visualTags = mergedVisualTags,
+        visualNumeric = descriptor?.numeric ?: emptyMap(),
+        technologyEra = technologyEra,
+        adultVisual = effectiveAdultVisual,
+        actionPlan = visibleActionPlan,
+        galleryCapture = galleryCapture,
+        modifier = Modifier.fillMaxWidth().height(if (age >= 18) 360.dp else 230.dp),
+    )
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("Профіль", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricTile("Вплив", prestigeLabel(person.prestige), Modifier.weight(1f), MaterialTheme.colorScheme.primary)
@@ -111,6 +138,14 @@ fun CharacterCardPanel(
             dynasty?.let { InfoLine("Династія", it) }
             if (person.traits.isNotEmpty()) {
                 InfoLine("Характер", person.traits.sorted().joinToString(" · ") { traitLabel(it) })
+            }
+            if (lineage != null && descriptor != null) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
+                InfoLine(
+                    "Походження",
+                    "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "",
+                )
+                morphology?.let { InfoLine("Морфологія", it) }
             }
         }
     }
@@ -122,26 +157,6 @@ fun CharacterCardPanel(
         technologyEra = technologyEra,
         enabled = controlsEnabled,
     )
-
-    if (lineage != null && descriptor != null) {
-        val ancestry = descriptor.ancestry.entries.sortedByDescending { it.value }.take(4).joinToString(" · ") { (lineageId, share) ->
-            val label = evolution.lineage(lineageId)?.label ?: "невідома лінія"
-            "$label ${String.format("%.0f%%", share * 100.0)}"
-        }
-        val covering = descriptor.bodyPlan.covering.name.lowercase()
-        val morphology = buildString {
-            append("рук ${descriptor.bodyPlan.armPairs * 2} · ніг ${descriptor.bodyPlan.legPairs * 2} · очей ${descriptor.bodyPlan.eyeCount}")
-            if (descriptor.bodyPlan.hasTail) append(" · хвіст")
-            if (covering != "bare_skin") append(" · ${coveringLabel(covering)}")
-        }
-        PanelCard {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Біологія", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                InfoLine("Походження", "${lineage.label} · ${rankLabel(lineage.rank.name)}" + if (ancestry.isNotBlank()) " · $ancestry" else "")
-                InfoLine("Морфологія", morphology)
-            }
-        }
-    }
 
     if (relationships.isNotEmpty()) {
         PanelCard(accent = MaterialTheme.colorScheme.secondary) {
