@@ -110,8 +110,12 @@ object AdultActionPlanner {
                 )
             },
             bond = bond,
-            setting = norms.setting,
-            mood = norms.mood,
+            setting = listOf(norms.setting, norms.visualSignature, norms.clothing)
+                .filter { it.isNotBlank() }
+                .joinToString("; "),
+            mood = listOf(norms.mood, norms.courtship, norms.conflict)
+                .filter { it.isNotBlank() }
+                .joinToString("; "),
         )
     }
 
