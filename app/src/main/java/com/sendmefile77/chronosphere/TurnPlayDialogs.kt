@@ -40,7 +40,7 @@ internal fun TurnDecisionDialog(
 ) {
     val multi = EraTurnChoiceCatalog.isEraTurn(decision)
     val era = remember(decision) { EraExperience.eraFromDecision(decision) }
-    val chapter = remember(era) { era?.let(EraExperience::chapter) }
+    val chapter = remember(era) { era?.let { EraExperience.chapter(it) } }
     var selectedIds by remember(decision.eventId) { mutableStateOf(emptySet<String>()) }
     val selected = decision.options.filter { it.id in selectedIds }
     val selectedEra = selected.filter(TurnChoiceComposer::isEraOption)
@@ -160,6 +160,7 @@ internal fun TurnDecisionDialog(
                 }
 
                 if (multi) {
+                    StrategyFocusCard(selectedEra.size)
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -193,7 +194,7 @@ internal fun TurnDecisionDialog(
         confirmButton = {
             if (multi) {
                 Button(
-                    onClick = { onConfirm(selected) },
+                    onClick = { onConfirm(EraStrategyBalance.apply(selected)) },
                     enabled = selectedEra.isNotEmpty() && historicalReady,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -252,6 +253,38 @@ private fun EraChapterCard(chapter: EraChapter) {
                 "НАСТУПНИЙ ПОРІГ · ${chapter.horizon}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StrategyFocusCard(eraCount: Int) {
+    val accent = when (eraCount) {
+        1 -> MaterialTheme.colorScheme.primary
+        2 -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.outline
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = accent.copy(alpha = 0.075f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.32f)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                EraStrategyBalance.title(eraCount).uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.65.sp),
+                color = accent,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                EraStrategyBalance.detail(eraCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
