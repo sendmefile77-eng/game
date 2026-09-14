@@ -1,5 +1,6 @@
 package com.sendmefile77.chronosphere
 
+import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.people.BiologicalSex
 import com.sendmefile77.chronosphere.people.NotablePerson
 import com.sendmefile77.chronosphere.people.PeopleState
@@ -62,6 +63,23 @@ class AdultActionPlannerTest {
         )
         requireNotNull(plan)
         assertEquals(AdultActionType.ORAL, plan.type)
+    }
+
+    @Test
+    fun explicitPlayerChoiceIsNotSilentlyReplacedByEraNorms() {
+        val adult = person("adult-a", birthTick = 0L)
+        val other = person("adult-b", birthTick = 0L)
+        val plan = AdultActionPlanner.plan(
+            person = adult,
+            tick = 360L,
+            people = people(adult, other),
+            sequence = 1,
+            preferredType = AdultActionType.BUKKAKE,
+            technologyEra = TechnologyEra.TRIBAL,
+        )
+        requireNotNull(plan)
+        assertEquals(AdultActionType.BUKKAKE, plan.type)
+        assertTrue(plan.mood.contains("taboo"))
     }
 
     @Test
