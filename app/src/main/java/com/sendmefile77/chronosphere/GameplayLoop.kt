@@ -366,6 +366,7 @@ internal object GameplayLoop {
             "WAR_STARTED" -> if (counterpart != null) "Почалася війна з $counterpart" else "Почалася війна"
             "PEACE_TREATY" -> if (counterpart != null) "Укладено мир з $counterpart" else "Укладено мир"
             "ALLIANCE_FORMED" -> if (counterpart != null) "Створено союз з $counterpart" else "Створено союз"
+            "STATE_FOUNDED" -> event.facts["civilization"]?.let { "Постала нова держава: $it" } ?: "Постала нова держава"
             "CITY_CAPTURED" -> "Змінився контроль над містом $place".trim()
             "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> "Загострився дефіцит ресурсів"
             "ERA_ADVANCED" -> "Держава перейшла до нової епохи"

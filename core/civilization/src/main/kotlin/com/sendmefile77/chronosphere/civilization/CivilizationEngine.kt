@@ -76,7 +76,14 @@ class CivilizationEngine(
         val nextTick = state.tick + 1
         val events = ArrayList<SimulationEvent>()
         var settlements = growSettlements(state.settlements, nextTick, events).toMutableList()
-        if (nextTick % 240L == 0L) foundColonies(settlements, nextTick, events)
+        if (nextTick % 240L == 0L) {
+            foundColonies(
+                settlements = settlements,
+                tick = nextTick,
+                events = events,
+                ensureFirstExpansion = state.civilizations.size == 1,
+            )
+        }
         if (nextTick % 12L == 0L) migratePopulation(settlements, nextTick, events)
 
         val diplomacy = updateDiplomacy(state, nextTick, events)
@@ -103,7 +110,7 @@ class CivilizationEngine(
             )
         }
 
-        return state.copy(
+        return maybeFormSuccessorState(state.copy(
             tick = nextTick,
             civilizations = updatedCivilizations,
             settlements = settlements,
@@ -111,7 +118,7 @@ class CivilizationEngine(
             relations = settlementResult.relations,
             wars = settlementResult.wars,
             alliances = settlementResult.alliances,
-        )
+        ))
     }
 
     private fun growSettlements(settlements: List<Settlement>, nextTick: Long, events: MutableList<SimulationEvent>): List<Settlement> = settlements.map { settlement ->
@@ -441,11 +448,21 @@ class CivilizationEngine(
         }
     }
 
-    private fun foundColonies(settlements: MutableList<Settlement>, tick: Long, events: MutableList<SimulationEvent>) {
+    private fun foundColonies(
+        settlements: MutableList<Settlement>,
+        tick: Long,
+        events: MutableList<SimulationEvent>,
+        ensureFirstExpansion: Boolean,
+    ) {
         val founders = settlements.toList()
         founders.forEach { founder ->
-            if (founder.population < 2_500L) return@forEach
-            if (hash01(world.seed.value xor tick, founder.id.hashCode(), tick.toInt()) >= 0.22) return@forEach
+            val hasOtherCenter = founders.any {
+                it.civilizationId == founder.civilizationId && it.id != founder.id
+            }
+            val firstExpansion = ensureFirstExpansion && !hasOtherCenter && tick >= FIRST_EXPANSION_TICK
+            val minimumPopulation = if (firstExpansion) 1_400L else 2_500L
+            if (founder.population < minimumPopulation) return@forEach
+            if (!firstExpansion && hash01(world.seed.value xor tick, founder.id.hashCode(), tick.toInt()) >= 0.22) return@forEach
             val target = findExpansionTile(founder, settlements) ?: return@forEach
             val founderIndex = settlements.indexOfFirst { it.id == founder.id }
             if (founderIndex < 0) return@forEach
@@ -460,6 +477,136 @@ class CivilizationEngine(
                 numbers = mapOf("population" to transfer.toDouble()), facts = mapOf("settlement" to colonyName, "parent" to founder.name),
             )
         }
+    }
+
+    /**
+     * Lets a one-tribe world grow into an actual political game. A mature frontier center can become
+     * a successor state while keeping population, territory and diplomacy fully inside the normal
+     * deterministic simulation. Multi-state worlds only split under sustained internal pressure.
+     */
+    private fun maybeFormSuccessorState(state: LivingPlanetState): LivingPlanetState {
+        if (state.tick < FIRST_STATE_FORMATION_TICK || state.tick % STATE_FORMATION_INTERVAL != 0L) return state
+        if (state.civilizations.size >= MAX_CIVILIZATIONS) return state
+
+        data class Candidate(
+            val parent: Civilization,
+            val capital: Settlement,
+            val frontier: Settlement,
+            val pressure: Double,
+        )
+
+        val candidates = state.civilizations.mapNotNull { parent ->
+            val centers = state.settlements.filter { it.civilizationId == parent.id }
+            if (centers.size < 2) return@mapNotNull null
+            val capital = centers.minWithOrNull(
+                compareBy<Settlement> { it.foundedTick }
+                    .thenByDescending { it.population }
+                    .thenBy { it.id },
+            ) ?: return@mapNotNull null
+            val frontier = centers.asSequence()
+                .filter { it.id != capital.id }
+                .filter { state.tick - it.foundedTick >= MIN_SUCCESSOR_CENTER_AGE }
+                .filter { it.population >= MIN_SUCCESSOR_POPULATION }
+                .maxWithOrNull(
+                    compareBy<Settlement> { distance(it, capital) * 10_000L + it.population }
+                        .thenBy { it.id },
+                ) ?: return@mapNotNull null
+            val distancePressure = (distance(frontier, capital) / 30.0).coerceIn(0.0, 0.55)
+            val populationPressure = (frontier.population.toDouble() / parent.population.coerceAtLeast(1L)).coerceIn(0.0, 0.45)
+            val culturalPressure = when {
+                "weak_internal_splits" in parent.cultureTags -> 0.34
+                "isolationist" in parent.cultureTags -> 0.18
+                else -> 0.0
+            }
+            Candidate(
+                parent = parent,
+                capital = capital,
+                frontier = frontier,
+                pressure = (1.0 - parent.stability) + distancePressure + populationPressure + culturalPressure,
+            )
+        }
+        val candidate = candidates.maxWithOrNull(
+            compareBy<Candidate> { it.pressure }.thenBy { it.frontier.id },
+        ) ?: return state
+
+        val firstSuccessor = state.civilizations.size == 1
+        val splitChance = ((candidate.pressure - 0.62) * 0.34).coerceIn(0.04, 0.32)
+        val roll = hash01(
+            world.seed.value xor state.tick,
+            candidate.parent.id.hashCode(),
+            candidate.frontier.id.hashCode(),
+        )
+        if (!firstSuccessor && roll >= splitChance) return state
+
+        val nextOrdinal = state.civilizations.asSequence()
+            .mapNotNull { it.id.substringAfterLast('-').toIntOrNull() }
+            .maxOrNull()
+            ?.plus(1)
+            ?: (state.civilizations.size + 1)
+        val successorId = "civ-$nextOrdinal"
+        val successorName = successorName(candidate.frontier.name, state.civilizations.mapTo(hashSetOf()) { it.name })
+        val transferredTreasury = (candidate.parent.treasury * 0.18).coerceIn(8.0, 36.0)
+        val successor = Civilization(
+            id = successorId,
+            name = successorName,
+            population = candidate.frontier.population,
+            stability = (0.48 + candidate.parent.stability * 0.20).coerceIn(0.42, 0.68),
+            technology = (candidate.parent.technology * 0.94).coerceIn(0.0, 1.0),
+            treasury = transferredTreasury,
+            cultureTags = candidate.parent.cultureTags + setOf("successor_state", "frontier_identity"),
+        )
+        val settlements = state.settlements.map { settlement ->
+            if (settlement.id == candidate.frontier.id) settlement.copy(civilizationId = successorId) else settlement
+        }
+        val civilizations = (state.civilizations.map { civilization ->
+            if (civilization.id == candidate.parent.id) {
+                civilization.copy(
+                    population = settlements.filter { it.civilizationId == civilization.id }.sumOf { it.population },
+                    stability = (civilization.stability - 0.07).coerceAtLeast(0.15),
+                    treasury = (civilization.treasury - transferredTreasury).coerceAtLeast(0.0),
+                )
+            } else civilization
+        } + successor)
+        val relations = state.relations + state.civilizations.map { other ->
+            val value = if (other.id == candidate.parent.id) {
+                -0.38
+            } else {
+                (hash01(world.seed.value xor state.tick, successorId.hashCode(), other.id.hashCode()) * 0.36 - 0.18)
+                    .coerceIn(-1.0, 1.0)
+            }
+            DiplomaticRelation(successorId, other.id, value, state.tick)
+        }
+        val event = SimulationEvent(
+            id = "state-founded-$successorId-${state.tick}",
+            tick = state.tick,
+            code = "STATE_FOUNDED",
+            actorIds = listOf(successorId, candidate.parent.id),
+            locationId = candidate.frontier.id,
+            numbers = mapOf("population" to candidate.frontier.population.toDouble()),
+            facts = mapOf(
+                "civilization" to successorName,
+                "parent" to candidate.parent.name,
+                "settlement" to candidate.frontier.name,
+            ),
+        )
+        return state.copy(
+            civilizations = civilizations,
+            settlements = settlements,
+            relations = relations,
+            recentEvents = (state.recentEvents + event).takeLast(96),
+        )
+    }
+
+    private fun distance(a: Settlement, b: Settlement): Int = abs(a.x - b.x) + abs(a.y - b.y)
+
+    private fun successorName(centerName: String, existingNames: Set<String>): String {
+        val forms = listOf("Вільні землі", "Союз", "Нова держава", "Співдружність")
+        val start = positiveIndex(world.seed.value xor centerName.hashCode().toLong(), forms.size)
+        for (offset in forms.indices) {
+            val candidate = "${forms[(start + offset) % forms.size]} $centerName"
+            if (candidate !in existingNames) return candidate
+        }
+        return "Держава $centerName ${existingNames.size + 1}"
     }
 
     private fun findExpansionTile(founder: Settlement, settlements: List<Settlement>): WorldTile? = world.tiles.asSequence()
@@ -538,5 +685,14 @@ class CivilizationEngine(
         z = (z xor (z ushr 27)) * -7723592293110705685L
         z = z xor (z ushr 31)
         return z.ushr(11).toDouble() * (1.0 / (1L shl 53).toDouble())
+    }
+
+    private companion object {
+        const val FIRST_EXPANSION_TICK = 1_200L
+        const val FIRST_STATE_FORMATION_TICK = 1_200L
+        const val STATE_FORMATION_INTERVAL = 120L
+        const val MIN_SUCCESSOR_CENTER_AGE = 120L
+        const val MIN_SUCCESSOR_POPULATION = 240L
+        const val MAX_CIVILIZATIONS = 12
     }
 }

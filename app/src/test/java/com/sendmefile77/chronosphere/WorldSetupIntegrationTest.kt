@@ -47,6 +47,7 @@ class WorldSetupIntegrationTest {
 
     @Test
     fun oneTribeWorldStartsWithExactlyOneCivilization() {
+        assertEquals(1, WorldSetup.default().tribes.size)
         val setup = WorldSetup.default(seed = 424242L, tribeCount = 1)
         assertEquals(1, setup.tribes.size)
 

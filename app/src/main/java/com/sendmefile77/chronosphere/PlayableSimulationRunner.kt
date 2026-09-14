@@ -64,6 +64,14 @@ internal class PlayableSimulationRunner(
         val admixtureEngine = AdmixtureEngine(worldMap)
         val interventionEngine = InterventionEngine()
         val queuedDecisions = ChronicleDecisionMailbox.drain()
+        val knownEventIds = currentWorld.recentEvents.mapTo(hashSetOf()) { it.id }
+        val eventsCreatedThisTurn = linkedMapOf<String, SimulationEvent>()
+
+        fun rememberNewEvents(world: LivingPlanetState) {
+            world.recentEvents.forEach { event ->
+                if (event.id !in knownEventIds) eventsCreatedThisTurn[event.id] = event
+            }
+        }
 
         try {
             val alreadyResolved = currentWorld.recentEvents.asSequence()
@@ -105,6 +113,7 @@ internal class PlayableSimulationRunner(
                     )
                 }
             }
+            rememberNewEvents(worldState)
             var people = currentPeople
             var economy = currentEconomy
             var evolution = currentEvolution
@@ -164,11 +173,18 @@ internal class PlayableSimulationRunner(
                 people = societyResult.people.copy(tick = worldState.tick)
                 economy = economyAtTick
                 evolution = evolutionAtTick.copy(tick = worldState.tick)
+                rememberNewEvents(worldState)
                 remaining -= step
                 // A confirmed turn is atomic: new chronicle forks created during these 100 years
                 // are remembered and offered together with the era choices on the NEXT turn.
             }
 
+            worldState = preserveTurnDecisions(
+                world = worldState,
+                turnEvents = eventsCreatedThisTurn.values,
+                people = people,
+                economy = economy,
+            )
             val actualMonths = (worldState.tick - currentWorld.tick).toInt().coerceAtLeast(1)
             GameplayTurnReportStore.replace(
                 beforeSnapshots.associate { snapshot ->
@@ -186,6 +202,39 @@ internal class PlayableSimulationRunner(
             ChronicleDecisionMailbox.restore(queuedDecisions)
             throw error
         }
+    }
+
+    /**
+     * A century can produce more than the world's 96-event rolling window. Keep the events that
+     * can drive the next player decision, plus the response that resolved the previous decision,
+     * so the turn report and Chronicle cannot silently lose a meaningful fork.
+     */
+    private fun preserveTurnDecisions(
+        world: LivingPlanetState,
+        turnEvents: Collection<SimulationEvent>,
+        people: PeopleState,
+        economy: EconomyState,
+    ): LivingPlanetState {
+        val protected = turnEvents.asSequence()
+            .filter { event ->
+                event.facts["sourceEventId"] != null ||
+                    event.id.startsWith("player-") ||
+                    ChronicleDecisionCatalog.forEvent(event, people, economy) != null
+            }
+            .sortedWith(compareBy<SimulationEvent> { it.tick }.thenBy { it.id })
+            .toList()
+            .takeLast(MAX_PROTECTED_TURN_EVENTS)
+        if (protected.isEmpty()) return world
+
+        val protectedIds = protected.mapTo(hashSetOf()) { it.id }
+        val ordinaryCapacity = (MAX_RECENT_EVENTS - protected.size).coerceAtLeast(0)
+        val ordinary = world.recentEvents
+            .filterNot { it.id in protectedIds }
+            .takeLast(ordinaryCapacity)
+        val retained = (ordinary + protected)
+            .distinctBy { it.id }
+            .sortedWith(compareBy<SimulationEvent> { it.tick }.thenBy { it.id })
+        return world.copy(recentEvents = retained.takeLast(MAX_RECENT_EVENTS))
     }
 
     /**
@@ -310,6 +359,8 @@ internal class PlayableSimulationRunner(
     )
 
     companion object {
+        private const val MAX_RECENT_EVENTS = 96
+        private const val MAX_PROTECTED_TURN_EVENTS = 24
         private val NOISY_MINOR_SETTLEMENT_EVENTS = setOf(
             "COLONY_FOUNDED",
             "SETTLEMENT_GROWTH",

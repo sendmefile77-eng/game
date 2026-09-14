@@ -55,7 +55,7 @@ fun CharacterCardPanel(
     var chosenActionType by remember(person.id) { mutableStateOf(storedAction?.type) }
     var actionMenuOpen by remember(person.id) { mutableStateOf(false) }
     val resolvedActionSequence = maxOf(adultActionSequence, localActionSequence)
-    val displayScene = if (age >= 18) scene.copy(wardrobeState = WardrobeState.UNDRESSED) else scene
+    val displayScene = scene
     val dynasty = person.dynastyId?.let { dynastyId -> people.dynasties.firstOrNull { it.id == dynastyId }?.name }
     val descriptor = person.settlementId?.let(evolution::visualDescriptor)
     val lineage = descriptor?.lineageId?.let(evolution::lineage)
@@ -73,12 +73,15 @@ fun CharacterCardPanel(
             AdultActionPlanner.plan(person = person, tick = tick, people = people, sequence = resolvedActionSequence, preferredType = chosenActionType)
         } else null
     }
+    val visibleActionPlan = actionPlan.takeIf {
+        age >= 18 && displayScene.wardrobeState == WardrobeState.UNDRESSED
+    }
     val relationships = people.relationships.filter { it.involves(person.id) }.sortedByDescending { kotlin.math.abs(it.strength) }.take(6).mapNotNull { relationship ->
         val otherId = if (relationship.personA == person.id) relationship.personB else relationship.personA
         val other = people.persons.firstOrNull { it.id == otherId } ?: return@mapNotNull null
         "${relationshipLabel(relationship.kind)} · ${other.name} · ${relationshipStrengthLabel(relationship.strength)}"
     }
-    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, actionPlan?.cacheToken, technologyEra, mergedVisualTags) {
+    val galleryCapture = remember(person.id, person.civilizationId, people.worldSeed, visibleActionPlan?.cacheToken, displayScene.wardrobeState, technologyEra, mergedVisualTags) {
         GalleryCapture(worldSeed = people.worldSeed, civilizationIds = listOf(person.civilizationId), kind = GalleryImageKind.PERSON, subject = person.name, tick = tick)
     }
 
@@ -96,7 +99,7 @@ fun CharacterCardPanel(
         }
     }
 
-    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = mergedVisualTags, visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = actionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
+    OfflineSceneView(scene = displayScene, characterKey = person.id, ageYears = age, visualTags = mergedVisualTags, visualNumeric = descriptor?.numeric ?: emptyMap(), technologyEra = technologyEra, adultVisual = effectiveAdultVisual, actionPlan = visibleActionPlan, galleryCapture = galleryCapture, modifier = Modifier.fillMaxWidth().height(if (age >= 18) 400.dp else 240.dp))
 
     PanelCard(accent = MaterialTheme.colorScheme.primary) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -155,7 +158,15 @@ fun CharacterCardPanel(
         PanelCard(accent = MaterialTheme.colorScheme.secondary) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Сцена персонажа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Оберіть дію — кадр зберегається для цієї епохи, поки не натиснете інший варіант. Канонічний портрет не змінюється.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Режим одягу та обрана дія змінюють сцену, але не особу й не її канонічний портрет.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton(
+                    onClick = onToggleWardrobe,
+                    enabled = controlsEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ChronosphereSmallShape,
+                ) {
+                    Text(if (displayScene.wardrobeState == WardrobeState.UNDRESSED) "Одягнути" else "Роздягнути")
+                }
                 Box {
                     Button(onClick = { actionMenuOpen = true }, enabled = controlsEnabled, modifier = Modifier.fillMaxWidth(), shape = ChronosphereSmallShape) { Text("Дія") }
                     DropdownMenu(expanded = actionMenuOpen, onDismissRequest = { actionMenuOpen = false }) {
@@ -170,8 +181,8 @@ fun CharacterCardPanel(
                         }
                     }
                 }
-                if (actionPlan != null) {
-                    StatusPill(actionCaption(actionPlan), color = MaterialTheme.colorScheme.secondary)
+                if (visibleActionPlan != null) {
+                    StatusPill(actionCaption(visibleActionPlan), color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }

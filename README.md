@@ -15,7 +15,7 @@ Offline-first Android world-history sandbox. A deterministic procedural world de
 
 ## Current playable shell
 
-The Android app is map-first. The world map is the primary navigation surface: tapping a settlement selects its civilization and highlights its territory. The lower panel is split into focused sections:
+The Android app is map-first. A fresh world begins with one tribe and grows new successor states through expansion and internal pressure. The map supports tap selection, pinch/pan zoom and double-tap overview/detail switching. The lower panel is split into focused sections:
 
 - **Держава** — civilization, economy, era, ruler, lineage and player interventions;
 - **Персонаж** — notable-person card, ancestry/morphology, relationships and adult-only wardrobe state;

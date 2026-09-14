@@ -13,7 +13,7 @@ import com.sendmefile77.chronosphere.people.PeopleState
 data class WorldSetup(
     val seed: Long,
     val startSpacing: StartSpacing = StartSpacing.NORMAL,
-    val tribes: List<TribeSetup> = defaultTribes(3),
+    val tribes: List<TribeSetup> = defaultTribes(1),
 ) {
     init {
         require(tribes.size in MIN_TRIBES..MAX_TRIBES)
@@ -24,7 +24,7 @@ data class WorldSetup(
         const val MIN_TRIBES = 1
         const val MAX_TRIBES = 6
 
-        fun default(seed: Long = 424242L, tribeCount: Int = 3): WorldSetup =
+        fun default(seed: Long = 424242L, tribeCount: Int = 1): WorldSetup =
             WorldSetup(seed = seed, tribes = defaultTribes(tribeCount.coerceIn(MIN_TRIBES, MAX_TRIBES)))
     }
 }

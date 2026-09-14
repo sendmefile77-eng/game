@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 internal fun TurnDecisionDialog(
     decision: ChronicleDecision,
+    onDismiss: () -> Unit,
     onConfirm: (List<ChronicleDecisionOption>) -> Unit,
 ) {
     val multi = EraTurnChoiceCatalog.isEraTurn(decision)
@@ -56,7 +58,7 @@ internal fun TurnDecisionDialog(
     }
 
     AlertDialog(
-        onDismissRequest = {},
+        onDismissRequest = onDismiss,
         shape = RoundedCornerShape(24.dp),
         containerColor = ChronosphereVisuals.DeepSpace,
         title = {
@@ -201,7 +203,11 @@ internal fun TurnDecisionDialog(
                 }
             }
         },
-        dismissButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Повернутися до світу")
+            }
+        },
     )
 }
 

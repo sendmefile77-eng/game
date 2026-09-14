@@ -152,6 +152,17 @@ internal object ChronicleDecisionCatalog {
         )
 
         return when (event.code) {
+            "STATE_FOUNDED" -> ChronicleDecision(
+                event.id,
+                "Нова держава шукає власний шлях",
+                "${event.facts["civilization"] ?: primaryName} відокремилася від ${event.facts["parent"] ?: "старого центру"}. Перший курс визначить, чи переживе вона народження.",
+                listOf(
+                    option("state-order", "Закріпити нову владу", "Підняти стабільність молодої держави.", "Швидкий розвиток не отримає прямої підтримки.", InterventionKind.STABILITY_SUPPORT, strength = 0.68),
+                    option("state-craft", "Зробити ставку на ремесла", "Прискорити технологічне становлення.", "Політична система залишиться крихкою.", InterventionKind.TECHNOLOGY_BOOST, strength = 0.54),
+                    option("state-reserves", "Створити державні резерви", "Поповнити продовольство нового центру.", "Казна й технології не зміцняться одразу.", InterventionKind.HARVEST_AID, strength = 0.62),
+                ),
+            )
+
             "SETTLEMENT_FOUNDED", "COLONY_FOUNDED" -> ChronicleDecision(
                 event.id,
                 "Новий центр потребує напрямку",

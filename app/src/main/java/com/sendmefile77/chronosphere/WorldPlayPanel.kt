@@ -44,7 +44,6 @@ internal fun WorldPlayPanel(
     isAdvancing: Boolean,
     onOpenChronicle: () -> Unit,
     onNextCivilization: () -> Unit,
-    onIntervene: (InterventionKind) -> Unit,
     onEvolutionIntervene: (PlayerEvolutionInterventionEngine.Kind, String) -> Unit,
 ) {
     val economy = economyState.economy(civilization.id)
@@ -344,7 +343,12 @@ internal fun WorldPlayPanel(
                 }
                 if (showEvolution) {
                     val bodyPlan = representativeLineage.bodyPlan
-                    val evolutionEnabled = !isAdvancing && queuedAction == null && !directActionSpent
+                    val evolutionGate = GameplayLoop.evolutionGate(
+                        state = session.state,
+                        civilizationId = civilization.id,
+                        hasPendingDecision = false,
+                    )
+                    val evolutionEnabled = !isAdvancing && evolutionGate.enabled
                     InfoLine(
                         "Активна лінія",
                         "${representativeLineage.label} · відхилення ${String.format("%.0f%%", representativeLineage.divergenceFromOrigin * 100.0)} · мутації ${String.format("%.0f%%", representativePopulation.mutationPressure * 100.0)}",
@@ -364,14 +368,14 @@ internal fun WorldPlayPanel(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionTile(
                             "Розходження",
-                            "велика біологічна зміна",
+                            "велика зміна · ${evolutionGate.treasuryCost.toInt()} казни",
                             evolutionEnabled,
                             { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.DIVERGE, representativeSettlement.id) },
                             MaterialTheme.colorScheme.secondary,
                         )
                         ActionTile(
                             "Мутація",
-                            "змінити план тіла",
+                            "план тіла · ${evolutionGate.treasuryCost.toInt()} казни",
                             evolutionEnabled,
                             { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.MUTATE, representativeSettlement.id) },
                             MaterialTheme.colorScheme.primary,
@@ -379,10 +383,18 @@ internal fun WorldPlayPanel(
                     }
                     ActionTileFullWidth(
                         title = "Гібридизація",
-                        subtitle = hybridCandidate?.let { "поєднати з ${it.lineageLabel}" } ?: "потрібна відмінна друга лінія",
+                        subtitle = hybridCandidate?.let { "${it.lineageLabel} · ${evolutionGate.treasuryCost.toInt()} казни" }
+                            ?: "потрібна відмінна друга лінія",
                         enabled = evolutionEnabled && hybridCandidate != null,
                         onClick = { onEvolutionIntervene(PlayerEvolutionInterventionEngine.Kind.HYBRIDIZE, representativeSettlement.id) },
                     )
+                    if (!evolutionGate.enabled && evolutionGate.reasonUk != null) {
+                        Text(
+                            evolutionGate.reasonUk,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }

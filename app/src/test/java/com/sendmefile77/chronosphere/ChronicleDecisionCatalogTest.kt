@@ -62,6 +62,28 @@ class ChronicleDecisionCatalogTest {
     }
 
     @Test
+    fun successorStateGetsItsOwnFoundingDecision() {
+        ChronicleDecisionMailbox.drain()
+        val event = SimulationEvent(
+            id = "state-founded-civ-b-1200",
+            tick = 1_200L,
+            code = "STATE_FOUNDED",
+            actorIds = listOf("civ-b", "civ-a"),
+            facts = mapOf(
+                "civilization" to "Вільні землі Істри",
+                "parent" to "Нері",
+                "settlement" to "Істра",
+            ),
+        )
+
+        val decision = ChronicleDecisionCatalog.forEvent(event, people, economy)
+
+        assertNotNull(decision)
+        assertEquals(3, decision!!.options.size)
+        assertTrue(decision.options.all { it.targetCivilizationId == "civ-b" })
+    }
+
+    @Test
     fun warOffersEnemyPressureWhenSecondCivilizationIsKnown() {
         ChronicleDecisionMailbox.drain()
         val event = SimulationEvent(

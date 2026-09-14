@@ -86,6 +86,19 @@ class GameplayLoopTest {
     }
 
     @Test
+    fun evolutionActionConsumesItsAdvertisedTreasuryCost() {
+        ChronicleDecisionMailbox.drain()
+        val before = state(relation = 0.0)
+        val after = GameplayLoop.chargeEvolutionCost(before, "civ-a")
+
+        assertEquals(
+            before.civilizations.first { it.id == "civ-a" }.treasury - EVOLUTION_ACTION_COST,
+            after.civilizations.first { it.id == "civ-a" }.treasury,
+            0.0001,
+        )
+    }
+
+    @Test
     fun reportShowsConcreteChangesInsteadOfOnlyAStatusMessage() {
         ChronicleDecisionMailbox.drain()
         val beforeState = state(relation = 0.0)

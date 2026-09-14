@@ -19,10 +19,13 @@ A failed test blocks the APK milestone. Do not bypass the regression step just t
 
 - Launch without a previous save.
 - Seed `424242` creates a world without a crash.
+- A fresh install starts with exactly one tribe; additional states emerge from expansion and internal history.
 - Map, rivers, territories and settlements are visible.
 - Tapping a settlement selects its civilization and highlights that territory/settlement.
+- Pinch/pan works at 1×–4×; double tap switches between the overview and a 2× detail view.
 - Population, cities, wars, alliances, trade and branch summary render.
-- `+1 рік`, `+10 років`, `+100 років` advance time and preserve a valid world state.
+- `Хід · 100 років` opens a strategic choice, can be cancelled safely and advances only after confirmation.
+- A one-tribe world eventually creates a successor state with its own treasury, territory, relations and Chronicle choice.
 - Long advances show progress and do not freeze the Compose UI thread.
 - Switching the selected civilization never leaves a stale/dead selected person.
 - State, character, time-machine and chronicle panels remain reachable in portrait mode.

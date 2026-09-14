@@ -207,6 +207,7 @@ object GameSituation {
         "PEACE_TREATY" -> "Укладено мир"
         "ALLIANCE_FORMED" -> "Створено союз"
         "ALLIANCE_ENDED" -> "Союз розпався"
+        "STATE_FOUNDED" -> "Постала нова держава"
         "FOOD_SHORTAGE" -> "Нестача їжі"
         "SETTLEMENT_GROWTH" -> "Місто зросло"
         "CITY_CAPTURED" -> "Місто взято"

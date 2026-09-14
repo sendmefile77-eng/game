@@ -1,14 +1,25 @@
 package com.sendmefile77.chronosphere.map
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import com.sendmefile77.chronosphere.worldgen.Biome
 import com.sendmefile77.chronosphere.worldgen.TileCoord
@@ -35,48 +46,107 @@ fun WorldMapView(
     selectedCivilizationIndex: Int? = null,
     onCivilizationSelected: ((Int) -> Unit)? = null,
 ) {
-    val interactiveModifier = if (onCivilizationSelected == null) modifier else {
-        modifier.pointerInput(world.width, world.height, settlements, territoryOwners) {
-            detectTapGestures { tap ->
-                if (size.width <= 0 || size.height <= 0) return@detectTapGestures
-                val cellW = size.width.toFloat() / world.width.toFloat()
-                val cellH = size.height.toFloat() / world.height.toFloat()
+    var scale by remember(world.seed.value) { mutableFloatStateOf(1f) }
+    var translation by remember(world.seed.value) { mutableStateOf(Offset.Zero) }
 
-                if (territoryOwners != null && territoryOwners.size == world.tiles.size) {
-                    val tileX = (tap.x / cellW).toInt().coerceIn(0, world.width - 1)
-                    val tileY = (tap.y / cellH).toInt().coerceIn(0, world.height - 1)
-                    val owner = territoryOwners[tileY * world.width + tileX]
-                    if (owner >= 0) {
-                        onCivilizationSelected(owner)
-                        return@detectTapGestures
-                    }
-                }
-
-                if (settlements.isEmpty()) return@detectTapGestures
-                val nearest = settlements.minByOrNull { settlement ->
-                    val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
-                    val dx = tap.x - center.x
-                    val dy = tap.y - center.y
-                    dx * dx + dy * dy
-                } ?: return@detectTapGestures
-                val center = Offset((nearest.x + 0.5f) * cellW, (nearest.y + 0.5f) * cellH)
-                val dx = tap.x - center.x
-                val dy = tap.y - center.y
-                val radius = settlementRadius(nearest.population)
-                val hitRadius = (radius * 2.8f).coerceAtLeast(22f)
-                if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-                    onCivilizationSelected(nearest.civilizationIndex)
-                }
-            }
-        }
+    fun boundedTranslation(candidate: Offset, targetScale: Float, width: Float, height: Float): Offset {
+        if (targetScale <= 1.001f || width <= 0f || height <= 0f) return Offset.Zero
+        val minX = width * (1f - targetScale)
+        val minY = height * (1f - targetScale)
+        return Offset(candidate.x.coerceIn(minX, 0f), candidate.y.coerceIn(minY, 0f))
     }
 
-    Canvas(modifier = interactiveModifier) {
-        val cellW = size.width / world.width
-        val cellH = size.height / world.height
-        val minCell = minOf(cellW, cellH)
+    val interactiveModifier = modifier
+        .clipToBounds()
+        .pointerInput(world.seed.value) {
+            detectTransformGestures { centroid, pan, zoom, _ ->
+                val oldScale = scale
+                val nextScale = (oldScale * zoom).coerceIn(1f, 4f)
+                val ratio = nextScale / oldScale
+                val candidate = Offset(
+                    x = centroid.x - (centroid.x - translation.x) * ratio + pan.x,
+                    y = centroid.y - (centroid.y - translation.y) * ratio + pan.y,
+                )
+                scale = nextScale
+                translation = boundedTranslation(
+                    candidate = candidate,
+                    targetScale = nextScale,
+                    width = size.width.toFloat(),
+                    height = size.height.toFloat(),
+                )
+            }
+        }
+        .pointerInput(world.width, world.height, settlements, territoryOwners, onCivilizationSelected) {
+            detectTapGestures(
+                onDoubleTap = { tap ->
+                    val nextScale = if (scale > 1.05f) 1f else 2f
+                    scale = nextScale
+                    translation = if (nextScale == 1f) {
+                        Offset.Zero
+                    } else {
+                        boundedTranslation(
+                            candidate = Offset(-tap.x, -tap.y),
+                            targetScale = nextScale,
+                            width = size.width.toFloat(),
+                            height = size.height.toFloat(),
+                        )
+                    }
+                },
+                onTap = selectCivilization@{ position ->
+                    val select = onCivilizationSelected ?: return@selectCivilization
+                    if (size.width <= 0 || size.height <= 0) return@selectCivilization
+                    val contentTap = Offset(
+                        x = (position.x - translation.x) / scale,
+                        y = (position.y - translation.y) / scale,
+                    )
+                    val cellW = size.width.toFloat() / world.width.toFloat()
+                    val cellH = size.height.toFloat() / world.height.toFloat()
 
-        drawRect(Color(0xFF061017))
+                    if (territoryOwners != null && territoryOwners.size == world.tiles.size) {
+                        val tileX = (contentTap.x / cellW).toInt().coerceIn(0, world.width - 1)
+                        val tileY = (contentTap.y / cellH).toInt().coerceIn(0, world.height - 1)
+                        val owner = territoryOwners[tileY * world.width + tileX]
+                        if (owner >= 0) {
+                            select(owner)
+                            return@selectCivilization
+                        }
+                    }
+
+                    if (settlements.isEmpty()) return@selectCivilization
+                    val nearest = settlements.minByOrNull { settlement ->
+                        val center = Offset((settlement.x + 0.5f) * cellW, (settlement.y + 0.5f) * cellH)
+                        val dx = contentTap.x - center.x
+                        val dy = contentTap.y - center.y
+                        dx * dx + dy * dy
+                    } ?: return@selectCivilization
+                    val center = Offset((nearest.x + 0.5f) * cellW, (nearest.y + 0.5f) * cellH)
+                    val dx = contentTap.x - center.x
+                    val dy = contentTap.y - center.y
+                    val hitRadius = (settlementRadius(nearest.population) * 2.8f).coerceAtLeast(22f / scale)
+                    if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                        select(nearest.civilizationIndex)
+                    }
+                },
+            )
+        }
+
+    Box(modifier = interactiveModifier) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = translation.x
+                    translationY = translation.y
+                    transformOrigin = TransformOrigin(0f, 0f)
+                },
+        ) {
+            val cellW = size.width / world.width
+            val cellH = size.height / world.height
+            val minCell = minOf(cellW, cellH)
+
+            drawRect(Color(0xFF061017))
 
         // Terrain base. Color variation follows elevation, moisture and temperature so the map reads
         // like a physical world first and a political overlay second.
@@ -251,6 +321,7 @@ fun WorldMapView(
         // Frame: black outer cut and warm inner keyline instead of a generic white rectangle.
         drawRect(Color.Black.copy(alpha = 0.72f), style = Stroke(width = 3.5f))
         drawRect(Color(0xFFE0C675).copy(alpha = 0.18f), style = Stroke(width = 1.0f))
+        }
     }
 }
 

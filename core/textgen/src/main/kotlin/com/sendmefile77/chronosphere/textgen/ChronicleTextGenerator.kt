@@ -27,6 +27,18 @@ class ChronicleTextGenerator {
                 changes = changes(event, "settlement" to "Осередок", "civilization" to "Держава"),
             )
         }
+        "STATE_FOUNDED" -> {
+            val civilization = fact(event, "civilization", "Нова держава")
+            val parent = fact(event, "parent", "стара держава")
+            val settlement = fact(event, "settlement", "прикордонний центр")
+            ChronicleNarrative(
+                title = "$civilization постає як окрема держава",
+                hook = "$settlement більше не підкоряється державі $parent — на мапі з’явився новий політичний центр.",
+                body = "Мешканці центру $settlement відокремилися від держави $parent і проголосили власну державу — $civilization. Вони успадкували частину населення, ресурсів, технологій і культури, але тепер мають окремі інтереси.",
+                significance = "Поява нового центру сили відкриває дипломатію, торгівлю, союзи й конфлікти навіть у світі, що починався лише з одного племені.",
+                changes = changes(event, "civilization" to "Нова держава", "parent" to "Материнська держава", "settlement" to "Столичний центр"),
+            )
+        }
         "SETTLEMENT_GROWTH" -> {
             val settlement = fact(event, "settlement", "Поселення")
             val population = event.numbers["population"]?.toLong()
