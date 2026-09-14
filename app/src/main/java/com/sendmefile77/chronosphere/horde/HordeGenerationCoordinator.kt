@@ -107,7 +107,23 @@ internal object HordeGenerationCoordinator {
     fun nextRetryNonce(cacheKey: String): Int =
         retryNonceByCacheKey.merge(cacheKey, 1) { oldValue, increment -> oldValue + increment } ?: 1
 
+    /**
+     * Stops work for a scene that is no longer visible. Generation lives in an app-level scope so
+     * it must be cancelled explicitly when Compose disposes the old scene; otherwise obsolete
+     * portraits keep occupying Local Dream and later turns appear to be stuck at the start.
+     */
+    fun cancel(cacheKey: String) {
+        val prefix = "$cacheKey|"
+        inFlight.entries.toList().forEach { (jobKey, deferred) ->
+            if (jobKey.startsWith(prefix) && inFlight.remove(jobKey, deferred)) {
+                deferred.cancel()
+            }
+        }
+        progressFlow(cacheKey).value = ImageJobProgress.idle()
+    }
+
     fun invalidate(filesDir: File, cacheKey: String) {
+        cancel(cacheKey)
         preparedByCacheKey.remove(cacheKey)
         HordeImageCache(File(filesDir, GENERATED_IMAGE_CACHE_DIRECTORY)).remove(cacheKey)
         progressFlow(cacheKey).value = ImageJobProgress.idle()
@@ -157,14 +173,10 @@ internal object HordeGenerationCoordinator {
         )
         val localResult = if (localStatus.available) {
             try {
-                publish(
-                    request.cacheKey,
-                    ImageJobProgress(
-                        phase = ImageJobPhase.LOCAL_DREAM,
-                        step = 0,
-                        totalSteps = localDreamRequest.steps.coerceAtLeast(1),
-                    ),
-                )
+                // Do not publish a fake 0/N diffusion step here. LocalDreamClient is serialized by
+                // a mutex, so 0/N used to remain on screen while this job was only waiting for an
+                // older request. The first determinate step is now shown only after the backend
+                // actually reports progress.
                 localDreamClient.generate(
                     request = localDreamRequest,
                     sourceImageBytes = localReferenceBytes,
@@ -308,7 +320,7 @@ internal data class ImageJobProgress(
     val captionUk: String
         get() = when (phase) {
             ImageJobPhase.IDLE -> "очікування…"
-            ImageJobPhase.CONNECTING -> "Local Dream відповідає · запускаємо генерацію…"
+            ImageJobPhase.CONNECTING -> "Local Dream · запускаємо…"
             ImageJobPhase.LOCAL_DREAM -> if (totalSteps > 0) {
                 "Local Dream · крок $step/$totalSteps"
             } else {
