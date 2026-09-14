@@ -4,7 +4,7 @@ import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.scene.ResolvedScene
 import com.sendmefile77.chronosphere.scene.WardrobeState
 
-internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v11"
+internal const val RESOLVED_SCENE_CACHE_SCHEMA = "horde-resolved-scene-v12"
 internal const val CHARACTER_REFERENCE_CACHE_SCHEMA = "horde-character-reference-v5"
 
 object HordeResolvedScenePromptFactory {
@@ -40,7 +40,8 @@ object HordeResolvedScenePromptFactory {
 
         val identity = HordeCharacterVisualProfile.from(characterKey)
         val morphology = HordeMorphologyVisual.from(visualTags, visualNumeric)
-        val historicalVisual = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
+        val historicalVisualRaw = HordeHistoricalVisualPrompt.fragment(visualTags, technologyEra)
+        val historicalVisual = if (undressed) HordeAdultSubjectGuard.sanitize(historicalVisualRaw) else historicalVisualRaw
         val historicalSignature = HordeHistoricalVisualPrompt.signature(visualTags)
         val adultSignature = if (undressed) HordeAdultVisualEnrichment.signature(visualTags) else ""
         val agePhrase = when {
@@ -75,7 +76,7 @@ object HordeResolvedScenePromptFactory {
             "three-quarter portrait from head to at least mid-thigh, complete head, neck, both shoulders, torso and arms visible, head naturally connected to the body, no isolated head or bust composition"
         }
 
-        val positive = buildList {
+        val positiveRaw = buildList {
             add("high quality photorealistic single fictional character")
             add(agePhrase)
             add(identity.promptFragment)
@@ -84,6 +85,8 @@ object HordeResolvedScenePromptFactory {
             add(HordeEraVisual.portraitInterior(technologyEra))
             if (historicalVisual.isNotBlank()) add(historicalVisual)
             if (undressed) {
+                add(HordeAdultSubjectGuard.HUMAN_LOCK)
+                add(HordeAdultSubjectGuard.EROTIC_LOCK)
                 HordeAdultVisualEnrichment.fragment(
                     visualTags,
                     technologyEra,
@@ -103,6 +106,7 @@ object HordeResolvedScenePromptFactory {
             add("environment and objects strictly consistent with the technological era")
             if (ageYears < 18) add("strictly nonsexual age-appropriate presentation")
         }.joinToString(", ")
+        val positive = if (undressed) HordeAdultSubjectGuard.sanitize(positiveRaw) else positiveRaw
 
         val negative = buildList {
             add(HordeImageRequest.DEFAULT_NEGATIVE_PROMPT)
@@ -128,6 +132,7 @@ object HordeResolvedScenePromptFactory {
             add("detached body parts")
             addAll(HordeEraVisual.negatives(technologyEra))
             if (undressed) {
+                addAll(HordeAdultSubjectGuard.NEGATIVES)
                 add("clothing")
                 add("dress")
                 add("robe")
