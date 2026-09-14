@@ -17,7 +17,7 @@ class HordeAdultActionPromptFactoryTest {
     fun oralScenePutsTheActBeforeAnyIdlePortraitLanguage() {
         val request = HordeAdultActionPromptFactory.create(scene = scene(), plan = plan(AdultActionType.ORAL))
         assertTrue(request.nsfw)
-        assertTrue(request.cacheKey.startsWith("horde-adult-action-v10|"))
+        assertTrue(request.cacheKey.startsWith("horde-adult-action-v11|"))
         assertTrue(request.positivePrompt.startsWith("ORAL SEX:"))
         assertTrue(request.positivePrompt.contains("blowjob") || request.positivePrompt.contains("cunnilingus"))
         assertTrue(request.positivePrompt.contains("the only sex act"))
