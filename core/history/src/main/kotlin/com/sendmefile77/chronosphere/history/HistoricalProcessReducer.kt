@@ -205,7 +205,7 @@ internal object HistoricalProcessReducer {
             HistoricalCausalRelation.ESCALATION to "Накопичена внутрішня напруга переросла у відкрите повстання"
         causeCode == "REBELLION_STARTED" && effectCode == "REBELLION_SUPPRESSED" ->
             HistoricalCausalRelation.RESOLUTION to "Повстання завершилося відновленням контролю центру"
-        causeCode == "REBELLION_STARTED" && effectCode in setOf("SECESSION", "STATE_FOUNDED") ->
+        causeCode == "REBELLION_STARTED" && effectCode == "SECESSION" ->
             HistoricalCausalRelation.TRANSITION to "Повстання завершилося політичним відокремленням"
         else -> null
     }
