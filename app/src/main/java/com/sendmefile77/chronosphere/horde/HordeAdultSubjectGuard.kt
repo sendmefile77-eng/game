@@ -26,8 +26,14 @@ internal object HordeAdultSubjectGuard {
         "keep this specific adult face and body identity; erotic action must not replace the person, " +
             "same hair, same eyes, same skin, same face shape"
 
+    /**
+     * Keeps adult imagery unmistakably adult and sensual rather than drifting into kawaii / youthful
+     * character design. This is injected only on 18+ adult paths.
+     */
     const val EROTIC_LOCK =
-        "explicit adult nude person, visible breasts or chest, visible genitals, erotic body language"
+        "unmistakably adult mature presentation, mature adult facial features and adult body proportions, " +
+            "confident sensual expression, direct erotic gaze, provocative erotic body language, " +
+            "explicit adult nude person, visible breasts or chest, visible genitals, sexually charged pose"
 
     val NEGATIVES = animalSubjectNegatives(chimeric = false)
 
@@ -56,6 +62,15 @@ internal object HordeAdultSubjectGuard {
                 "bestiality",
                 "zoophilia",
                 "animal focus",
+                "childlike face",
+                "baby face",
+                "underage",
+                "teen",
+                "schoolgirl",
+                "kawaii",
+                "moe",
+                "chibi",
+                "childlike proportions",
             ),
         )
         if (!chimeric) {
