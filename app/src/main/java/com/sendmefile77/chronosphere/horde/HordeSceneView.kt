@@ -17,7 +17,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,14 +70,13 @@ internal fun HordeSceneView(
         HordeGenerationCoordinator.observeProgress(request.cacheKey)
     }.collectAsState()
 
-    DisposableEffect(request.cacheKey) {
-        onDispose {
-            HordeGenerationCoordinator.cancel(request.cacheKey)
-        }
-    }
-
+    // The image job lives in HordeGenerationCoordinator's app-level scope. Switching tabs must
+    // detach only this observer, not cancel Local Dream/Horde work. Returning to this scene will
+    // either reuse the prepared image or rejoin the same in-flight generation.
     LaunchedEffect(request.cacheKey, retryNonce, galleryCapture) {
-        if (HordeGenerationCoordinator.peekPrepared(request.cacheKey) == null) {
+        HordeGenerationCoordinator.peekPrepared(request.cacheKey)?.let { prepared ->
+            state = prepared.toPortraitUiState(request)
+        } ?: run {
             state = HordeUiState.Loading
         }
         val attemptRequest = if (retryNonce == 0) request else request.copy(seed = "${request.seed}:variant:$retryNonce")
@@ -103,6 +101,8 @@ internal fun HordeSceneView(
             )
             state = prepared.toPortraitUiState(request)
         } catch (cancelled: CancellationException) {
+            // Compose may cancel this observer when the tab disappears. The shared app-level job is
+            // intentionally left alive and can still complete into memory/disk cache.
             throw cancelled
         } catch (error: Throwable) {
             state = HordeUiState.Failed(error.message ?: "невідома помилка")
