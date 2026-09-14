@@ -80,14 +80,21 @@ object AdultActionPlanner {
         if (!person.isAlive) return null
 
         val norms = AdultIntimateNorms.resolve(technologyEra, profile, cultureTags, person.role)
-        val requested = preferredType?.takeIf { norms.allows(it) }
-        val rawType = requested ?: AdultIntimateNorms.defaultAct(norms, person.id, tick, sequence)
+        // Automatic scenes follow the living culture. An explicit player choice is never silently
+        // replaced by a different practice just because the local culture considers it taboo.
+        val explicitlyChosen = preferredType != null
+        val rawType = preferredType ?: AdultIntimateNorms.defaultAct(norms, person.id, tick, sequence)
         val partner = when (rawType) {
             AdultActionType.MASTURBATION -> null
             else -> pickPartner(person, tick, people, sequence, norms)
         }
-        val type = normalizeType(rawType, person.biologicalSex, partner?.biologicalSex)
-            .let { if (norms.allows(it)) it else norms.allowedActs.first() }
+        val normalizedType = normalizeType(rawType, person.biologicalSex, partner?.biologicalSex)
+        val type = if (explicitlyChosen) {
+            normalizedType
+        } else {
+            normalizedType.takeIf(norms::allows) ?: norms.allowedActs.first()
+        }
+        val taboo = !norms.allows(type)
         val bond = partner?.let { other ->
             people.relationships.firstOrNull { it.involves(person.id) && it.involves(other.id) }?.kind
         }
@@ -113,9 +120,10 @@ object AdultActionPlanner {
             setting = listOf(norms.setting, norms.visualSignature, norms.clothing)
                 .filter { it.isNotBlank() }
                 .joinToString("; "),
-            mood = listOf(norms.mood, norms.courtship, norms.conflict)
-                .filter { it.isNotBlank() }
-                .joinToString("; "),
+            mood = buildList {
+                addAll(listOf(norms.mood, norms.courtship, norms.conflict).filter { it.isNotBlank() })
+                if (taboo) add("chosen practice is taboo here: ${norms.tabooSummary}")
+            }.joinToString("; "),
         )
     }
 
