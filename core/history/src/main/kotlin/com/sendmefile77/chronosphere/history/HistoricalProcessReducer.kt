@@ -131,6 +131,147 @@ internal object HistoricalProcessReducer {
         )
     }
 
+    fun applyEventToCausalLinks(
+        existing: List<HistoricalCausalLink>,
+        event: SimulationEvent,
+        civilizationIds: Set<String>,
+        recentEvents: List<SimulationEvent>,
+    ): List<HistoricalCausalLink> {
+        if (existing.any { it.effectEventId == event.id }) return existing
+        val cause = recentEvents.asSequence()
+            .filter { candidate -> candidate.id != event.id && candidate.tick <= event.tick }
+            .filter { candidate -> event.tick - candidate.tick <= causalWindow(candidate.code, event.code) }
+            .filter { candidate -> sharesCivilization(candidate, civilizationIds) }
+            .mapNotNull { candidate -> causalDefinition(candidate.code, event.code)?.let { candidate to it } }
+            .sortedWith(compareBy<Pair<SimulationEvent, Pair<HistoricalCausalRelation, String>>> { it.first.tick }.thenBy { it.first.id })
+            .lastOrNull()
+            ?: return existing
+        val causeEvent = cause.first
+        val definition = cause.second
+        val link = HistoricalCausalLink(
+            id = "causal:${causeEvent.id}->${event.id}",
+            civilizationIds = civilizationIds,
+            causeEventId = causeEvent.id,
+            effectEventId = event.id,
+            causeTick = causeEvent.tick,
+            effectTick = event.tick,
+            relation = definition.first,
+            titleUk = definition.second,
+        )
+        return (existing + link).takeLast(192)
+    }
+
+    private fun sharesCivilization(event: SimulationEvent, civilizationIds: Set<String>): Boolean =
+        event.actorIds.any { it in civilizationIds } ||
+            event.facts["targetCivilizationId"]?.let { it in civilizationIds } == true
+
+    private fun causalWindow(causeCode: String, effectCode: String): Long = when {
+        effectCode == "PEACE_TREATY" -> 1200L
+        causeCode == "FOOD_SHORTAGE" || causeCode == "ECONOMIC_SHORTAGE" -> 360L
+        else -> 720L
+    }
+
+    private fun causalDefinition(
+        causeCode: String,
+        effectCode: String,
+    ): Pair<HistoricalCausalRelation, String>? = when {
+        causeCode == "WAR_STARTED" && effectCode == "WAR_CASUALTIES" ->
+            HistoricalCausalRelation.ESCALATION to "Початок війни спричинив цикл воєнних втрат"
+        causeCode in setOf("WAR_STARTED", "WAR_CASUALTIES") && effectCode == "CITY_CAPTURED" ->
+            HistoricalCausalRelation.ESCALATION to "Воєнний тиск завершився зміною контролю над містом"
+        causeCode in setOf("WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED") && effectCode == "PEACE_TREATY" ->
+            HistoricalCausalRelation.RESOLUTION to "Воєнний цикл привів до мирної угоди"
+        causeCode in setOf("FOOD_SHORTAGE", "ECONOMIC_SHORTAGE") && effectCode == "MIGRATION" ->
+            HistoricalCausalRelation.DISPLACEMENT to "Дефіцит став поштовхом до переміщення населення"
+        causeCode == "FOOD_SHORTAGE" && effectCode == "ECONOMIC_SHORTAGE" ->
+            HistoricalCausalRelation.PRESSURE to "Продовольча нестача переросла в ширший економічний дефіцит"
+        causeCode == "ECONOMIC_SHORTAGE" && effectCode == "FOOD_SHORTAGE" ->
+            HistoricalCausalRelation.PRESSURE to "Економічний дефіцит посилив продовольчу нестачу"
+        causeCode == "MIGRATION" && effectCode in setOf("SETTLEMENT_FOUNDED", "COLONY_FOUNDED") ->
+            HistoricalCausalRelation.TRANSITION to "Міграційний рух закріпився заснуванням нового осередку"
+        causeCode == "RULER_SUCCEEDED" && effectCode == "DYNASTY_FOUNDED" ->
+            HistoricalCausalRelation.TRANSITION to "Зміна правителя закріпила нову династичну лінію"
+        else -> null
+    }
+
+    fun applyEventToLegacies(
+        existing: List<HistoricalLegacy>,
+        event: SimulationEvent,
+        civilizationIds: Set<String>,
+    ): List<HistoricalLegacy> {
+        val definition = legacyDefinition(event.code) ?: return existing
+        val stableCivilizationIds = civilizationIds.toSortedSet()
+        val id = "legacy:${definition.first.name.lowercase()}:${stableCivilizationIds.joinToString("+")}"
+        val old = existing.firstOrNull { it.id == id }
+        val updated = if (old == null) {
+            HistoricalLegacy(
+                id = id,
+                civilizationIds = stableCivilizationIds,
+                kind = definition.first,
+                titleUk = definition.second,
+                originTick = event.tick,
+                lastReinforcedTick = event.tick,
+                strength = definition.third,
+                sourceEventIds = listOf(event.id),
+            )
+        } else {
+            old.copy(
+                titleUk = definition.second,
+                lastReinforcedTick = event.tick,
+                strength = (old.strength + legacyReinforcement(event.code)).coerceIn(0.0, 1.0),
+                sourceEventIds = (old.sourceEventIds + event.id).distinct().takeLast(16),
+            )
+        }
+        return (existing.filterNot { it.id == id } + updated)
+            .sortedBy { it.lastReinforcedTick }
+            .takeLast(96)
+    }
+
+    private fun legacyDefinition(code: String): Triple<HistoricalLegacyKind, String, Double>? = when (code) {
+        "WAR_STARTED", "WAR_CASUALTIES", "PEACE_TREATY" -> Triple(
+            HistoricalLegacyKind.WAR_MEMORY,
+            "Пам'ять про війну та її ціну",
+            0.48,
+        )
+        "CITY_CAPTURED" -> Triple(
+            HistoricalLegacyKind.TERRITORIAL_MEMORY,
+            "Пам'ять про втрату й зміну контролю над землею",
+            0.68,
+        )
+        "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> Triple(
+            HistoricalLegacyKind.SCARCITY_MEMORY,
+            "Пам'ять про дефіцит і вразливість постачання",
+            0.50,
+        )
+        "MIGRATION" -> Triple(
+            HistoricalLegacyKind.MIGRATION_MEMORY,
+            "Пам'ять про велике переміщення населення",
+            0.44,
+        )
+        "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> Triple(
+            HistoricalLegacyKind.DYNASTIC_MEMORY,
+            "Пам'ять про зміну влади та династичну тяглість",
+            0.42,
+        )
+        "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
+        "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> Triple(
+            HistoricalLegacyKind.POPULATION_MEMORY,
+            "Пам'ять про зміну походження та вигляду населення",
+            0.64,
+        )
+        "ERA_ADVANCED" -> Triple(
+            HistoricalLegacyKind.TECHNOLOGICAL_MEMORY,
+            "Пам'ять про технологічний перелом",
+            0.54,
+        )
+        else -> null
+    }
+
+    private fun legacyReinforcement(code: String): Double = when (code) {
+        "CITY_CAPTURED", "WAR_CASUALTIES", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> 0.14
+        else -> 0.09
+    }
+
     fun ageProcesses(
         processes: List<HistoricalProcess>,
         world: LivingPlanetState,
