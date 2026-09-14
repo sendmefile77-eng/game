@@ -2,6 +2,7 @@ package com.sendmefile77.chronosphere
 
 import com.sendmefile77.chronosphere.adultcontracts.AdultModule
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
+import com.sendmefile77.chronosphere.civilization.InternalPoliticsBatchEngine
 import com.sendmefile77.chronosphere.civilization.InternalPoliticsEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.Settlement
@@ -126,11 +127,12 @@ internal class PlayableSimulationRunner(
                 val fromTick = worldState.tick
 
                 val civilizationNext = HistoricalCommitmentEngine.applyRecurring(
-                    InternalPoliticsEngine.advance(
-                        applyConfiguredCultureDynamics(
+                    InternalPoliticsBatchEngine.advance(
+                        finalWorld = applyConfiguredCultureDynamics(
                             consolidateMinorSettlements(civilizationEngine.advance(worldState, step)),
                             months = step,
                         ),
+                        fromTick = fromTick,
                     ),
                     months = step,
                 )
