@@ -17,6 +17,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:simulation"))
     implementation(project(":core:worldgen"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
