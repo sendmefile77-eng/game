@@ -52,36 +52,39 @@ internal object HistoricalProcessReducer {
     }
 
     private fun processKind(code: String): HistoricalProcessKind? = when (code) {
-        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "SETTLEMENT_GROWTH" -> HistoricalProcessKind.SETTLEMENT_EXPANSION
+        "SETTLEMENT_FOUNDED", "COLONY_FOUNDED", "SETTLEMENT_GROWTH", "STATE_FOUNDED" -> HistoricalProcessKind.SETTLEMENT_EXPANSION
         "MIGRATION" -> HistoricalProcessKind.MIGRATION
         "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> HistoricalProcessKind.SHORTAGE
         "WAR_STARTED", "WAR_CASUALTIES", "CITY_CAPTURED", "PEACE_TREATY" -> HistoricalProcessKind.WAR
-        "ALLIANCE_FORMED", "ALLIANCE_DISSOLVED", "INTERVENTION_EMBASSY" -> HistoricalProcessKind.DIPLOMATIC_ALIGNMENT
+        "ALLIANCE_FORMED", "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED", "INTERVENTION_EMBASSY" -> HistoricalProcessKind.DIPLOMATIC_ALIGNMENT
         "ERA_ADVANCED", "INTERVENTION_TECH_BOOST" -> HistoricalProcessKind.TECHNOLOGICAL_TRANSITION
         "RULER_SUCCEEDED", "DYNASTY_FOUNDED" -> HistoricalProcessKind.DYNASTIC_TRANSITION
         "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> HistoricalProcessKind.POPULATION_DIVERGENCE
+        "TAXES_RAISED", "TAXES_LOWERED", "PROVINCIAL_UNREST", "REBELLION_STARTED", "REBELLION_SUPPRESSED", "SECESSION" -> HistoricalProcessKind.INTERNAL_CRISIS
         else -> null
     }
 
     private fun stageFor(code: String): HistoricalProcessStage = when (code) {
-        "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "WAR_CASUALTIES", "CITY_CAPTURED" -> HistoricalProcessStage.STRAINED
-        "PEACE_TREATY", "ALLIANCE_DISSOLVED" -> HistoricalProcessStage.RESOLVED
-        "ERA_ADVANCED", "RULER_SUCCEEDED", "DYNASTY_FOUNDED",
+        "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "WAR_CASUALTIES", "CITY_CAPTURED", "PROVINCIAL_UNREST", "REBELLION_STARTED" -> HistoricalProcessStage.STRAINED
+        "PEACE_TREATY", "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED", "REBELLION_SUPPRESSED", "SECESSION" -> HistoricalProcessStage.RESOLVED
+        "ERA_ADVANCED", "RULER_SUCCEEDED", "DYNASTY_FOUNDED", "TAXES_RAISED", "TAXES_LOWERED",
         "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
         "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" -> HistoricalProcessStage.EMERGING
         else -> HistoricalProcessStage.ACTIVE
     }
 
     private fun initialIntensity(code: String): Double = when (code) {
-        "WAR_STARTED", "CITY_CAPTURED", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> 0.68
+        "REBELLION_STARTED" -> 0.80
+        "WAR_STARTED", "CITY_CAPTURED", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "PROVINCIAL_UNREST" -> 0.68
         "ERA_ADVANCED", "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED" -> 0.55
         else -> 0.42
     }
 
     private fun intensityDelta(code: String): Double = when (code) {
-        "WAR_CASUALTIES", "CITY_CAPTURED", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> 0.12
-        "PEACE_TREATY", "ALLIANCE_DISSOLVED" -> -0.24
+        "REBELLION_STARTED" -> 0.18
+        "WAR_CASUALTIES", "CITY_CAPTURED", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "PROVINCIAL_UNREST" -> 0.12
+        "PEACE_TREATY", "ALLIANCE_DISSOLVED", "ALLIANCE_ENDED", "REBELLION_SUPPRESSED", "SECESSION" -> -0.24
         else -> 0.05
     }
 
@@ -101,6 +104,7 @@ internal object HistoricalProcessReducer {
             HistoricalProcessKind.TECHNOLOGICAL_TRANSITION -> "Технологічний перехід · $actor"
             HistoricalProcessKind.DYNASTIC_TRANSITION -> "Перехід влади · $actor"
             HistoricalProcessKind.POPULATION_DIVERGENCE -> "Зміна популяційної лінії · $actor"
+            HistoricalProcessKind.INTERNAL_CRISIS -> "Внутрішня політична криза · $actor"
         }
     }
 
@@ -114,6 +118,8 @@ internal object HistoricalProcessReducer {
             "WAR_STARTED", "WAR_CASUALTIES" -> "Порушення торгівлі та мобілізаційний тиск" to "зникає після завершення війни"
             "CITY_CAPTURED" -> "Перерозподіл території та населення" to "стихає після тривалого мирного періоду"
             "ERA_ADVANCED" -> "Адаптація до нової епохи" to "стихає після періоду консолідації"
+            "PROVINCIAL_UNREST", "REBELLION_STARTED" -> "Тривала внутрішня політична напруга" to "стихає після відновлення лояльності провінцій і завершення повстань"
+            "SECESSION" -> "Розкол держави та нова політична межа" to "стає історичною нормою лише після тривалого нового порядку"
             "BIOLOGICAL_DIVERGENCE", "STRUCTURAL_MUTATION", "HYBRID_LINEAGE_FORMED",
             "PLAYER_EVOLUTION_DIVERGENCE", "PLAYER_STRUCTURAL_MUTATION", "PLAYER_HYBRIDIZATION" ->
                 "Наслідки нової популяційної лінії" to "стають нормою лише після тривалої інтеграції"
@@ -166,8 +172,8 @@ internal object HistoricalProcessReducer {
             event.facts["targetCivilizationId"]?.let { it in civilizationIds } == true
 
     private fun causalWindow(causeCode: String, effectCode: String): Long = when {
-        effectCode == "PEACE_TREATY" -> 1200L
-        causeCode == "FOOD_SHORTAGE" || causeCode == "ECONOMIC_SHORTAGE" -> 360L
+        effectCode == "PEACE_TREATY" || effectCode == "SECESSION" -> 1200L
+        causeCode in setOf("FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "TAXES_RAISED") -> 360L
         else -> 720L
     }
 
@@ -191,6 +197,16 @@ internal object HistoricalProcessReducer {
             HistoricalCausalRelation.TRANSITION to "Міграційний рух закріпився заснуванням нового осередку"
         causeCode == "RULER_SUCCEEDED" && effectCode == "DYNASTY_FOUNDED" ->
             HistoricalCausalRelation.TRANSITION to "Зміна правителя закріпила нову династичну лінію"
+        causeCode == "TAXES_RAISED" && effectCode == "PROVINCIAL_UNREST" ->
+            HistoricalCausalRelation.PRESSURE to "Зростання податкового тиску підштовхнуло провінцію до невдоволення"
+        causeCode in setOf("FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "WAR_CASUALTIES") && effectCode == "PROVINCIAL_UNREST" ->
+            HistoricalCausalRelation.PRESSURE to "Матеріальна або воєнна криза переросла у провінційне невдоволення"
+        causeCode in setOf("PROVINCIAL_UNREST", "TAXES_RAISED") && effectCode == "REBELLION_STARTED" ->
+            HistoricalCausalRelation.ESCALATION to "Накопичена внутрішня напруга переросла у відкрите повстання"
+        causeCode == "REBELLION_STARTED" && effectCode == "REBELLION_SUPPRESSED" ->
+            HistoricalCausalRelation.RESOLUTION to "Повстання завершилося відновленням контролю центру"
+        causeCode == "REBELLION_STARTED" && effectCode in setOf("SECESSION", "STATE_FOUNDED") ->
+            HistoricalCausalRelation.TRANSITION to "Повстання завершилося політичним відокремленням"
         else -> null
     }
 
@@ -264,11 +280,16 @@ internal object HistoricalProcessReducer {
             "Пам'ять про технологічний перелом",
             0.54,
         )
+        "PROVINCIAL_UNREST", "REBELLION_STARTED", "REBELLION_SUPPRESSED", "SECESSION" -> Triple(
+            HistoricalLegacyKind.REBELLION_MEMORY,
+            "Пам'ять про внутрішній конфлікт між центром і провінціями",
+            0.62,
+        )
         else -> null
     }
 
     private fun legacyReinforcement(code: String): Double = when (code) {
-        "CITY_CAPTURED", "WAR_CASUALTIES", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE" -> 0.14
+        "CITY_CAPTURED", "WAR_CASUALTIES", "FOOD_SHORTAGE", "ECONOMIC_SHORTAGE", "REBELLION_STARTED", "SECESSION" -> 0.14
         else -> 0.09
     }
 
@@ -322,6 +343,17 @@ internal object HistoricalProcessReducer {
                 age >= 480L -> process.copy(stage = HistoricalProcessStage.CONSOLIDATING)
                 else -> process
             }
+            HistoricalProcessKind.INTERNAL_CRISIS -> {
+                val stillUnstable = primary?.let { id ->
+                    world.rebellions.any { it.civilizationId == id && it.isActive } ||
+                        world.provinces.any { it.civilizationId == id && it.unrest >= 0.62 }
+                } ?: false
+                when {
+                    !stillUnstable && age >= 12L -> process.resolve(world.tick)
+                    age >= 60L && process.stage == HistoricalProcessStage.STRAINED -> process.copy(stage = HistoricalProcessStage.CONSOLIDATING)
+                    else -> process
+                }
+            }
         }
     }
 
@@ -351,6 +383,14 @@ internal object HistoricalProcessReducer {
             }
             consequence.titleUk.contains("епохи", ignoreCase = true) -> !processStillActive || world.tick - consequence.originTick >= 360L
             consequence.titleUk.contains("популяційної", ignoreCase = true) -> !processStillActive || world.tick - consequence.originTick >= 1200L
+            consequence.titleUk.contains("внутрішня", ignoreCase = true) -> {
+                val stable = consequence.civilizationIds.all { id ->
+                    world.rebellions.none { it.civilizationId == id && it.isActive } &&
+                        world.provinces.none { it.civilizationId == id && it.unrest >= 0.45 }
+                }
+                stable && world.tick - consequence.originTick >= 120L
+            }
+            consequence.titleUk.contains("розкол", ignoreCase = true) -> world.tick - consequence.originTick >= 600L
             else -> false
         }
         if (resolve) consequence.copy(status = HistoricalConsequenceStatus.RESOLVED, resolvedTick = world.tick) else consequence
