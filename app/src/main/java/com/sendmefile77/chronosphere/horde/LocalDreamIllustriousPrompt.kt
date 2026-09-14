@@ -3,7 +3,8 @@ package com.sendmefile77.chronosphere.horde
 /**
  * Local Dream is running WAI Illustrious (or a DMD2 merge of it), not a Horde worker.
  * Long documentary prompts collapse; this rewrite keeps the act AND a visible era set.
- * Era scenery is placed first so it is not drowned by nude/act tags.
+ * Adult/portrait frames lead with the human subject so a tent or domestication tag
+ * cannot become an empty-room or animal picture.
  */
 internal object LocalDreamIllustriousPrompt {
     private const val QUALITY =
@@ -14,12 +15,14 @@ internal object LocalDreamIllustriousPrompt {
             "clothed, dress, panties, bra, standing idle, standing side by side, " +
             "portrait, cowboy shot, kissing, kiss, closed mouth, 3d, realistic photo, child, loli, " +
             "modern bedroom, drywall, tiled bathroom, porcelain toilet, smartphone, neon lights, " +
-            "skyscraper, marble palace, greek columns, office, hospital, empty white background"
+            "skyscraper, marble palace, greek columns, office, hospital, empty white background, " +
+            "dog, puppy, wolf, cat, horse, livestock, animal only, no humans, empty room, vacant tent, furry, bestiality"
 
     private const val SAFE_NEGATIVE =
         "lowres, worst quality, bad anatomy, extra limbs, extra fingers, text, watermark, duplicate person, " +
             "floating head, disconnected body, 3d, plastic doll, child, loli, shota, nudity, explicit sex, " +
-            "anachronistic props, unexplained modern objects, neon cyberpunk, empty white background"
+            "anachronistic props, unexplained modern objects, neon cyberpunk, empty white background, " +
+            "dog, puppy, animal only, no humans, empty room, vacant tent"
 
     fun apply(request: HordeImageRequest): HordeImageRequest {
         val source = request.positivePrompt.lowercase()
@@ -29,25 +32,35 @@ internal object LocalDreamIllustriousPrompt {
         val people = peopleTag(girls, men, action, request.nsfw)
         val act = actTags(source)
         val era = eraScene(source)
-        val eraPrefix = if (era.isBlank()) "" else "$era, "
-        // Non-adult only: keep a few material consequences of the civilization's actual history
-        // after Illustrious compresses the much longer documentary prompt. Adult branches below are
-        // owned by the adult enrichment layer and keep a short historical intimacy cue.
         val safeRequest = !action && !request.nsfw
-        val safeMaterial = if (safeRequest) LocalDreamMaterialCueBridge.fragment(source) else ""
-        val safeMaterialSuffix = if (safeMaterial.isBlank()) "" else ", $safeMaterial"
-        val adultCue = if (!safeRequest) LocalDreamAdultCueBridge.fragment(source) else ""
-        val adultCueSuffix = if (adultCue.isBlank()) "" else ", $adultCue"
-        val positive = if (action && act.isNotBlank()) {
-            "$QUALITY, $eraPrefix$people, $act$adultCueSuffix"
-        } else if (request.nsfw) {
-            "$QUALITY, ${eraPrefix}$people, standing, nipples, pussy, navel$adultCueSuffix"
+        val portrait = request.cacheKey.startsWith("horde-resolved-scene") ||
+            request.cacheKey.startsWith("horde-adult-character")
+        val rawMaterial = if (safeRequest) LocalDreamMaterialCueBridge.fragment(source) else ""
+        val safeMaterial = if (portrait) HordeAdultSubjectGuard.stripAnimalSubject(rawMaterial) else rawMaterial
+        val adultCue = if (!safeRequest) {
+            HordeAdultSubjectGuard.sanitize(LocalDreamAdultCueBridge.fragment(source))
         } else {
-            "masterpiece, best quality, ${eraPrefix}$people, fully clothed$safeMaterialSuffix"
+            ""
         }
+        val humanLock = if (!safeRequest || portrait) ", ${HordeAdultSubjectGuard.HUMAN_LOCK}" else ""
+        val eroticLock = if (!safeRequest) ", ${HordeAdultSubjectGuard.EROTIC_LOCK}" else ""
+        val eraAsBackground = if (!safeRequest || portrait) {
+            era.removePrefix("wide shot, ").takeIf { it.isNotBlank() }?.let { "background $it" }.orEmpty()
+        } else {
+            era
+        }
+        val eraPrefixSafe = if (eraAsBackground.isBlank()) "" else "$eraAsBackground, "
+        val positiveRaw = if (action && act.isNotBlank()) {
+            "$QUALITY, $people, $act, $eraPrefixSafe$adultCue$humanLock$eroticLock"
+        } else if (request.nsfw) {
+            "$QUALITY, $people, standing, nipples, pussy, navel, full body looking at viewer, $eraPrefixSafe$adultCue$humanLock$eroticLock"
+        } else {
+            "masterpiece, best quality, $people, fully clothed, $eraPrefixSafe$safeMaterial$humanLock"
+        }
+        val positive = HordeAdultSubjectGuard.sanitize(positiveRaw)
         val safeCacheSuffix = if (safeRequest) "|material-v2" else ""
         return request.copy(
-            cacheKey = "${request.cacheKey}|ld-illust-v3$safeCacheSuffix",
+            cacheKey = "${request.cacheKey}|ld-illust-v4$safeCacheSuffix",
             positivePrompt = positive,
             negativePrompt = if (safeRequest) SAFE_NEGATIVE else NEGATIVE,
             referenceCacheKey = if (action || request.nsfw) null else request.referenceCacheKey,
