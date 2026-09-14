@@ -76,7 +76,29 @@ class HordeChronicleEventPromptFactoryTest {
         assertNotEquals(tribal.positivePrompt, metal.positivePrompt)
         assertTrue(tribal.positivePrompt.contains("hide") || tribal.positivePrompt.contains("hearth"))
         assertTrue(metal.positivePrompt.contains("forge") || metal.positivePrompt.contains("bronze"))
+        assertTrue(tribal.positivePrompt.contains("epochal reward"))
+        assertTrue(metal.positivePrompt.contains("epochal reward"))
         assertNotEquals(tribal.cacheKey, metal.cacheKey)
+    }
+
+    @Test
+    fun warFrameIsAMusterNotAGenericCityStreet() {
+        val war = HordeChronicleEventPromptFactory.create(
+            SimulationEvent("war", 20, "WAR_STARTED", actorIds = listOf("civ"), facts = mapOf("civilization" to "A")),
+            people(),
+            economy(TechnologyEra.METALLURGIC),
+        )
+        val era = HordeChronicleEventPromptFactory.create(
+            SimulationEvent("era", 20, "ERA_ADVANCED", actorIds = listOf("civ"), facts = mapOf("civilization" to "A")),
+            people(),
+            economy(TechnologyEra.METALLURGIC),
+        )
+        assertTrue(war.positivePrompt.contains("war tableau"))
+        assertTrue(war.positivePrompt.contains("war-camp") || war.positivePrompt.contains("fighters"))
+        assertTrue(era.positivePrompt.contains("epochal reward"))
+        assertFalse(era.positivePrompt.contains("war tableau"))
+        assertNotEquals(war.positivePrompt, era.positivePrompt)
+        assertTrue(war.negativePrompt.contains("dog"))
     }
 
     @Test
