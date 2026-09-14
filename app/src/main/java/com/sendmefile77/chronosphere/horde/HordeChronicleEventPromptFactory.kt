@@ -39,7 +39,7 @@ object HordeChronicleEventPromptFactory {
         val choiceVisual = HordeHistoricalVisualPrompt.eraChoiceFragment(event.facts["choiceId"])
         val choiceLabel = event.facts["choiceLabel"]?.takeIf { it.isNotBlank() }
         val persistentTags = persistentHistoricalTags(event, people, economy)
-        val persistentVisual = HordeHistoricalVisualPrompt.fragment(persistentTags)
+        val persistentVisual = HordeHistoricalVisualPrompt.fragment(persistentTags, era)
         val persistentSignature = HordeHistoricalVisualPrompt.signature(persistentTags)
 
         val positive = buildList {
