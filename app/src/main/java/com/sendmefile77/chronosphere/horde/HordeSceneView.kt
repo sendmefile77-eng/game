@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +70,12 @@ internal fun HordeSceneView(
     val jobProgress by remember(request.cacheKey) {
         HordeGenerationCoordinator.observeProgress(request.cacheKey)
     }.collectAsState()
+
+    DisposableEffect(request.cacheKey) {
+        onDispose {
+            HordeGenerationCoordinator.cancel(request.cacheKey)
+        }
+    }
 
     LaunchedEffect(request.cacheKey, retryNonce, galleryCapture) {
         if (HordeGenerationCoordinator.peekPrepared(request.cacheKey) == null) {
