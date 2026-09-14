@@ -2,8 +2,11 @@ package com.sendmefile77.chronosphere.history
 
 import com.sendmefile77.chronosphere.civilization.AllianceState
 import com.sendmefile77.chronosphere.civilization.DiplomaticRelation
+import com.sendmefile77.chronosphere.civilization.InstitutionEngine
+import com.sendmefile77.chronosphere.civilization.InternalPoliticsEngine
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.civilization.WarState
+import com.sendmefile77.chronosphere.civilization.institutionsFor
 import com.sendmefile77.chronosphere.simulation.SimulationEvent
 import kotlin.math.roundToLong
 
@@ -18,6 +21,9 @@ enum class InterventionKind {
     MAKE_PEACE,
     FORM_ALLIANCE,
     EMBASSY,
+    TAX_LOWER,
+    TAX_RAISE,
+    INSTITUTION_REFORM,
 }
 
 data class InterventionCommand(
@@ -60,6 +66,9 @@ class InterventionEngine {
             InterventionKind.MAKE_PEACE -> applyMakePeace(state, command, event, counterpartId)
             InterventionKind.FORM_ALLIANCE -> applyFormAlliance(state, command, event, counterpartId)
             InterventionKind.EMBASSY -> applyEmbassy(state, command, event, counterpartId)
+            InterventionKind.TAX_LOWER -> applyTaxShift(state, command, event, -1)
+            InterventionKind.TAX_RAISE -> applyTaxShift(state, command, event, 1)
+            InterventionKind.INSTITUTION_REFORM -> applyInstitutionReform(state, command, event)
         }
     }
 
@@ -293,6 +302,25 @@ class InterventionEngine {
         )
     }
 
+    private fun applyTaxShift(
+        state: LivingPlanetState,
+        command: InterventionCommand,
+        event: SimulationEvent,
+        direction: Int,
+    ): LivingPlanetState {
+        val shifted = InternalPoliticsEngine.shiftTaxPolicy(state, command.civilizationId, direction)
+        return shifted.copy(recentEvents = appendEvent(shifted, event))
+    }
+
+    private fun applyInstitutionReform(
+        state: LivingPlanetState,
+        command: InterventionCommand,
+        event: SimulationEvent,
+    ): LivingPlanetState {
+        val reformed = InstitutionEngine.reform(state, command.civilizationId, command.strength)
+        return reformed.copy(recentEvents = appendEvent(reformed, event))
+    }
+
     internal fun resolveCounterpart(state: LivingPlanetState, command: InterventionCommand): String? {
         val actorId = command.civilizationId
         val requested = command.targetCivilizationId
@@ -363,6 +391,8 @@ class InterventionEngine {
     private fun eventFor(state: LivingPlanetState, command: InterventionCommand, counterpartId: String?): SimulationEvent {
         val civilization = state.civilizations.first { it.id == command.civilizationId }
         val counterpart = counterpartId?.let { id -> state.civilizations.firstOrNull { it.id == id } }
+        val weakestInstitution = state.institutionsFor(command.civilizationId)
+            .minByOrNull { it.capacity * 0.65 + it.legitimacy * 0.35 }
         val code = when (command.kind) {
             InterventionKind.HARVEST_AID -> "INTERVENTION_HARVEST_AID"
             InterventionKind.DROUGHT -> "INTERVENTION_DROUGHT"
@@ -374,6 +404,9 @@ class InterventionEngine {
             InterventionKind.MAKE_PEACE -> "PEACE_TREATY"
             InterventionKind.FORM_ALLIANCE -> "ALLIANCE_FORMED"
             InterventionKind.EMBASSY -> "INTERVENTION_EMBASSY"
+            InterventionKind.TAX_LOWER -> "INTERVENTION_TAX_LOWER"
+            InterventionKind.TAX_RAISE -> "INTERVENTION_TAX_RAISE"
+            InterventionKind.INSTITUTION_REFORM -> "INTERVENTION_INSTITUTION_REFORM"
         }
         val facts = buildMap {
             put("civilization", civilization.name)
@@ -383,6 +416,9 @@ class InterventionEngine {
             command.sourceEventId?.let { put("sourceEventId", it) }
             command.choiceId?.let { put("choiceId", it) }
             command.choiceLabel?.let { put("choiceLabel", it) }
+            if (command.kind == InterventionKind.INSTITUTION_REFORM) {
+                weakestInstitution?.let { put("institution", it.kind.name) }
+            }
         }
         return SimulationEvent(
             id = command.id,
