@@ -27,7 +27,6 @@ import com.sendmefile77.chronosphere.StatusPill
 import com.sendmefile77.chronosphere.civilization.Civilization
 import com.sendmefile77.chronosphere.civilization.LivingPlanetState
 import com.sendmefile77.chronosphere.economy.EconomyState
-import com.sendmefile77.chronosphere.horde.LocalDreamSettingsCard
 
 /** Visible read-only Qwen layer. The deterministic game remains authoritative. */
 @Composable
@@ -76,9 +75,6 @@ internal fun LocalLlmWorldAdvisorCard(
     val statusDetail = currentStatus?.detail
     val accent = if (currentStatus?.available == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        LocalDreamSettingsCard(enabled = enabled)
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.055f)),
@@ -94,7 +90,7 @@ internal fun LocalLlmWorldAdvisorCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Qwen · локальний радник", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Qwen · Tellama", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
                         when {
                             checking -> "Перевіряю Tellama…"
@@ -127,10 +123,10 @@ internal fun LocalLlmWorldAdvisorCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { refreshNonce += 1 }, enabled = enabled && !checking && !working) {
-                    Text("Перевірити")
+                    Text("Оновити пораду")
                 }
                 TextButton(onClick = { showSettings = !showSettings }, enabled = enabled) {
-                    Text(if (showSettings) "Сховати ключ" else "Налаштувати")
+                    Text(if (showSettings) "Сховати ключ" else "Tellama")
                 }
             }
 
@@ -178,6 +174,5 @@ internal fun LocalLlmWorldAdvisorCard(
                 )
             }
         }
-    }
     }
 }
