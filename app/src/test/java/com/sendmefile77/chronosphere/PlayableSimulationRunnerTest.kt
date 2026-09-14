@@ -3,7 +3,6 @@ package com.sendmefile77.chronosphere
 import com.sendmefile77.chronosphere.adultcontracts.NoOpAdultModule
 import com.sendmefile77.chronosphere.civilization.CivilizationEngine
 import com.sendmefile77.chronosphere.economy.EconomyEngine
-import com.sendmefile77.chronosphere.economy.TechnologyEra
 import com.sendmefile77.chronosphere.evolution.EvolutionEngine
 import com.sendmefile77.chronosphere.history.InterventionKind
 import com.sendmefile77.chronosphere.people.PeopleEngine
@@ -96,19 +95,19 @@ class PlayableSimulationRunnerTest {
         val fixture = fixture()
         val target = fixture.worldState.civilizations.first()
         val decision = EraTurnChoiceCatalog.decision(
-            worldSeed = fixture.worldState.worldSeed,
-            tick = fixture.worldState.tick,
+            state = fixture.worldState,
+            economy = fixture.economy,
             civilizationId = target.id,
-            civilizationName = target.name,
-            era = TechnologyEra.TRIBAL,
-            cultureTags = target.cultureTags,
         )
-        val fire = decision.options.first { it.id == "era-tribal-breakthrough-fire" }
-        val hunters = decision.options.first { it.id == "era-tribal-subsistence-predator_hunters" }
-        var chosenWorld = EraTurnChoiceCatalog.applyLegacy(fixture.worldState, target.id, fire.id)
-        chosenWorld = EraTurnChoiceCatalog.applyLegacy(chosenWorld, target.id, hunters.id)
-        ChronicleDecisionMailbox.enqueue(fire)
-        ChronicleDecisionMailbox.enqueue(hunters)
+        val choices = decision.options.take(2)
+        assertEquals(2, choices.size)
+        val chosenWorld = choices.fold(fixture.worldState) { state, choice ->
+            EraTurnChoiceCatalog.applyLegacy(state, target.id, choice.id)
+        }
+        val expectedLegacyTags = chosenWorld.civilizations
+            .first { it.id == target.id }
+            .cultureTags - target.cultureTags
+        choices.forEach(ChronicleDecisionMailbox::enqueue)
 
         val result = fixture.runner.advance(
             chosenWorld,
@@ -120,10 +119,9 @@ class PlayableSimulationRunnerTest {
         val resolvedSources = result.world.recentEvents.mapNotNull { it.facts["sourceEventId"] }.toSet()
         val cultureTags = result.world.civilizations.first { it.id == target.id }.cultureTags
 
-        assertTrue(fire.sourceEventId in resolvedSources)
-        assertTrue(hunters.sourceEventId in resolvedSources)
-        assertTrue("foundation:fire_mastery" in cultureTags)
-        assertTrue("policy:predator_hunters" in cultureTags)
+        assertTrue(choices.all { it.sourceEventId in resolvedSources })
+        assertTrue(expectedLegacyTags.isNotEmpty())
+        assertTrue(cultureTags.containsAll(expectedLegacyTags))
         assertTrue(ChronicleDecisionMailbox.drain().isEmpty())
     }
 
