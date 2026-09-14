@@ -30,6 +30,8 @@ internal object HordeHistoricalVisualPrompt {
                 if (parts.size == 2 && parts.all(String::isNotBlank)) EraChoice(parts[0], parts[1]) else null
             }
             .toList()
+        val predatorHunterActive = eraChoices.any { it.slug == "predator_hunters" } ||
+            "policy:predator_hunters" in tags
 
         val parts = linkedSetOf<String>()
 
@@ -40,6 +42,11 @@ internal object HordeHistoricalVisualPrompt {
             .sortedBy { it.family }
             .take(3)
             .forEach { parts += HordeDecisionVisualCue.forSlug(it.slug) }
+        if (predatorHunterActive) {
+            // Keep this physical trace explicit. It distinguishes an active predator-hunter culture
+            // from a generic hunting camp and is expected to remain visible in unrelated Chronicle frames.
+            parts += "blood-stained hides and hands from routine big-game butchering"
+        }
 
         // Breakthroughs accumulate forever. Prefer the newest historical layer, and when the
         // current era is known restrict emphasis to the current/previous era. This prevents fire
