@@ -48,7 +48,7 @@ class LocalDreamIllustriousPromptTest {
         assertEquals(5.5, local.cfgScale, 0.0001)
         assertEquals(24, horde.steps)
         assertTrue(local.cacheKey.contains("|ld-illust-v3"))
-        assertFalse(local.cacheKey.contains("|material-v1"))
+        assertFalse(local.cacheKey.contains("|material-v2"))
         assertTrue(local.cacheKey.contains("ld-pack-illustrious"))
     }
 
@@ -67,7 +67,7 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.negativePrompt.contains("kiss"))
         assertTrue(local.positivePrompt.contains("hide tent"))
         assertTrue(local.positivePrompt.contains("prehistoric tribal camp"))
-        assertFalse(local.cacheKey.contains("|material-v1"))
+        assertFalse(local.cacheKey.contains("|material-v2"))
     }
 
     @Test
@@ -89,7 +89,9 @@ class LocalDreamIllustriousPromptTest {
         assertTrue(local.positivePrompt.contains("telepresence"))
         assertTrue(local.positivePrompt.contains("connected devices"))
         assertTrue(local.positivePrompt.contains("fully clothed"))
-        assertTrue(local.cacheKey.contains("|material-v1"))
+        assertFalse(local.negativePrompt.contains("clothed"))
+        assertTrue(local.negativePrompt.contains("nudity"))
+        assertTrue(local.cacheKey.contains("|material-v2"))
         assertTrue(local.saveResultAsReference)
         assertTrue(local.referenceCacheKey?.contains("safe-information-ruler") == true)
     }
