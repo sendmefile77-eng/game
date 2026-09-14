@@ -1,8 +1,11 @@
 package com.sendmefile77.chronosphere
 
 /**
- * One turn screen owns both the mandatory historical fork (when one exists) and the optional
- * era-development directions. This avoids a chain of modal confirmations before time can move.
+ * One turn screen owns the mandatory historical fork and the era-development directions.
+ *
+ * When the simulation has not produced a natural unresolved event, CenturyDilemmaCatalog supplies
+ * an era-specific dilemma. A century therefore never collapses into a sterile "pick upgrades and
+ * wait" screen: the player must answer one concrete problem and then choose the long-term course.
  */
 internal object TurnChoiceComposer {
     const val MAX_ERA_CHOICES = 3
@@ -11,15 +14,33 @@ internal object TurnChoiceComposer {
         eraDecision: ChronicleDecision,
         historicalDecision: ChronicleDecision?,
     ): ChronicleDecision {
-        if (historicalDecision == null) return eraDecision
+        val fork = historicalDecision ?: CenturyDilemmaCatalog.fromEraDecision(eraDecision)
+        val era = EraExperience.eraFromDecision(eraDecision)
+        val chapter = era?.let(EraExperience::chapter)
+
         return eraDecision.copy(
             titleUk = eraDecision.titleUk,
             promptUk = buildString {
-                append("Історія вимагає відповіді: «${historicalDecision.titleUk}». ")
-                append("Оберіть одну реакцію на цю подію та до трьох напрямів розвитку епохи. ")
-                append("Після підтвердження світ одразу проживе наступні 100 років.")
+                if (chapter != null) {
+                    append(chapter.title).append(". ")
+                    append(chapter.opening)
+                    append("\n\n")
+                    append(chapter.power)
+                    append("\n\n")
+                }
+                if (fork != null) {
+                    append("ЦЬОГО СТОЛІТТЯ · ")
+                    append(fork.titleUk)
+                    append("\n")
+                    append(fork.promptUk)
+                    append("\n\n")
+                    append("Оберіть одну відповідь на цю ситуацію та від одного до трьох напрямів розвитку епохи. ")
+                } else {
+                    append("Оберіть від одного до трьох напрямів розвитку епохи. ")
+                }
+                append("Після підтвердження світ одразу проживе наступні 100 років, а наслідки стануть частиною його історії.")
             },
-            options = historicalDecision.options + eraDecision.options,
+            options = fork?.options.orEmpty() + eraDecision.options,
         )
     }
 
